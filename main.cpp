@@ -87,7 +87,7 @@ private:
 	bool m_Multiview = false;
 	float m_Transparency = 1.0f;
 	float m_Scale = 1.0f;
-
+	float m_Fov = 45.0f;
 	vec4 skyParams;
 };
 
@@ -727,6 +727,7 @@ void Sample::PrepareFrame(uint32_t) {
 	{
 		ImGui::SliderFloat("Transparency", &m_Transparency, 0.0f, 1.0f);
 		ImGui::SliderFloat("Scale", &m_Scale, 0.75f, 1.25f);
+		ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f,"%.0f");
 
 		const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_Device);
 		ImGui::BeginDisabled(!deviceDesc.isFlexibleMultiviewSupported);
@@ -762,9 +763,9 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 	const glm::mat4 m = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f),
 			glm::vec3(1.f, 0.f, 0.f));
 	const glm::mat4 v =
-			glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 1.5f)),
+			glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 3.5f)),
 					(float)glfwGetTime(), glm::vec3(0.0f, 1.0f, 0.0f));
-	const glm::mat4 p = glm::perspectiveLH_ZO(45.0f, 900.f / 600.f, 0.1f, 100.0f);
+	const glm::mat4 p = glm::perspectiveLH_ZO(glm::radians(m_Fov), 900.f / 600.f, 0.1f, 100.0f);
 
 	skyParams.x = 0;
 	skyParams.y = p[1][1];

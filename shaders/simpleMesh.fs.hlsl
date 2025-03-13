@@ -17,6 +17,6 @@ float4 main(InputPS input) : SV_Target
     float2 newUV = input.uv;
     newUV.y = 1.0 - newUV.y;
     float4 color = g_DiffuseTexture.Sample( g_Sampler, newUV);
-    color += g_cubeTexture.Sample( g_Sampler, float2(0.0, 0.0)); 
+    color += g_cubeTexture.Sample( g_Sampler, float2(0.0, 0.0)) * 0.001;  
     return color;
 }
