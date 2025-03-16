@@ -1,5 +1,7 @@
 // © 2021 NVIDIA Corporation
+#include "NRIDescs.h"
 #include "NRIFramework.h"
+#include "glm/ext/matrix_transform.hpp"
 #include "imgui.h"
 
 // STB
@@ -11,6 +13,9 @@
 #include <assimp/scene.h>
 #include <assimp/version.h>
 #include <vector>
+
+#define TINYDDSLOADER_IMPLEMENTATION
+#include "tinyddsloader.h"
 
 constexpr uint32_t VIEW_MASK = 0b11;
 constexpr nri::Color32f COLOR_0 = { 1.0f, 1.0f, 0.0f, 1.0f };
@@ -70,13 +75,16 @@ private:
 	nri::DescriptorSet *m_TextureDescriptorSet = nullptr;
 	nri::DescriptorSet *m_SkyTextureDescriptorSet = nullptr;
 	nri::Descriptor *m_TextureShaderResource = nullptr;
-	nri::Descriptor *m_CubeTextureShaderResource = nullptr;
+	nri::Descriptor *m_HDRTextureShaderResource = nullptr;
+	nri::Descriptor *m_CubemapTextureShaderResource = nullptr;
 	nri::Descriptor *m_DepthAttachment = nullptr;
 	nri::Descriptor *m_Sampler = nullptr;
+	nri::Descriptor *m_CubeSampler = nullptr;
 	nri::Buffer *m_ConstantBuffer = nullptr;
 	nri::Buffer *m_GeometryBuffer = nullptr;
 	nri::Texture *m_Texture = nullptr;
-	nri::Texture *m_CubeTexture = nullptr;
+	nri::Texture *m_HDRTexture = nullptr;
+	nri::Texture *m_CubemapTexture = nullptr;
 	nri::Texture *m_DepthTexture = nullptr;
 
 	std::array<Frame, BUFFERED_FRAME_MAX_NUM> m_Frames = {};
@@ -110,6 +118,7 @@ Sample::~Sample() {
 	NRI.DestroyDescriptor(*m_TextureShaderResource);
 	NRI.DestroyDescriptor(*m_DepthAttachment);
 	NRI.DestroyDescriptor(*m_Sampler);
+	NRI.DestroyDescriptor(*m_CubeSampler);
 	NRI.DestroyBuffer(*m_ConstantBuffer);
 	NRI.DestroyBuffer(*m_GeometryBuffer);
 	NRI.DestroyTexture(*m_Texture);
@@ -238,7 +247,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 			{ 1, descriptorRangeTexture, helper::GetCountOf(descriptorRangeTexture) },
 		};
 
-		nri::RootConstantDesc rootConstant = { 1, sizeof(float),
+		nri::RootConstantDesc rootConstant = { 1, sizeof(glm::vec4),
 			nri::StageBits::FRAGMENT_SHADER };
 
 		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
@@ -338,9 +347,8 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 			nri::StageBits::ALL };
 
 		nri::DescriptorRangeDesc descriptorRangeTexture[2];
-		descriptorRangeTexture[0] = { 0, 1, nri::DescriptorType::TEXTURE,
+		descriptorRangeTexture[0] = { 0, 2, nri::DescriptorType::TEXTURE,
 			nri::StageBits::FRAGMENT_SHADER };
-
 		descriptorRangeTexture[1] = { 0, 1, nri::DescriptorType::SAMPLER,
 			nri::StageBits::FRAGMENT_SHADER };
 
@@ -440,7 +448,8 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	}
 
 	utils::Texture cubemapHDRTex;
-	path = utils::GetFullPath("piazza_bologni_1k.hdr", utils::DataFolder::TEXTURES);
+	// path = utils::GetFullPath("piazza_bologni_1k.hdr", utils::DataFolder::TEXTURES);
+	path = utils::GetFullPath("barcelona.hdr", utils::DataFolder::TEXTURES);
 	if (!utils::LoadTexture(path, cubemapHDRTex)) {
 		return false;
 	}
@@ -452,6 +461,10 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	cubemapHDRTex.height = h;
 	cubemapHDRTex.format = nri::Format::RGBA32_SFLOAT;
 	cubemapHDRTex.mipNum = 1;
+
+	tinyddsloader::DDSFile ddsImage;
+	path = utils::GetFullPath("test.dds", utils::DataFolder::TEXTURES);
+	ddsImage.Load(path.c_str());
 
 	// Resources
 	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
@@ -500,7 +513,20 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 			textureDesc.height = cubemapHDRTex.height;
 			textureDesc.mipNum = cubemapHDRTex.mipNum;
 			NRI_ABORT_ON_FAILURE(
-					NRI.CreateTexture(*m_Device, textureDesc, m_CubeTexture));
+					NRI.CreateTexture(*m_Device, textureDesc, m_HDRTexture));
+		}
+
+		{
+			nri::TextureDesc textureDesc = {};
+			textureDesc.type = nri::TextureType::TEXTURE_2D;
+			textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
+			textureDesc.format = nri::Format::BC7_RGBA_UNORM;
+			textureDesc.width = ddsImage.GetWidth();
+			textureDesc.height = ddsImage.GetHeight();
+			textureDesc.mipNum = 0;
+			textureDesc.layerNum = ddsImage.GetArraySize();
+			NRI_ABORT_ON_FAILURE(
+					NRI.CreateTexture(*m_Device, textureDesc, m_CubemapTexture));
 		}
 
 		{
@@ -546,7 +572,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 			m_MemoryAllocations.data()));
 
 	std::vector<nri::Buffer *> bufferArray = { m_GeometryBuffer };
-	std::vector<nri::Texture *> textureArray = { m_Texture, m_DepthTexture, m_CubeTexture };
+	std::vector<nri::Texture *> textureArray = { m_Texture, m_DepthTexture, m_HDRTexture, m_CubemapTexture };
 	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
 	resourceGroupDesc.bufferNum = bufferArray.size();
 	resourceGroupDesc.buffers = bufferArray.data();
@@ -569,9 +595,15 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		}
 
 		{
-			nri::Texture2DViewDesc textureViewDesc = { .texture = m_CubeTexture, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = cubemapHDRTex.format };
+			nri::Texture2DViewDesc textureViewDesc = { .texture = m_HDRTexture, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = cubemapHDRTex.format };
 			NRI_ABORT_ON_FAILURE(
-					NRI.CreateTexture2DView(textureViewDesc, m_CubeTextureShaderResource));
+					NRI.CreateTexture2DView(textureViewDesc, m_HDRTextureShaderResource));
+		}
+
+		{
+			nri::Texture2DViewDesc textureViewDesc = { .texture = m_CubemapTexture, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_CUBE, .format = nri::Format::BC7_RGBA_UNORM };
+			NRI_ABORT_ON_FAILURE(
+					NRI.CreateTexture2DView(textureViewDesc, m_CubemapTextureShaderResource));
 		}
 
 		{
@@ -583,7 +615,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		{ // Sampler
 			nri::SamplerDesc samplerDesc = {};
 			samplerDesc.addressModes = { nri::AddressMode::REPEAT,
-				nri::AddressMode::MIRRORED_REPEAT };
+				nri::AddressMode::REPEAT, nri::AddressMode::REPEAT };
 			samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
 				nri::Filter::LINEAR };
 			samplerDesc.anisotropy = 4;
@@ -612,7 +644,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 				NRI.AllocateDescriptorSets(*m_DescriptorPool, *m_PipelineLayout, 1,
 						&m_TextureDescriptorSet, 1, 0));
 
-		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_TextureShaderResource, m_CubeTextureShaderResource };
+		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_TextureShaderResource, m_CubemapTextureShaderResource };
 
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
 		descriptorRangeUpdateDescs[0].descriptorNum = shaderResoruceViewArray.size();
@@ -646,7 +678,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 				NRI.AllocateDescriptorSets(*m_DescriptorPool, *m_SkyPipelineLayout, 1,
 						&m_SkyTextureDescriptorSet, 1, 0));
 
-		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_CubeTextureShaderResource };
+		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_HDRTextureShaderResource, m_CubemapTextureShaderResource };
 
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
 		descriptorRangeUpdateDescs[0].descriptorNum = shaderResoruceViewArray.size();
@@ -685,17 +717,41 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		textureData1.after = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT };
 		textureData1.planes = nri::PlaneBits::DEPTH;
 
-		nri::TextureSubresourceUploadDesc cubeSubresources;
-		cubeSubresources.slices = imgHDR;
-		cubeSubresources.sliceNum = 1;
-		cubeSubresources.rowPitch = cubemapHDRTex.width * 16;
-		cubeSubresources.slicePitch = cubeSubresources.rowPitch * cubemapHDRTex.height;
+		nri::TextureSubresourceUploadDesc hdrSubresources;
+		hdrSubresources.slices = imgHDR;
+		hdrSubresources.sliceNum = 1;
+		hdrSubresources.rowPitch = cubemapHDRTex.width * 16;
+		hdrSubresources.slicePitch = hdrSubresources.rowPitch * cubemapHDRTex.height;
 
 		nri::TextureUploadDesc textureData2;
-		textureData2.subresources = &cubeSubresources;
-		textureData2.texture = m_CubeTexture;
+		textureData2.subresources = &hdrSubresources;
+		textureData2.texture = m_HDRTexture;
 		textureData2.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
 		textureData2.planes = nri::PlaneBits::ALL;
+
+		uint32_t width = ddsImage.GetWidth();
+		uint32_t height = ddsImage.GetHeight();
+		uint32_t mipCount = ddsImage.GetMipCount();
+		auto format = ddsImage.GetFormat();
+		std::vector<nri::TextureSubresourceUploadDesc> cubeSubresources(6);
+		for (uint32_t mipLevel = 0; mipLevel < 1; ++mipLevel) {
+			uint32_t mipWidth = std::max(1u, width >> mipLevel);
+			uint32_t mipHeight = std::max(1u, height >> mipLevel);
+			for (uint32_t face = 0; face < 6; ++face) {
+				uint32_t subresourceIdx = mipLevel * 6 + face;
+				const tinyddsloader::DDSFile::ImageData *imgData = ddsImage.GetImageData(mipLevel, face);
+				cubeSubresources[subresourceIdx].slices = imgData->m_mem;
+				cubeSubresources[subresourceIdx].sliceNum = 1;
+				cubeSubresources[subresourceIdx].rowPitch = imgData->m_memPitch;
+				cubeSubresources[subresourceIdx].slicePitch = imgData->m_memSlicePitch;
+			}
+		}
+
+		nri::TextureUploadDesc textureData3;
+		textureData3.subresources = cubeSubresources.data();
+		textureData3.texture = m_CubemapTexture;
+		textureData3.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
+		textureData3.planes = nri::PlaneBits::ALL;
 
 		nri::BufferUploadDesc bufferData = {};
 		bufferData.buffer = m_GeometryBuffer;
@@ -705,7 +761,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 			nri::AccessBits::VERTEX_BUFFER };
 
 		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData };
-		std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData, textureData1, textureData2 };
+		std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData, textureData1, textureData2, textureData3 };
 
 		NRI_ABORT_ON_FAILURE(NRI.UploadData(*m_GraphicsQueue, texUploadDescArray.data(), texUploadDescArray.size(),
 				uploadDescArray.data(),
@@ -727,7 +783,7 @@ void Sample::PrepareFrame(uint32_t) {
 	{
 		ImGui::SliderFloat("Transparency", &m_Transparency, 0.0f, 1.0f);
 		ImGui::SliderFloat("Scale", &m_Scale, 0.75f, 1.25f);
-		ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f,"%.0f");
+		ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f, "%.0f");
 
 		const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_Device);
 		ImGui::BeginDisabled(!deviceDesc.isFlexibleMultiviewSupported);
@@ -766,6 +822,7 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 			glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 3.5f)),
 					(float)glfwGetTime(), glm::vec3(0.0f, 1.0f, 0.0f));
 	const glm::mat4 p = glm::perspectiveLH_ZO(glm::radians(m_Fov), 900.f / 600.f, 0.1f, 100.0f);
+	const glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.5f);
 
 	skyParams.x = 0;
 	skyParams.y = p[1][1];
@@ -846,7 +903,7 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 
 				NRI.CmdSetPipelineLayout(*commandBuffer, *m_PipelineLayout);
 				NRI.CmdSetPipeline(*commandBuffer, *m_Pipeline);
-				NRI.CmdSetRootConstants(*commandBuffer, 0, &m_Transparency, 4);
+				NRI.CmdSetRootConstants(*commandBuffer, 0, &cameraPos, sizeof(glm::vec4));
 				NRI.CmdSetIndexBuffer(*commandBuffer, *m_GeometryBuffer, 0,
 						nri::IndexType::UINT32);
 				NRI.CmdSetVertexBuffers(*commandBuffer, 0, 1, &m_GeometryBuffer,
