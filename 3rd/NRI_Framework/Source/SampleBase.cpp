@@ -378,7 +378,7 @@ void SampleBase::GetCameraDescFromInputDevices(CameraDesc &cameraDesc) {
   float motionScale = m_Camera.state.motionScale;
 
   vec2 mouseDelta = GetMouseDelta();
-  cameraDesc.dYaw = -mouseDelta.x * m_MouseSensitivity;
+  cameraDesc.dYaw = -mouseDelta.x * m_MouseSensitivity; 
   cameraDesc.dPitch = -mouseDelta.y * m_MouseSensitivity;
 
   if (IsKeyPressed(Key::Right))

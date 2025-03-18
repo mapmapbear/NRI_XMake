@@ -2,6 +2,7 @@
 #include "NRIDescs.h"
 #include "NRIFramework.h"
 #include "glm/ext/matrix_transform.hpp"
+#include "glm/trigonometric.hpp"
 #include "imgui.h"
 
 // STB
@@ -770,11 +771,11 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 
 	// User interface
 	bool initialized = InitUI(NRI, NRI, *m_Device, swapChainFormat);
-
+	m_Camera.Initialize(glm::vec3(0.0f, 0.0f, -3.5f), glm::vec3(0.0f, 0.0f, 0.0f));
 	return initialized;
 }
 
-void Sample::PrepareFrame(uint32_t) {
+void Sample::PrepareFrame(uint32_t frameIndex) {
 	BeginUI();
 
 	ImGui::SetNextWindowPos(ImVec2(30, 30), ImGuiCond_Once);
@@ -796,6 +797,16 @@ void Sample::PrepareFrame(uint32_t) {
 
 	EndUI(NRI, *m_Streamer);
 	NRI.CopyStreamerUpdateRequests(*m_Streamer);
+
+	CameraDesc desc = {};
+	desc.aspectRatio = float(GetWindowResolution().first) / float(GetWindowResolution().second);
+	desc.horizontalFov = 90.0f;
+	desc.nearZ = 0.1f;
+	desc.isReversedZ = false;
+	desc.timeScale = 1.0;
+	GetCameraDescFromInputDevices(desc);
+
+	m_Camera.Update(desc, frameIndex);
 }
 
 void Sample::RenderFrame(uint32_t frameIndex) {
@@ -816,13 +827,15 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 			NRI.AcquireNextSwapChainTexture(*m_SwapChain);
 	BackBuffer &currentBackBuffer = m_SwapChainBuffers[currentTextureIndex];
 
-	const glm::mat4 m = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f),
-			glm::vec3(1.f, 0.f, 0.f));
-	const glm::mat4 v =
-			glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 3.5f)),
-					(float)glfwGetTime(), glm::vec3(0.0f, 1.0f, 0.0f));
+	const glm::mat4 m1 = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f),
+			glm::vec3(1.0f, 0.f, 0.f));
+	const glm::mat4 m2 = glm::rotate(glm::mat4(1.0f), (float)glfwGetTime(),
+			glm::vec3(0.0f, 1.f, 0.f));
+	glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 0.0f)) * m2 * m1;
 	const glm::mat4 p = glm::perspectiveLH_ZO(glm::radians(m_Fov), 900.f / 600.f, 0.1f, 100.0f);
-	const glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.5f);
+	const glm::vec3 cameraPos = m_Camera.state.globalPosition;
+	glm::vec3 target = cameraPos + glm::vec3(m_Camera.state.mWorldToView[0][2], m_Camera.state.mWorldToView[1][2], m_Camera.state.mWorldToView[2][2]);
+	const glm::mat4 v = glm::lookAtLH(cameraPos, target, glm::vec3(0.0f, 1.0f, 0.0f));
 
 	skyParams.x = 0;
 	skyParams.y = p[1][1];
@@ -835,7 +848,7 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 
 	if (commonConstants) {
 		commonConstants->modelMat = m;
-		commonConstants->viewMat = v;
+		commonConstants->viewMat = m_Camera.state.mWorldToView;
 		commonConstants->projectMat = p;
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
