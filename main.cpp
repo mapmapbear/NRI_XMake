@@ -71,7 +71,9 @@ private:
 	nri::PipelineLayout *m_PipelineLayout = nullptr;
 	nri::Pipeline *m_Pipeline = nullptr;
 	nri::PipelineLayout *m_SkyPipelineLayout = nullptr;
+	nri::PipelineLayout *m_GridPipelineLayout = nullptr;
 	nri::Pipeline *m_SkyPipeline = nullptr;
+	nri::Pipeline *m_GridPipeline = nullptr;
 	nri::Pipeline *m_PipelineMultiview = nullptr;
 	nri::DescriptorSet *m_TextureDescriptorSet = nullptr;
 	nri::DescriptorSet *m_SkyTextureDescriptorSet = nullptr;
@@ -418,6 +420,73 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 
 		NRI_ABORT_ON_FAILURE(NRI.CreateGraphicsPipeline(
 				*m_Device, graphicsPipelineDesc, m_SkyPipeline));
+	}
+
+	// Grid Pipeline
+	{
+		struct bindRoot {
+			glm::mat4 a;
+			vec4 b;
+			vec4 c;
+		};
+		nri::RootConstantDesc rootConstant = { 0, sizeof(bindRoot),
+			nri::StageBits::VERTEX_SHADER };
+
+		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
+		pipelineLayoutDesc.descriptorSetNum = 0;
+		pipelineLayoutDesc.descriptorSets = nullptr;
+		pipelineLayoutDesc.rootConstants = &rootConstant;
+		pipelineLayoutDesc.rootConstantNum = 1;
+		pipelineLayoutDesc.shaderStages =
+				nri::StageBits::VERTEX_SHADER | nri::StageBits::FRAGMENT_SHADER;
+
+		NRI_ABORT_ON_FAILURE(NRI.CreatePipelineLayout(*m_Device, pipelineLayoutDesc,
+				m_GridPipelineLayout));
+
+		nri::InputAssemblyDesc inputAssemblyDesc = {};
+		inputAssemblyDesc.topology = nri::Topology::TRIANGLE_LIST;
+
+		nri::RasterizationDesc rasterizationDesc = {};
+		rasterizationDesc.fillMode = nri::FillMode::SOLID;
+		rasterizationDesc.cullMode = nri::CullMode::NONE;
+
+		nri::ColorAttachmentDesc colorAttachmentDesc = {};
+		colorAttachmentDesc.format = swapChainFormat;
+		colorAttachmentDesc.colorWriteMask = nri::ColorWriteBits::RGBA;
+		colorAttachmentDesc.blendEnabled = true;
+		colorAttachmentDesc.colorBlend = { nri::BlendFactor::SRC_ALPHA,
+			nri::BlendFactor::ONE_MINUS_SRC_ALPHA,
+			nri::BlendFunc::ADD };
+
+		nri::DepthAttachmentDesc depthAttachmentDesc = {};
+		depthAttachmentDesc.write = false;
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::ALWAYS;
+		depthAttachmentDesc.boundsTest = false;
+
+		nri::OutputMergerDesc outputMergerDesc = {};
+		outputMergerDesc.colors = &colorAttachmentDesc;
+		outputMergerDesc.colorNum = 1;
+		outputMergerDesc.depth = depthAttachmentDesc;
+		outputMergerDesc.depthStencilFormat = nri::Format::D16_UNORM;
+
+		nri::ShaderDesc shaderStages[] = {
+			utils::LoadShader(deviceDesc.graphicsAPI,
+					"grid.vs", shaderCodeStorage),
+			utils::LoadShader(deviceDesc.graphicsAPI, "grid.fs",
+					shaderCodeStorage),
+		};
+
+		nri::GraphicsPipelineDesc graphicsPipelineDesc;
+		graphicsPipelineDesc.pipelineLayout = m_GridPipelineLayout;
+		graphicsPipelineDesc.vertexInput = nullptr;
+		graphicsPipelineDesc.inputAssembly = inputAssemblyDesc;
+		graphicsPipelineDesc.rasterization = rasterizationDesc;
+		graphicsPipelineDesc.outputMerger = outputMergerDesc;
+		graphicsPipelineDesc.shaders = shaderStages;
+		graphicsPipelineDesc.shaderNum = helper::GetCountOf(shaderStages);
+
+		NRI_ABORT_ON_FAILURE(NRI.CreateGraphicsPipeline(
+				*m_Device, graphicsPipelineDesc, m_GridPipeline));
 	}
 
 	{ // Descriptor pool
@@ -909,6 +978,31 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 					NRI.CmdSetScissors(*commandBuffer, &scissor, 1);
 				}
 				NRI.CmdDraw(*commandBuffer, { 3, 1, 0, 0 });
+			}
+
+			{
+				helper::Annotation annotation(NRI, *commandBuffer, "Grid");
+				NRI.CmdSetPipelineLayout(*commandBuffer, *m_GridPipelineLayout);
+				NRI.CmdSetPipeline(*commandBuffer, *m_GridPipeline);
+				struct {
+					mat4 mvp;
+					vec4 camPos;
+					vec4 origin;
+				} params = {
+					.mvp = m_Camera.state.mClipToView * m_Camera.state.mWorldToView,
+					.camPos = vec4(m_Camera.state.globalPosition, 1.0),
+					.origin = vec4(0.0)
+				};
+				NRI.CmdSetRootConstants(*commandBuffer, 0, &params, sizeof(params));
+				{
+					const nri::Viewport viewport = { 0.0f, 0.0f, (float)w,
+						(float)h, 0.0f, 1.0f };
+					NRI.CmdSetViewports(*commandBuffer, &viewport, 1);
+
+					nri::Rect scissor = { 0, 0, w, h };
+					NRI.CmdSetScissors(*commandBuffer, &scissor, 1);
+				}
+				NRI.CmdDraw(*commandBuffer, { 6, 1, 0, 0 });
 			}
 
 			{

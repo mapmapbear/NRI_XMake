@@ -5,18 +5,19 @@
 #include "glm/ext/matrix_projection.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/matrix.hpp"
+#include <math.h>
 
 void Camera::Initialize(const vec3 &position, const vec3 &lookAt,
 		bool isRelative) {
 	vec3 dir = normalize(lookAt - position);
 
 	vec3 rot;
-	rot.x = atan2(dir.y, dir.x);
-	rot.y = asin(dir.z);
+	rot.x = 0.0f;
+	rot.y = 0.0f;
 	rot.z = 0.0f;
 
 	state.globalPosition = vec3(position);
-	state.rotation = degrees(rot);
+	state.rotation = glm::degrees(rot);
 	m_IsRelative = isRelative;
 }
 
@@ -67,7 +68,7 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 		state.position = vec3(state.globalPosition);
 		statePrev.position = vec3(statePrev.globalPosition);
 
-		state.mViewToWorld = glm::lookAtLH(state.globalPosition, state.globalPosition + vForward, glm::vec3(0.0, 1.0, 0.0));
+		state.mWorldToView = glm::lookAtLH(state.globalPosition, state.globalPosition + vForward, glm::vec3(0.0, 1.0, 0.0));
 	}
 
 	// Rotation
@@ -84,12 +85,12 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 		state.rotation.z = 0.0f;
 	} else {
 #if 1
-		state.mViewToWorld = glm::rotate(state.mViewToWorld, glm::radians(state.rotation.x), vUp);
-		// state.mViewToWorld = glm::rotate(state.mViewToWorld, glm::radians(state.rotation.x), vRight);
-		// state.mViewToWorld =  glm::rotate(state.mViewToWorld, glm::radians(state.rotation.x), vForward);
+		state.mViewToWorld = glm::rotate(glm::mat4(1.0), glm::radians(state.rotation.x), vUp);
+		state.mViewToWorld = glm::rotate(state.mViewToWorld, glm::radians(state.rotation.y), vRight);
 #endif
-		state.mWorldToView = state.mViewToWorld;
+		state.mWorldToView = state.mWorldToView * state.mViewToWorld;
 	}
+
 
 	// Projection
 	if (desc.orthoRange > 0.0f) {
@@ -118,10 +119,14 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 
 	// Previous other
 	statePrev.mWorldToClip = statePrev.mViewToClip * statePrev.mWorldToView;
-
-	statePrev.mViewToWorld = statePrev.mWorldToView;
-	//   statePrev.mViewToWorld.InvertOrtho();
+	statePrev.mViewToWorld = state.mViewToWorld;
 
 	statePrev.mClipToWorld = statePrev.mWorldToClip;
-	//   statePrev.mClipToWorld.Invert();
+
+	statePrev.rotation.x = state.rotation.x;
+	statePrev.rotation.y = state.rotation.y;
+	statePrev.rotation.z = state.rotation.z;
+	state.rotation.x = 0;
+	state.rotation.y = 0;
+	state.rotation.z = 0;
 }
