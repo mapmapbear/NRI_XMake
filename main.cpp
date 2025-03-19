@@ -2,6 +2,7 @@
 #include "NRIDescs.h"
 #include "NRIFramework.h"
 #include "glm/ext/matrix_transform.hpp"
+#include "glm/gtc/random.hpp"
 #include "glm/trigonometric.hpp"
 #include "imgui.h"
 
@@ -79,14 +80,19 @@ private:
 	nri::Pipeline *m_PipelineMultiview = nullptr;
 	nri::DescriptorSet *m_TextureDescriptorSet = nullptr;
 	nri::DescriptorSet *m_SkyTextureDescriptorSet = nullptr;
+	nri::DescriptorSet *m_ComputeBufferDescriptorSet = nullptr;
 	nri::Descriptor *m_TextureShaderResource = nullptr;
 	nri::Descriptor *m_HDRTextureShaderResource = nullptr;
 	nri::Descriptor *m_CubemapTextureShaderResource = nullptr;
 	nri::Descriptor *m_DepthAttachment = nullptr;
 	nri::Descriptor *m_Sampler = nullptr;
 	nri::Descriptor *m_CubeSampler = nullptr;
+	nri::Descriptor *m_PosStorageShaderResource = nullptr;
+	nri::Descriptor *m_MatrixStorageShaderResource = nullptr;
 	nri::Buffer *m_ConstantBuffer = nullptr;
 	nri::Buffer *m_GeometryBuffer = nullptr;
+	nri::Buffer *m_PositionStorageBuffer = nullptr;
+	nri::Buffer *m_MatrixStorageBuffer = nullptr;
 	nri::Texture *m_Texture = nullptr;
 	nri::Texture *m_HDRTexture = nullptr;
 	nri::Texture *m_CubemapTexture = nullptr;
@@ -501,9 +507,9 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	// Compute pipeline
 	{
 		nri::DescriptorRangeDesc descriptorRangeComp[2];
-		descriptorRangeComp[0] = { 0, 1, nri::DescriptorType::STORAGE_BUFFER,
+		descriptorRangeComp[0] = { 0, 1, nri::DescriptorType::STRUCTURED_BUFFER,
 			nri::StageBits::COMPUTE_SHADER };
-		descriptorRangeComp[1] = { 0, 1, nri::DescriptorType::STRUCTURED_BUFFER,
+		descriptorRangeComp[1] = { 0, 1, nri::DescriptorType::STORAGE_BUFFER,
 			nri::StageBits::COMPUTE_SHADER };
 
 		nri::DescriptorSetDesc descriptorSetDesc = { 0, descriptorRangeComp, 2 };
@@ -530,8 +536,10 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 
 	{ // Descriptor pool
 		nri::DescriptorPoolDesc descriptorPoolDesc = {};
-		descriptorPoolDesc.descriptorSetMaxNum = BUFFERED_FRAME_MAX_NUM + 2;
+		descriptorPoolDesc.descriptorSetMaxNum = BUFFERED_FRAME_MAX_NUM + 5;
 		descriptorPoolDesc.constantBufferMaxNum = BUFFERED_FRAME_MAX_NUM;
+		descriptorPoolDesc.storageBufferMaxNum = 2;
+		descriptorPoolDesc.structuredBufferMaxNum = 2;
 		descriptorPoolDesc.textureMaxNum = 20;
 		descriptorPoolDesc.samplerMaxNum = 10;
 
@@ -598,6 +606,8 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	const uint64_t indexDataSize = helper::GetByteSizeOf(indices);
 	const uint64_t indexDataAlignedSize = helper::Align(indexDataSize, 32);
 	const uint64_t vertexDataSize = helper::GetByteSizeOf(positions);
+
+	const uint32_t kNumMeshes = 32 * 1024;
 
 	{
 		{ // Read-only texture
@@ -667,6 +677,26 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 					NRI.CreateBuffer(*m_Device, bufferDesc, m_GeometryBuffer));
 			m_GeometryOffset = indexDataAlignedSize;
 		}
+
+		// Storage Buffer(Pos)
+		{
+			nri::BufferDesc bufferDesc = {};
+			bufferDesc.size = sizeof(vec4) * kNumMeshes;
+			bufferDesc.structureStride = 16;
+			bufferDesc.usage = nri::BufferUsageBits::SHADER_RESOURCE;
+			NRI_ABORT_ON_FAILURE(
+					NRI.CreateBuffer(*m_Device, bufferDesc, m_PositionStorageBuffer));
+		}
+
+		// RW Storage Buffer(Matrix)
+		{
+			nri::BufferDesc bufferDesc = {};
+			bufferDesc.size = sizeof(mat4) * kNumMeshes;
+			bufferDesc.structureStride = 64;
+			bufferDesc.usage = nri::BufferUsageBits::SHADER_RESOURCE_STORAGE;
+			NRI_ABORT_ON_FAILURE(
+					NRI.CreateBuffer(*m_Device, bufferDesc, m_MatrixStorageBuffer));
+		}
 	}
 
 	std::vector<nri::Buffer *> constantBufferArray = { m_ConstantBuffer };
@@ -680,7 +710,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(*m_Device, resourceGroupDesc,
 			m_MemoryAllocations.data()));
 
-	std::vector<nri::Buffer *> bufferArray = { m_GeometryBuffer };
+	std::vector<nri::Buffer *> bufferArray = { m_GeometryBuffer, m_PositionStorageBuffer, m_MatrixStorageBuffer };
 	std::vector<nri::Texture *> textureArray = { m_Texture, m_DepthTexture, m_HDRTexture, m_CubemapTexture };
 	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
 	resourceGroupDesc.bufferNum = bufferArray.size();
@@ -745,6 +775,28 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 
 			m_Frames[i].constantBufferViewOffset = bufferViewDesc.offset;
 		}
+
+		// Position Storage Buffer
+		{
+			nri::BufferViewDesc bufferViewDesc = {};
+			bufferViewDesc.buffer = m_PositionStorageBuffer;
+			bufferViewDesc.viewType = nri::BufferViewType::SHADER_RESOURCE;
+			bufferViewDesc.format = nri::Format::UNKNOWN;
+			bufferViewDesc.size = kNumMeshes * sizeof(vec4);
+			NRI_ABORT_ON_FAILURE(
+					NRI.CreateBufferView(bufferViewDesc, m_PosStorageShaderResource));
+		}
+
+		// Matrix Storage Buffer
+		{
+			nri::BufferViewDesc bufferViewDesc = {};
+			bufferViewDesc.buffer = m_MatrixStorageBuffer;
+			bufferViewDesc.viewType = nri::BufferViewType::SHADER_RESOURCE_STORAGE;
+			bufferViewDesc.format = nri::Format::UNKNOWN;
+			bufferViewDesc.size = kNumMeshes * sizeof(mat4);
+			NRI_ABORT_ON_FAILURE(
+					NRI.CreateBufferView(bufferViewDesc, m_MatrixStorageShaderResource));
+		}
 	}
 
 	{ // Descriptor sets
@@ -798,6 +850,26 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 
 		NRI.UpdateDescriptorRanges(*m_SkyTextureDescriptorSet, 0,
 				helper::GetCountOf(descriptorRangeUpdateDescs),
+				descriptorRangeUpdateDescs);
+	}
+
+	// Compute Descriptor Sets
+	{
+		NRI_ABORT_ON_FAILURE(
+				NRI.AllocateDescriptorSets(*m_DescriptorPool, *m_ComputePipelineLayout, 1,
+						&m_ComputeBufferDescriptorSet, 1, 0));
+
+		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_PosStorageShaderResource, m_MatrixStorageShaderResource };
+
+		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
+		descriptorRangeUpdateDescs[0].descriptorNum = 2;
+		descriptorRangeUpdateDescs[0].descriptors = shaderResoruceViewArray.data();
+
+		// descriptorRangeUpdateDescs[1].descriptorNum = 1;
+		// descriptorRangeUpdateDescs[1].descriptors = &m_MatrixStorageShaderResource;
+
+		NRI.UpdateDescriptorRanges(*m_ComputeBufferDescriptorSet, 0,
+				1,
 				descriptorRangeUpdateDescs);
 	}
 
@@ -869,7 +941,17 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		bufferData.after = { nri::AccessBits::INDEX_BUFFER |
 			nri::AccessBits::VERTEX_BUFFER };
 
-		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData };
+		std::vector<vec4> centers(kNumMeshes);
+		for (vec4 &p : centers) {
+			p = vec4(glm::linearRand(-vec3(500.0f), +vec3(500.0f)), glm::linearRand(0.0f, 3.14159f));
+		}
+		// nri::BufferUploadDesc bufferData1 = {};
+		// bufferData1.buffer = m_PositionStorageBuffer;
+		// bufferData1.data = centers.data();
+		// bufferData1.dataSize = centers.size();
+		// bufferData1.after = { nri::AccessBits::SHADER_RESOURCE_STORAGE };
+
+		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData }; //, bufferData1 };
 		std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData, textureData1, textureData2, textureData3 };
 
 		NRI_ABORT_ON_FAILURE(NRI.UploadData(*m_GraphicsQueue, texUploadDescArray.data(), texUploadDescArray.size(),
