@@ -69,14 +69,6 @@ float4 gridColor(float2 uv, float2 camPos) {
     return c;
 }
 
-// struct PushConstants
-// {
-//     float4x4 mvpMat;
-//     float4 cameraPos;
-//     float4 origin;
-// };
-// NRI_ROOT_CONSTANTS( PushConstants, g_PushConstants, 0, 0 ); 
- 
 
 struct inputPS
 {

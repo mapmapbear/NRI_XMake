@@ -72,8 +72,10 @@ private:
 	nri::Pipeline *m_Pipeline = nullptr;
 	nri::PipelineLayout *m_SkyPipelineLayout = nullptr;
 	nri::PipelineLayout *m_GridPipelineLayout = nullptr;
+	nri::PipelineLayout *m_ComputePipelineLayout = nullptr;
 	nri::Pipeline *m_SkyPipeline = nullptr;
 	nri::Pipeline *m_GridPipeline = nullptr;
+	nri::Pipeline *m_ComputePipeline = nullptr;
 	nri::Pipeline *m_PipelineMultiview = nullptr;
 	nri::DescriptorSet *m_TextureDescriptorSet = nullptr;
 	nri::DescriptorSet *m_SkyTextureDescriptorSet = nullptr;
@@ -116,8 +118,14 @@ Sample::~Sample() {
 	}
 
 	NRI.DestroyPipeline(*m_Pipeline);
+	NRI.DestroyPipeline(*m_SkyPipeline);
+	NRI.DestroyPipeline(*m_GridPipeline);
+	NRI.DestroyPipeline(*m_ComputePipeline);
 	NRI.DestroyPipeline(*m_PipelineMultiview);
 	NRI.DestroyPipelineLayout(*m_PipelineLayout);
+	NRI.DestroyPipelineLayout(*m_SkyPipelineLayout);
+	NRI.DestroyPipelineLayout(*m_GridPipelineLayout);
+	NRI.DestroyPipelineLayout(*m_ComputePipelineLayout);
 	NRI.DestroyDescriptor(*m_TextureShaderResource);
 	NRI.DestroyDescriptor(*m_DepthAttachment);
 	NRI.DestroyDescriptor(*m_Sampler);
@@ -484,9 +492,40 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		graphicsPipelineDesc.outputMerger = outputMergerDesc;
 		graphicsPipelineDesc.shaders = shaderStages;
 		graphicsPipelineDesc.shaderNum = helper::GetCountOf(shaderStages);
+		graphicsPipelineDesc.multisample = nullptr;
 
 		NRI_ABORT_ON_FAILURE(NRI.CreateGraphicsPipeline(
 				*m_Device, graphicsPipelineDesc, m_GridPipeline));
+	}
+
+	// Compute pipeline
+	{
+		nri::DescriptorRangeDesc descriptorRangeComp[2];
+		descriptorRangeComp[0] = { 0, 1, nri::DescriptorType::STORAGE_BUFFER,
+			nri::StageBits::COMPUTE_SHADER };
+		descriptorRangeComp[1] = { 0, 1, nri::DescriptorType::STRUCTURED_BUFFER,
+			nri::StageBits::COMPUTE_SHADER };
+
+		nri::DescriptorSetDesc descriptorSetDesc = { 0, descriptorRangeComp, 2 };
+
+		struct bindRoot {
+			vec4 a;
+		};
+		nri::RootConstantDesc rootConstant = { 0, sizeof(bindRoot),
+			nri::StageBits::COMPUTE_SHADER };
+
+		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
+		pipelineLayoutDesc.descriptorSetNum = 1;
+		pipelineLayoutDesc.descriptorSets = &descriptorSetDesc;
+		pipelineLayoutDesc.rootConstantNum = 1;
+		pipelineLayoutDesc.rootConstants = &rootConstant;
+		pipelineLayoutDesc.shaderStages = nri::StageBits::COMPUTE_SHADER;
+		NRI_ABORT_ON_FAILURE(NRI.CreatePipelineLayout(*m_Device, pipelineLayoutDesc, m_ComputePipelineLayout));
+
+		nri::ComputePipelineDesc computePipelineDesc = {};
+		computePipelineDesc.pipelineLayout = m_ComputePipelineLayout;
+		computePipelineDesc.shader = utils::LoadShader(deviceDesc.graphicsAPI, "instanceGenBuffer.cs", shaderCodeStorage);
+		NRI_ABORT_ON_FAILURE(NRI.CreateComputePipeline(*m_Device, computePipelineDesc, m_ComputePipeline));
 	}
 
 	{ // Descriptor pool
