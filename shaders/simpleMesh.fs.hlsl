@@ -8,9 +8,9 @@ struct InputPS
     float3 normal : NORMAL;
 };
 
-NRI_RESOURCE( Texture2D, g_DiffuseTexture, t, 0, 1 );
-NRI_RESOURCE( SamplerState, g_Sampler, s, 0, 1 );
-NRI_RESOURCE( TextureCube, g_cubeTexture, t, 1, 1 );
+NRI_RESOURCE(Texture2D, g_DiffuseTexture, t, 0, 1);
+NRI_RESOURCE(SamplerState, g_Sampler, s, 0, 1 );
+NRI_RESOURCE(TextureCube, g_cubeTexture, t, 1, 1 );
 
 
 struct PushConstants

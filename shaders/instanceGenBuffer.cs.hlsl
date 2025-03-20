@@ -21,6 +21,16 @@ float4x4 translate(float4x4 m, float3 v) {
     return Result;
 }
 
+
+float4x4 translate1(float4x4 m, float3 v)
+{
+    float4x4 Result = m;
+    Result[3].x = m[3].x + v.x;
+    Result[3].y = m[3].y + v.y;
+    Result[3].z = m[3].z + v.z;
+    return Result;
+}
+
 // 旋转函数（基于轴和角度）
 float4x4 rotate(float4x4 m, float angle, float3 v) {
     float a = angle;
@@ -65,13 +75,18 @@ void main(uint3 DTid : SV_DispatchThreadID) {
     float4 center = Positions[idx];
 
     // 计算模型矩阵：先平移到 center.xyz，再绕 (1,1,1) 轴旋转
-    float4x4 model = rotate(translate(float4x4(1.0f, 0.0f, 0.0f, 0.0f,
-                                              0.0f, 1.0f, 0.0f, 0.0f,
-                                              0.0f, 0.0f, 1.0f, 0.0f,
-                                              0.0f, 0.0f, 0.0f, 1.0f), 
-                                     center.xyz), 
-                           g_PushConstants.time.x + center.w, 
-                           float3(1.0f, 1.0f, 1.0f));
+    // float4x4 model = rotate(translate(float4x4(1.0f, 0.0f, 0.0f, 0.0f,
+    //                                           0.0f, 1.0f, 0.0f, 0.0f,
+    //                                           0.0f, 0.0f, 1.0f, 0.0f,
+    //                                           0.0f, 0.0f, 0.0f, 1.0f), 
+    //                                  float3(center.x, 0.2, center.z)), 
+    //                        g_PushConstants.time.x + center.w, 
+    //                        float3(1.0f, 1.0f, 1.0f));
+    float4x4 model = translate1(float4x4(1.0f, 0.0f, 0.0f, 0.0f,
+                        0.0f, 1.0f, 0.0f, 0.0f,
+                        0.0f, 0.0f, 1.0f, 0.0f,
+                        0.0f, 0.0f, 0.0f, 1.0f), 
+                float3(center.x, 0.2, center.z));
 
     // 将结果写入 Matrices 缓冲区
     Matrices[idx] = model;

@@ -1,7 +1,6 @@
 // © 2021 NVIDIA Corporation
 
 #include "NRICompatibility.hlsli"
-
 NRI_RESOURCE( cbuffer, CommonConstants, b, 0, 0 )
 {
     float4x4 modelMat;
@@ -9,11 +8,19 @@ NRI_RESOURCE( cbuffer, CommonConstants, b, 0, 0 )
 	float4x4 projectMat;
 };
 
+struct InstanceData
+{
+    float4x4 modelMat;
+};
+NRI_RESOURCE(StructuredBuffer<InstanceData>, gInstanceData, t, 0, 1);
+// #endif
+
 struct inputVS
 {
     float3 in_position : POSITION0;
     float2 in_texcoord : TEXCOORD0;
     float3 in_normal : NORMAL;
+    uint instanceID : SV_InstanceID;
 };
 
 struct outputVS 
@@ -66,12 +73,14 @@ float4x4 inverse(float4x4 m) {
 outputVS main(inputVS input)
 {
     outputVS output;
-    float4x4 vpMat = mul(viewMat, modelMat);
+    float4x4 newModelMat = modelMat;
+    newModelMat = gInstanceData[input.instanceID].modelMat;
+    float4x4 vpMat = mul(viewMat, newModelMat);
 	float4x4 mvpMat = mul(projectMat, vpMat);
 	output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));
     output.texCoord = input.in_texcoord;
     float4x4 normalMatrix = transpose(inverse(modelMat));
     output.normal  = mul(normalMatrix, float4(input.in_normal, 1.0)).xyz;
-    output.positionWS = mul(modelMat, float4(input.in_position, 1.0)).xyz;
+    output.positionWS = mul(newModelMat, float4(input.in_position, 1.0)).xyz; 
     return output;
 }
