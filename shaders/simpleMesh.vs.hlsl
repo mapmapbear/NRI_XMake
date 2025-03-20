@@ -73,14 +73,21 @@ float4x4 inverse(float4x4 m) {
 outputVS main(inputVS input)
 {
     outputVS output;
-    float4x4 newModelMat = modelMat;
-    newModelMat = gInstanceData[input.instanceID].modelMat;
-    float4x4 vpMat = mul(viewMat, newModelMat);
+    float4x4 newModelMat = gInstanceData[input.instanceID].modelMat;
+    // newModelMat = inverse(newModelMat);
+    float4x4 testMat = {
+        float4(1.0, 0.0, 0.0, gInstanceData[input.instanceID].modelMat[3].x), 
+        float4(0.0, 1.0, 0.0, gInstanceData[input.instanceID].modelMat[3].y), 
+        float4(0.0, 0.0, 1.0, gInstanceData[input.instanceID].modelMat[3].z), 
+        float4(0.0, 0.0, 0.0, 1.0)
+    };
+    float4x4 vpMat = mul(viewMat, testMat);
 	float4x4 mvpMat = mul(projectMat, vpMat);
 	output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));
     output.texCoord = input.in_texcoord;
     float4x4 normalMatrix = transpose(inverse(modelMat));
     output.normal  = mul(normalMatrix, float4(input.in_normal, 1.0)).xyz;
-    output.positionWS = mul(newModelMat, float4(input.in_position, 1.0)).xyz; 
+    output.positionWS = mul(testMat, float4(input.in_position, 1.0)).xyz; 
+    // output.positionWS = gInstanceData[input.instanceID].modelMat[3].xyz;
     return output;
 }

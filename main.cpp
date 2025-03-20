@@ -1203,7 +1203,7 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 #ifdef INSTANCE
 				instanceCount = 1024 * 32;
 #endif
-				NRI.CmdDrawIndexed(*commandBuffer, { g_indexCount, 5, 0, 0, 0 });
+				NRI.CmdDrawIndexed(*commandBuffer, { g_indexCount, instanceCount, 0, 0, 0 });
 			}
 		}
 		NRI.CmdEndRendering(*commandBuffer);

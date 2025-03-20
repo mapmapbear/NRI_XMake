@@ -70,7 +70,7 @@ target("ShaderCompiler")
         local shader_output_path = path.join(target:targetdir(), "_Shaders1")
         os.mkdir(shader_output_path)
         local args = {
-            "--useAPI", "--binary", "--flatten", "--stripReflection", "--WX",
+            "--useAPI", "--binary", "--flatten", "--stripReflection", "--WX", "--PDB",
             "--sRegShift", "100", "--tRegShift", "200", "--bRegShift", "300", "--uRegShift", "400",
             "--sourceDir", path.join(os.scriptdir(), "Shaders"),
             "-c", path.join(os.scriptdir(), "Shaders.cfg"),

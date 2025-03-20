@@ -82,5 +82,5 @@ float4 main(inputPS input) : SV_Target
     float2 newUV = input.uv;
     newUV.x = 1.0 - newUV.x;
     newUV.y = 1.0 - newUV.y;
-    return gridColor(newUV, input.cameraPos);
+    return gridColor(abs(newUV), input.cameraPos);
 }

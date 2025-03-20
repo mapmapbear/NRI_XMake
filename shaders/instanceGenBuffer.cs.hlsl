@@ -13,7 +13,7 @@ struct PushConstants
 };
 NRI_ROOT_CONSTANTS( PushConstants, g_PushConstants, 0, 0 ); 
 
-
+ 
 // 平移函数
 float4x4 translate(float4x4 m, float3 v) {
     float4x4 Result = m;
@@ -22,7 +22,7 @@ float4x4 translate(float4x4 m, float3 v) {
 }
 
 
-float4x4 translate1(float4x4 m, float3 v)
+float4x4 translate1(float4x4 m, float3 v) 
 {
     float4x4 Result = m;
     Result[3].x = m[3].x + v.x;
@@ -32,7 +32,7 @@ float4x4 translate1(float4x4 m, float3 v)
 }
 
 // 旋转函数（基于轴和角度）
-float4x4 rotate(float4x4 m, float angle, float3 v) {
+float4x4 rotate(float4x4 m, float angle, float3 v) { 
     float a = angle;
     float c = cos(a);
     float s = sin(a); 
@@ -89,5 +89,5 @@ void main(uint3 DTid : SV_DispatchThreadID) {
                 float3(center.x, 0.2, center.z));
 
     // 将结果写入 Matrices 缓冲区
-    Matrices[idx] = model;
+    Matrices[idx] = model; 
 }
