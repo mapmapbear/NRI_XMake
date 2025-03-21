@@ -1,10 +1,11 @@
 // © 2021 NVIDIA Corporation
-#include "NRIDescs.h"
-#include "NRIFramework.h"
+// #include "NRIDescs.h"
+// #include "NRIFramework.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/gtc/random.hpp"
 #include "glm/trigonometric.hpp"
 #include "imgui.h"
+#include "renderer.h"
 
 // STB
 #include "stb_image.h"
@@ -39,11 +40,6 @@ struct Vertex {
 };
 
 static uint32_t g_indexCount = 0;
-
-struct NRIInterface : public nri::CoreInterface,
-					  public nri::HelperInterface,
-					  public nri::StreamerInterface,
-					  public nri::SwapChainInterface {};
 
 struct Frame {
 	nri::CommandAllocator *commandAllocator;
@@ -116,6 +112,8 @@ private:
 	float m_Scale = 1.0f;
 	float m_Fov = 45.0f;
 	vec4 skyParams;
+
+	Renderer *testRenderPtr;
 };
 
 Sample::~Sample() {
@@ -221,6 +219,8 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	NRI_ABORT_ON_FAILURE(NRI.GetQueue(*m_Device, nri::QueueType::COMPUTE, 0, m_ComputeQueue));
 	NRI.SetDebugName(m_ComputeQueue, "ComputeQueue");
 
+	testRenderPtr = new Renderer(NRI, m_Device);
+
 	// Fences
 	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_FrameFence));
 	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_ComputeFence));
@@ -270,6 +270,8 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateCommandBuffer(*frame.commandAllocatorCompute, frame.commandBufferCompute));
 	}
+
+	testRenderPtr->OnStart();
 
 	// Pipeline
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_Device);
@@ -392,14 +394,12 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 			nri::StageBits::ALL };
 
 		nri::DescriptorRangeDesc descriptorRangeTexture[2];
-		descriptorRangeTexture[0] = { 0, 2, nri::DescriptorType::TEXTURE,
+		descriptorRangeTexture[0] = { 0, 1, nri::DescriptorType::TEXTURE,
 			nri::StageBits::FRAGMENT_SHADER };
 		descriptorRangeTexture[1] = { 0, 1, nri::DescriptorType::SAMPLER,
 			nri::StageBits::FRAGMENT_SHADER };
 
 		nri::DescriptorSetDesc descriptorSetDescs[] = {
-			{ 0, descriptorRangeConstant,
-					helper::GetCountOf(descriptorRangeConstant) },
 			{ 1, descriptorRangeTexture, helper::GetCountOf(descriptorRangeTexture) },
 		};
 
@@ -878,10 +878,10 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	{
 		// Texture
 		NRI_ABORT_ON_FAILURE(
-				NRI.AllocateDescriptorSets(*m_DescriptorPool, *m_SkyPipelineLayout, 1,
+				NRI.AllocateDescriptorSets(*m_DescriptorPool, *m_SkyPipelineLayout, 0,
 						&m_SkyTextureDescriptorSet, 1, 0));
 
-		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_HDRTextureShaderResource, m_CubemapTextureShaderResource };
+		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_HDRTextureShaderResource };
 
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
 		descriptorRangeUpdateDescs[0].descriptorNum = shaderResoruceViewArray.size();
@@ -1131,15 +1131,17 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 				clearDesc.value.depthStencil.depth = 1.0;
 				NRI.CmdClearAttachments(*commandBuffer, &clearDesc, 1, nullptr, 0);
 			}
+			RenderInfo info = { .desc = attachmentsDesc, .cmdBuffer = *commandBuffer };
+			testRenderPtr->OnRender(info);
 
 			{
 				helper::Annotation annotation(NRI, *commandBuffer, "SkyBox");
 				NRI.CmdSetPipelineLayout(*commandBuffer, *m_SkyPipelineLayout);
 				NRI.CmdSetPipeline(*commandBuffer, *m_SkyPipeline);
 				NRI.CmdSetRootConstants(*commandBuffer, 0, &skyParams, sizeof(vec4));
-				NRI.CmdSetDescriptorSet(*commandBuffer, 0,
-						*frame.constantBufferDescriptorSet, nullptr);
-				NRI.CmdSetDescriptorSet(*commandBuffer, 1, *m_SkyTextureDescriptorSet,
+				// NRI.CmdSetDescriptorSet(*commandBuffer, 0,
+				// 		*frame.constantBufferDescriptorSet, nullptr);
+				NRI.CmdSetDescriptorSet(*commandBuffer, 0, *m_SkyTextureDescriptorSet,
 						nullptr);
 				{
 					const nri::Viewport viewport = { 0.0f, 0.0f, (float)w,
@@ -1249,8 +1251,14 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 	}
 
 	// Submit Graphics CommandBuffer
-	{ 
+	{
+		nri::FenceSubmitDesc graphicsWaitFence = {};
+		graphicsWaitFence.fence = m_ComputeFence;
+		graphicsWaitFence.value = frameIndex + 1;
+
 		nri::QueueSubmitDesc queueSubmitDesc = {};
+		queueSubmitDesc.waitFences = &graphicsWaitFence;
+		queueSubmitDesc.waitFenceNum = 1;
 		queueSubmitDesc.commandBuffers = &frame.commandBuffer;
 		queueSubmitDesc.commandBufferNum = 1;
 

@@ -55,8 +55,9 @@ target("DemoApp")
     add_deps("NRIFramework", "Detex", "NRI", "ImGUI")
     add_includedirs("3rd/NRI_Framework/Include", {public = true})
     add_includedirs("3rd/Detex", {public = true})
+    add_includedirs("source/", {public = true})
     add_packages("glfw", "glm", "assimp")
-    add_files("main.cpp")
+    add_files("main.cpp", "source/**.cpp")
 
 target("ShaderCompiler")
     set_kind("phony") -- 这里可以是 phony，避免 xmake 生成实际的二进制文件

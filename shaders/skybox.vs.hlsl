@@ -1,11 +1,11 @@
 #include "NRICompatibility.hlsli"
 
-NRI_RESOURCE( cbuffer, CommonConstants, b, 0, 0 )
-{
-    float4x4 modelMat;
-	float4x4 viewMat;
-	float4x4 projectMat;
-};
+// NRI_RESOURCE( cbuffer, CommonConstants, b, 0, 0 )
+// {
+//     float4x4 modelMat;
+// 	float4x4 viewMat;
+// 	float4x4 projectMat;
+// };
 
 struct VSOutput {
     float4 position : SV_Position; // Equivalent to gl_Position
