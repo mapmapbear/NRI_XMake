@@ -45,6 +45,18 @@
 #include "Timer.h"
 #include "Utils.h"
 
+// STB
+#include "stb_image.h"
+
+// ASSIMP
+#include <assimp/cimport.h>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
+#include <assimp/version.h>
+#include <vector>
+
+#include "tinyddsloader.h"
+
 // Settings
 constexpr nri::VKBindingOffsets VK_BINDING_OFFSETS = { 100, 200, 300, 400 }; // just ShaderMake defaults for simplicity
 constexpr bool D3D11_COMMANDBUFFER_EMULATION = false;

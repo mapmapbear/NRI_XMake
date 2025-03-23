@@ -1,8 +1,6 @@
 #include "skyRenderPass.h"
 #include "../renderer.h"
 
-#include "tinyddsloader.h"
-
 SkyRenderPass::SkyRenderPass(Renderer *renderer) :
 		m_renderer(renderer) {
 	m_NRI = &m_renderer->GetNRI();
@@ -43,7 +41,7 @@ SkyRenderPass::SkyRenderPass(Renderer *renderer) :
 		rasterizationDesc.cullMode = nri::CullMode::NONE;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
-		colorAttachmentDesc.format = nri::Format::RGBA8_SNORM;
+		colorAttachmentDesc.format = nri::Format::RGBA8_UNORM;
 		colorAttachmentDesc.colorWriteMask = nri::ColorWriteBits::RGBA;
 		colorAttachmentDesc.blendEnabled = true;
 		colorAttachmentDesc.colorBlend = { nri::BlendFactor::SRC_ALPHA,
@@ -131,7 +129,7 @@ SkyRenderPass::SkyRenderPass(Renderer *renderer) :
 	// Descriptor Set
 	{
 		NRI_ABORT_ON_FAILURE(
-				NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_SkyPipelineLayout, 1,
+				NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_SkyPipelineLayout, 0,
 						&m_SkyTextureDescriptorSet, 1, 0));
 
 		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_HDRTextureShaderResource };
@@ -168,22 +166,28 @@ SkyRenderPass::SkyRenderPass(Renderer *renderer) :
 			0));
 }
 
-void SkyRenderPass::Render(RenderInfo &info) {
+void SkyRenderPass::Render(RenderInfo &info, Camera &camera) {
+	glm::vec4 skyParams;
+	const glm::mat4 p = camera.state.mViewToClip;
+	skyParams.x = 0;
+	skyParams.y = p[1][1];
+	skyParams.z = 0;
+	skyParams.w = p[0][0];
 	auto NRI = *m_NRI;
 	nri::CommandBuffer &commandBuffer = info.cmdBuffer;
 	{
 		helper::Annotation annotation(NRI, commandBuffer, "SkyBoxTEST");
 		NRI.CmdSetPipelineLayout(commandBuffer, *m_SkyPipelineLayout);
 		NRI.CmdSetPipeline(commandBuffer, *m_SkyPipeline);
-		// NRI.CmdSetRootConstants(*commandBuffer, 0, &skyParams, sizeof(vec4));
+		NRI.CmdSetRootConstants(commandBuffer, 0, &skyParams, sizeof(vec4));
 		NRI.CmdSetDescriptorSet(commandBuffer, 0, *m_SkyTextureDescriptorSet,
 				nullptr);
 		{
-			const nri::Viewport viewport = { 0.0f, 0.0f, (float)200,
-				(float)90, 0.0f, 1.0f };
+			const nri::Viewport viewport = { 0.0f, 0.0f, (float)900.f,
+				(float)600.f, 0.0f, 1.0f };
 			NRI.CmdSetViewports(commandBuffer, &viewport, 1);
 
-			nri::Rect scissor = { 0, 0, 200, 90 };
+			nri::Rect scissor = { 0, 0, 900, 600 };
 			NRI.CmdSetScissors(commandBuffer, &scissor, 1);
 		}
 		NRI.CmdDraw(commandBuffer, { 3, 1, 0, 0 });

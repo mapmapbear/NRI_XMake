@@ -7,7 +7,7 @@ class Renderer;
 class SkyRenderPass {
 public:
 	SkyRenderPass(Renderer *renderer);
-	void Render(struct RenderInfo& info);
+	void Render(struct RenderInfo& info, Camera &camera);
 
 private:
 	Renderer *m_renderer;

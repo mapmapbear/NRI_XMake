@@ -1,6 +1,7 @@
 #pragma once
 #include "NRIDescs.h"
 #include "NRIFramework.h"
+#include "render_pass/gridRenderPass.h"
 #include <memory>
 
 
@@ -22,7 +23,7 @@ public:
 	void OnStart();
 	void OnUpdate();
 	void OnPreRender();
-	void OnRender(RenderInfo& info);
+	void OnRender(RenderInfo& info, Camera& camera);
 	void OnPostRender();
 
 private:
@@ -34,4 +35,5 @@ private:
 
 private:
 	std::shared_ptr<SkyRenderPass> skyPass = nullptr;
+	std::shared_ptr<GridRenderPass> gridPass = nullptr;
 };

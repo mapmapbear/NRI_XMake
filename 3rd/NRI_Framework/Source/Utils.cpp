@@ -12,6 +12,8 @@
 
 #include "Detex/stb_image.h"
 
+#include "tinyddsloader.h"
+
 struct Shader {
     const char* ext;
     nri::StageBits stage;

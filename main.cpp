@@ -1,6 +1,4 @@
 // © 2021 NVIDIA Corporation
-// #include "NRIDescs.h"
-// #include "NRIFramework.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/gtc/random.hpp"
 #include "glm/trigonometric.hpp"
@@ -17,8 +15,6 @@
 #include <assimp/version.h>
 #include <vector>
 
-#define TINYDDSLOADER_IMPLEMENTATION
-#include "tinyddsloader.h"
 
 #define INSTANCE
 
@@ -562,18 +558,19 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		NRI_ABORT_ON_FAILURE(NRI.CreateComputePipeline(*m_Device, computePipelineDesc, m_ComputePipeline));
 	}
 
-	{ // Descriptor pool
-		nri::DescriptorPoolDesc descriptorPoolDesc = {};
-		descriptorPoolDesc.descriptorSetMaxNum = BUFFERED_FRAME_MAX_NUM + 5;
-		descriptorPoolDesc.constantBufferMaxNum = BUFFERED_FRAME_MAX_NUM;
-		descriptorPoolDesc.storageBufferMaxNum = 2;
-		descriptorPoolDesc.structuredBufferMaxNum = 2;
-		descriptorPoolDesc.textureMaxNum = 20;
-		descriptorPoolDesc.samplerMaxNum = 10;
+	// { // Descriptor pool
+	// 	nri::DescriptorPoolDesc descriptorPoolDesc = {};
+	// 	descriptorPoolDesc.descriptorSetMaxNum = BUFFERED_FRAME_MAX_NUM + 5;
+	// 	descriptorPoolDesc.constantBufferMaxNum = BUFFERED_FRAME_MAX_NUM;
+	// 	descriptorPoolDesc.storageBufferMaxNum = 2;
+	// 	descriptorPoolDesc.structuredBufferMaxNum = 2;
+	// 	descriptorPoolDesc.textureMaxNum = 20;
+	// 	descriptorPoolDesc.samplerMaxNum = 10;
 
-		NRI_ABORT_ON_FAILURE(NRI.CreateDescriptorPool(*m_Device, descriptorPoolDesc,
-				m_DescriptorPool));
-	}
+	// 	NRI_ABORT_ON_FAILURE(NRI.CreateDescriptorPool(*m_Device, descriptorPoolDesc,
+	// 			m_DescriptorPool));
+	// }
+	m_DescriptorPool = &testRenderPtr->GetDescriptorPool();
 
 	// Load Scene Mesh
 	const aiScene *scene =
@@ -1061,7 +1058,8 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 	const glm::mat4 m2 = glm::rotate(glm::mat4(1.0f), (float)glfwGetTime(),
 			glm::vec3(0.0f, 1.f, 0.f));
 	glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 0.0f)) * m2 * m1;
-	const glm::mat4 p = glm::perspectiveLH_ZO(glm::radians(m_Fov), 900.f / 600.f, 0.1f, 100.0f);
+	// const glm::mat4 p = glm::perspectiveLH_ZO(glm::radians(m_Fov), 900.f / 600.f, 0.1f, 100.0f);
+	const glm::mat4 p = m_Camera.state.mViewToClip;
 	const glm::vec3 cameraPos = m_Camera.state.globalPosition;
 	glm::vec3 target = cameraPos + glm::vec3(m_Camera.state.mWorldToView[0][2], m_Camera.state.mWorldToView[1][2], m_Camera.state.mWorldToView[2][2]);
 	const glm::mat4 v = glm::lookAtLH(cameraPos, target, glm::vec3(0.0f, 1.0f, 0.0f));
@@ -1132,52 +1130,52 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 				NRI.CmdClearAttachments(*commandBuffer, &clearDesc, 1, nullptr, 0);
 			}
 			RenderInfo info = { .desc = attachmentsDesc, .cmdBuffer = *commandBuffer };
-			testRenderPtr->OnRender(info);
+			testRenderPtr->OnRender(info, m_Camera);
 
-			{
-				helper::Annotation annotation(NRI, *commandBuffer, "SkyBox");
-				NRI.CmdSetPipelineLayout(*commandBuffer, *m_SkyPipelineLayout);
-				NRI.CmdSetPipeline(*commandBuffer, *m_SkyPipeline);
-				NRI.CmdSetRootConstants(*commandBuffer, 0, &skyParams, sizeof(vec4));
-				// NRI.CmdSetDescriptorSet(*commandBuffer, 0,
-				// 		*frame.constantBufferDescriptorSet, nullptr);
-				NRI.CmdSetDescriptorSet(*commandBuffer, 0, *m_SkyTextureDescriptorSet,
-						nullptr);
-				{
-					const nri::Viewport viewport = { 0.0f, 0.0f, (float)w,
-						(float)h, 0.0f, 1.0f };
-					NRI.CmdSetViewports(*commandBuffer, &viewport, 1);
+			// {
+			// 	helper::Annotation annotation(NRI, *commandBuffer, "SkyBox");
+			// 	NRI.CmdSetPipelineLayout(*commandBuffer, *m_SkyPipelineLayout);
+			// 	NRI.CmdSetPipeline(*commandBuffer, *m_SkyPipeline);
+			// 	NRI.CmdSetRootConstants(*commandBuffer, 0, &skyParams, sizeof(vec4));
+			// 	// NRI.CmdSetDescriptorSet(*commandBuffer, 0,
+			// 	// 		*frame.constantBufferDescriptorSet, nullptr);
+			// 	NRI.CmdSetDescriptorSet(*commandBuffer, 0, *m_SkyTextureDescriptorSet,
+			// 			nullptr);
+			// 	{
+			// 		const nri::Viewport viewport = { 0.0f, 0.0f, (float)w,
+			// 			(float)h, 0.0f, 1.0f };
+			// 		NRI.CmdSetViewports(*commandBuffer, &viewport, 1);
 
-					nri::Rect scissor = { 0, 0, w, h };
-					NRI.CmdSetScissors(*commandBuffer, &scissor, 1);
-				}
-				NRI.CmdDraw(*commandBuffer, { 3, 1, 0, 0 });
-			}
+			// 		nri::Rect scissor = { 0, 0, w, h };
+			// 		NRI.CmdSetScissors(*commandBuffer, &scissor, 1);
+			// 	}
+			// 	NRI.CmdDraw(*commandBuffer, { 3, 1, 0, 0 });
+			// }
 
-			{
-				helper::Annotation annotation(NRI, *commandBuffer, "Grid");
-				NRI.CmdSetPipelineLayout(*commandBuffer, *m_GridPipelineLayout);
-				NRI.CmdSetPipeline(*commandBuffer, *m_GridPipeline);
-				struct {
-					mat4 mvp;
-					vec4 camPos;
-					vec4 origin;
-				} params = {
-					.mvp = m_Camera.state.mClipToView * m_Camera.state.mWorldToView,
-					.camPos = vec4(m_Camera.state.globalPosition, 1.0),
-					.origin = vec4(0.0)
-				};
-				NRI.CmdSetRootConstants(*commandBuffer, 0, &params, sizeof(params));
-				{
-					const nri::Viewport viewport = { 0.0f, 0.0f, (float)w,
-						(float)h, 0.0f, 1.0f };
-					NRI.CmdSetViewports(*commandBuffer, &viewport, 1);
+			// {
+			// 	helper::Annotation annotation(NRI, *commandBuffer, "Grid");
+			// 	NRI.CmdSetPipelineLayout(*commandBuffer, *m_GridPipelineLayout);
+			// 	NRI.CmdSetPipeline(*commandBuffer, *m_GridPipeline);
+			// 	struct {
+			// 		mat4 mvp;
+			// 		vec4 camPos;
+			// 		vec4 origin;
+			// 	} params = {
+			// 		.mvp = m_Camera.state.mClipToView * m_Camera.state.mWorldToView,
+			// 		.camPos = vec4(m_Camera.state.globalPosition, 1.0),
+			// 		.origin = vec4(0.0)
+			// 	};
+			// 	NRI.CmdSetRootConstants(*commandBuffer, 0, &params, sizeof(params));
+			// 	{
+			// 		const nri::Viewport viewport = { 0.0f, 0.0f, (float)w,
+			// 			(float)h, 0.0f, 1.0f };
+			// 		NRI.CmdSetViewports(*commandBuffer, &viewport, 1);
 
-					nri::Rect scissor = { 0, 0, w, h };
-					NRI.CmdSetScissors(*commandBuffer, &scissor, 1);
-				}
-				NRI.CmdDraw(*commandBuffer, { 6, 1, 0, 0 });
-			}
+			// 		nri::Rect scissor = { 0, 0, w, h };
+			// 		NRI.CmdSetScissors(*commandBuffer, &scissor, 1);
+			// 	}
+			// 	NRI.CmdDraw(*commandBuffer, { 6, 1, 0, 0 });
+			// }
 
 			{
 				helper::Annotation annotation(NRI, *commandBuffer, "SimpleMesh");

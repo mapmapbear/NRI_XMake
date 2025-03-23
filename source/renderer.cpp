@@ -1,4 +1,6 @@
 #include "renderer.h"
+#include "Camera.h"
+#include "render_pass/gridRenderPass.h"
 #include "render_pass/skyRenderPass.h"
 #include <memory>
 
@@ -24,8 +26,10 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 
 void Renderer::OnStart() {
 	skyPass = std::make_shared<SkyRenderPass>(this);
+	gridPass = std::make_shared<GridRenderPass>(this);
 }
 
-void Renderer::OnRender(RenderInfo &info) {
-	skyPass->Render(info);
+void Renderer::OnRender(RenderInfo &info, Camera &camera) {
+	skyPass->Render(info, camera);
+	gridPass->Render(info, camera);
 }
