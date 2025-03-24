@@ -13,7 +13,6 @@ struct InstanceData
     float4x4 modelMat;
 };
 NRI_RESOURCE(StructuredBuffer<InstanceData>, gInstanceData, t, 0, 1);
-// #endif
 
 struct inputVS
 {
@@ -73,8 +72,6 @@ float4x4 inverse(float4x4 m) {
 outputVS main(inputVS input)
 {
     outputVS output;
-    float4x4 newModelMat = gInstanceData[input.instanceID].modelMat;
-    // newModelMat = inverse(newModelMat);
     float4x4 testMat = {
         float4(1.0, 0.0, 0.0, gInstanceData[input.instanceID].modelMat[3].x), 
         float4(0.0, 1.0, 0.0, gInstanceData[input.instanceID].modelMat[3].y), 
@@ -88,6 +85,5 @@ outputVS main(inputVS input)
     float4x4 normalMatrix = transpose(inverse(modelMat));
     output.normal  = mul(normalMatrix, float4(input.in_normal, 1.0)).xyz;
     output.positionWS = mul(testMat, float4(input.in_position, 1.0)).xyz; 
-    // output.positionWS = gInstanceData[input.instanceID].modelMat[3].xyz;
     return output;
 }

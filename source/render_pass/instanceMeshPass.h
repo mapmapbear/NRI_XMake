@@ -1,7 +1,5 @@
 #pragma once
-#include "NRIDescs.h"
-#include "NRIFramework.h"
-#include <cstdint>
+#include "commonRenderPass.h"
 
 struct Vertex {
 	vec3 position;
@@ -18,25 +16,35 @@ struct ConstantBufferLayout {
 };
 
 class Renderer;
-class InstanceMeshPass {
+class InstanceMeshPass : public CommonRenderPass {
 public:
 	InstanceMeshPass(Renderer *renderer);
-	void Render(struct RenderInfo &info, Camera &camera);
+	void Render(struct RenderInfo &info, Camera &camera) override;
+	void BuildPipeline() override;
+	void AllocGPUMemory() override;
+	void BindMemory() override;
 
 private:
-	Renderer *m_renderer;
-	NRIInterface *m_NRI;
-	std::vector<nri::Memory *> m_MemoryAllocations;
-
 	nri::PipelineLayout *m_PipelineLayout = nullptr;
 	nri::Pipeline *m_Pipeline = nullptr;
 	nri::Texture *m_Texture = nullptr;
 	nri::Texture *m_CubemapTexture = nullptr;
 	nri::Buffer *m_ConstantBuffer = nullptr;
 	nri::Buffer *m_GeometryBuffer = nullptr;
+	nri::Buffer *m_MatrixStorageBuffer = nullptr;
+
 	nri::Descriptor *m_TextureShaderResource = nullptr;
 	nri::Descriptor *m_CubemapTextureShaderResource = nullptr;
+	nri::Descriptor *m_MatrixStorageBufferSRV = nullptr;
+	nri::Descriptor *m_ConstantBufferView = nullptr;
+	nri::Descriptor *m_Sampler = nullptr;
 
+	nri::DescriptorSet *m_TextureDescriptorSet = nullptr;
+	nri::DescriptorSet *m_ConstantBufferDescriptorSet = nullptr;
 	uint64_t m_GeometryOffset = 0;
-	uint64_t m_IndexCount = 0;
+	uint32_t m_IndexCount = 0;
+	uint32_t m_NumMeshes = 32 * 1024;
+
+	std::vector<Vertex> m_positions;
+	std::vector<uint32_t> m_indices;
 };

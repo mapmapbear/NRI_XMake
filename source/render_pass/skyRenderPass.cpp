@@ -2,10 +2,14 @@
 #include "../renderer.h"
 
 SkyRenderPass::SkyRenderPass(Renderer *renderer) :
-		m_renderer(renderer) {
-	m_NRI = &m_renderer->GetNRI();
-	auto NRI = *m_NRI;
+		CommonRenderPass(renderer) {
+	AllocGPUMemory();
+	BindMemory();
+	BuildPipeline();
+}
 
+void SkyRenderPass::BuildPipeline() {
+	auto NRI = *m_NRI;
 	// SKyBox Pipeline
 	{
 		nri::DescriptorRangeDesc descriptorRangeTexture[2];
@@ -79,6 +83,30 @@ SkyRenderPass::SkyRenderPass(Renderer *renderer) :
 				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_SkyPipeline));
 	}
 
+	// Descriptor Set
+	{
+		NRI_ABORT_ON_FAILURE(
+				NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_SkyPipelineLayout, 0,
+						&m_SkyTextureDescriptorSet, 1, 0));
+
+		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_HDRTextureShaderResource };
+
+		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
+		descriptorRangeUpdateDescs[0].descriptorNum = shaderResoruceViewArray.size();
+		descriptorRangeUpdateDescs[0].descriptors = shaderResoruceViewArray.data();
+
+		descriptorRangeUpdateDescs[1].descriptorNum = 1;
+		descriptorRangeUpdateDescs[1].descriptors = &m_Sampler;
+
+		NRI.UpdateDescriptorRanges(*m_SkyTextureDescriptorSet, 0,
+				helper::GetCountOf(descriptorRangeUpdateDescs),
+				descriptorRangeUpdateDescs);
+	}
+}
+
+void SkyRenderPass::AllocGPUMemory() {
+	auto NRI = *m_NRI;
+
 	tinyddsloader::DDSFile ddsImage;
 	std::string path = utils::GetFullPath("barcelona.dds", utils::DataFolder::TEXTURES);
 	ddsImage.Load(path.c_str());
@@ -94,6 +122,7 @@ SkyRenderPass::SkyRenderPass(Renderer *renderer) :
 
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture(*m_renderer->GetRenderDevice(), textureDesc, m_HDRTexture));
+		m_HDRTexture_DDS = &ddsImage;
 	}
 
 	std::vector<nri::Texture *> textureArray = { m_HDRTexture };
@@ -106,6 +135,10 @@ SkyRenderPass::SkyRenderPass(Renderer *renderer) :
 			1 + NRI.CalculateAllocationNumber(*m_renderer->GetRenderDevice(), resourceGroupDesc), nullptr);
 	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(
 			*m_renderer->GetRenderDevice(), resourceGroupDesc, m_MemoryAllocations.data() + 1));
+}
+
+void SkyRenderPass::BindMemory() {
+	auto NRI = *m_NRI;
 
 	// Descriptors
 	{
@@ -126,28 +159,11 @@ SkyRenderPass::SkyRenderPass(Renderer *renderer) :
 				NRI.CreateTexture2DView(textureViewDesc, m_HDRTextureShaderResource));
 	}
 
-	// Descriptor Set
-	{
-		NRI_ABORT_ON_FAILURE(
-				NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_SkyPipelineLayout, 0,
-						&m_SkyTextureDescriptorSet, 1, 0));
-
-		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_HDRTextureShaderResource };
-
-		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
-		descriptorRangeUpdateDescs[0].descriptorNum = shaderResoruceViewArray.size();
-		descriptorRangeUpdateDescs[0].descriptors = shaderResoruceViewArray.data();
-
-		descriptorRangeUpdateDescs[1].descriptorNum = 1;
-		descriptorRangeUpdateDescs[1].descriptors = &m_Sampler;
-
-		NRI.UpdateDescriptorRanges(*m_SkyTextureDescriptorSet, 0,
-				helper::GetCountOf(descriptorRangeUpdateDescs),
-				descriptorRangeUpdateDescs);
-	}
+	std::string path = utils::GetFullPath("barcelona.dds", utils::DataFolder::TEXTURES);
+	m_HDRTexture_DDS->Load(path.c_str());
 
 	// Upload data
-	const tinyddsloader::DDSFile::ImageData *imgData = ddsImage.GetImageData(0, 0);
+	const tinyddsloader::DDSFile::ImageData *imgData = (*m_HDRTexture_DDS).GetImageData(0, 0);
 
 	nri::TextureSubresourceUploadDesc hdrSubresources;
 	hdrSubresources.slices = imgData->m_mem;

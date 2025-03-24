@@ -4,11 +4,9 @@
 #include "render_pass/gridRenderPass.h"
 #include <memory>
 
-
-struct RenderInfo
-{
-	nri::AttachmentsDesc& desc;
-	nri::CommandBuffer& cmdBuffer;
+struct RenderInfo {
+	nri::AttachmentsDesc &desc;
+	nri::CommandBuffer &cmdBuffer;
 };
 
 class SkyRenderPass;
@@ -19,11 +17,12 @@ public:
 	NRIInterface &GetNRI() { return m_NRI; }
 	nri::DescriptorPool &GetDescriptorPool() { return *m_DescriptorPool; }
 	nri::Queue &GetRenderQueue() { return *m_GraphicsQueue; }
+	nri::DescriptorSet *GetGloablDescriptorSet() { return m_GloablFrameDescriptorSet; }
 
-	void OnStart();
+	void OnStart(nri::DescriptorSet *globalSet);
 	void OnUpdate();
 	void OnPreRender();
-	void OnRender(RenderInfo& info, Camera& camera);
+	void OnRender(RenderInfo &info, Camera &camera);
 	void OnPostRender();
 
 private:
@@ -32,6 +31,8 @@ private:
 	nri::DescriptorPool *m_DescriptorPool = nullptr;
 	nri::Queue *m_GraphicsQueue = nullptr;
 	nri::Queue *m_ComputeQueue = nullptr;
+
+	nri::DescriptorSet *m_GloablFrameDescriptorSet = nullptr;
 
 private:
 	std::shared_ptr<SkyRenderPass> skyPass = nullptr;

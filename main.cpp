@@ -15,7 +15,6 @@
 #include <assimp/version.h>
 #include <vector>
 
-
 #define INSTANCE
 
 constexpr uint32_t VIEW_MASK = 0b11;
@@ -265,9 +264,8 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 				NRI.CreateCommandAllocator(*m_ComputeQueue, frame.commandAllocatorCompute));
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateCommandBuffer(*frame.commandAllocatorCompute, frame.commandBufferCompute));
+		testRenderPtr->OnStart(frame.constantBufferDescriptorSet);
 	}
-
-	testRenderPtr->OnStart();
 
 	// Pipeline
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_Device);

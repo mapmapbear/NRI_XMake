@@ -4,8 +4,85 @@
 #include "NRIDescs.h"
 
 GridRenderPass::GridRenderPass(Renderer *renderer) :
-		m_renderer(renderer) {
+		CommonRenderPass(renderer) {
 	m_NRI = &m_renderer->GetNRI();
+	auto NRI = *m_NRI;
+	utils::ShaderCodeStorage shaderCodeStorage;
+	{
+		struct bindRoot {
+			glm::mat4 a;
+			vec4 b;
+			vec4 c;
+		};
+		nri::RootConstantDesc rootConstant = { 0, sizeof(bindRoot),
+			nri::StageBits::VERTEX_SHADER };
+
+		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
+		pipelineLayoutDesc.descriptorSetNum = 0;
+		pipelineLayoutDesc.descriptorSets = nullptr;
+		pipelineLayoutDesc.rootConstants = &rootConstant;
+		pipelineLayoutDesc.rootConstantNum = 1;
+		pipelineLayoutDesc.shaderStages =
+				nri::StageBits::VERTEX_SHADER | nri::StageBits::FRAGMENT_SHADER;
+
+		NRI_ABORT_ON_FAILURE(NRI.CreatePipelineLayout(*m_renderer->GetRenderDevice(), pipelineLayoutDesc,
+				m_GridPipelineLayout));
+
+		nri::InputAssemblyDesc inputAssemblyDesc = {};
+		inputAssemblyDesc.topology = nri::Topology::TRIANGLE_LIST;
+
+		nri::RasterizationDesc rasterizationDesc = {};
+		rasterizationDesc.fillMode = nri::FillMode::SOLID;
+		rasterizationDesc.cullMode = nri::CullMode::NONE;
+
+		nri::ColorAttachmentDesc colorAttachmentDesc = {};
+		colorAttachmentDesc.format = nri::Format::RGBA8_UNORM;
+		colorAttachmentDesc.colorWriteMask = nri::ColorWriteBits::RGBA;
+		colorAttachmentDesc.blendEnabled = true;
+		colorAttachmentDesc.colorBlend = { nri::BlendFactor::SRC_ALPHA,
+			nri::BlendFactor::ONE_MINUS_SRC_ALPHA,
+			nri::BlendFunc::ADD };
+
+		nri::DepthAttachmentDesc depthAttachmentDesc = {};
+		depthAttachmentDesc.write = false;
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::ALWAYS;
+		depthAttachmentDesc.boundsTest = false;
+
+		nri::OutputMergerDesc outputMergerDesc = {};
+		outputMergerDesc.colors = &colorAttachmentDesc;
+		outputMergerDesc.colorNum = 1;
+		outputMergerDesc.depth = depthAttachmentDesc;
+		outputMergerDesc.depthStencilFormat = nri::Format::D16_UNORM;
+
+		nri::ShaderDesc shaderStages[] = {
+			utils::LoadShader(nri::GraphicsAPI::D3D12,
+					"grid.vs", shaderCodeStorage),
+			utils::LoadShader(nri::GraphicsAPI::D3D12, "grid.fs",
+					shaderCodeStorage),
+		};
+
+		nri::GraphicsPipelineDesc graphicsPipelineDesc;
+		graphicsPipelineDesc.pipelineLayout = m_GridPipelineLayout;
+		graphicsPipelineDesc.vertexInput = nullptr;
+		graphicsPipelineDesc.inputAssembly = inputAssemblyDesc;
+		graphicsPipelineDesc.rasterization = rasterizationDesc;
+		graphicsPipelineDesc.outputMerger = outputMergerDesc;
+		graphicsPipelineDesc.shaders = shaderStages;
+		graphicsPipelineDesc.shaderNum = helper::GetCountOf(shaderStages);
+		graphicsPipelineDesc.multisample = nullptr;
+
+		NRI_ABORT_ON_FAILURE(NRI.CreateGraphicsPipeline(
+				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_GridPipeline));
+	}
+}
+
+void GridRenderPass::AllocGPUMemory() {
+}
+
+void GridRenderPass::BindMemory() {
+}
+
+void GridRenderPass::BuildPipeline() {
 	auto NRI = *m_NRI;
 	utils::ShaderCodeStorage shaderCodeStorage;
 	{

@@ -1,19 +1,16 @@
 #pragma once
-#include "NRIDescs.h"
-#include "NRIFramework.h"
-
+#include "commonRenderPass.h"
 
 class Renderer;
-class GridRenderPass {
+class GridRenderPass : public CommonRenderPass {
 public:
-GridRenderPass(Renderer *renderer);
-	void Render(struct RenderInfo& info, Camera& camera);
+	GridRenderPass(Renderer *renderer);
+	void Render(struct RenderInfo &info, Camera &camera) override;
+	void BuildPipeline() override;
+	void AllocGPUMemory() override;
+	void BindMemory() override;
 
 private:
-	Renderer *m_renderer;
-	NRIInterface *m_NRI;
-	std::vector<nri::Memory *> m_MemoryAllocations;
-
 	nri::PipelineLayout *m_GridPipelineLayout = nullptr;
 	nri::Pipeline *m_GridPipeline = nullptr;
 };

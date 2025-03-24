@@ -3,11 +3,198 @@
 #include "NRIDescs.h"
 
 InstanceMeshPass::InstanceMeshPass(Renderer *renderer) :
-		m_renderer(renderer) {
+		CommonRenderPass(renderer) {
 	m_NRI = &m_renderer->GetNRI();
 	auto NRI = *m_NRI;
+}
+
+void InstanceMeshPass::AllocGPUMemory() {
+	auto NRI = *m_NRI;
+	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
+
+	// Load Scene Mesh
+	const aiScene *scene =
+			aiImportFile("data/rubber_duck/scene.gltf",
+					aiProcess_Triangulate | aiProcess_MakeLeftHanded);
+	if (!scene || !scene->HasMeshes()) {
+		printf("Unable to load data/rubber_duck/scene.gltf\n");
+		exit(255);
+	}
+
+	// Load texture
+	utils::Texture texture;
+	std::string path =
+			utils::GetFullPath("Duck_baseColor.png", utils::DataFolder::TEXTURES);
+	if (!utils::LoadTexture(path, texture)) {
+		printf("Can not found this texture %s", path.c_str());
+	}
+
+	tinyddsloader::DDSFile ddsImage;
+	path = utils::GetFullPath("test.dds", utils::DataFolder::TEXTURES);
+	ddsImage.Load(path.c_str());
+
+	// GPU Resource
+	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
+			deviceDesc.constantBufferOffsetAlignment);
+
+	const aiMesh *mesh = scene->mMeshes[0];
+
+	for (unsigned int i = 0; i != mesh->mNumVertices; i++) {
+		const aiVector3D v = mesh->mVertices[i];
+		const aiVector3D uv0 = mesh->mTextureCoords[0][i];
+		const aiVector3D n = mesh->mNormals[i];
+		m_positions.push_back({ vec3(v.x, v.y, v.z), vec2(uv0.x, uv0.y), vec3(n.x, n.y, n.z) });
+	}
+
+	for (unsigned int i = 0; i != mesh->mNumFaces; i++) {
+		for (int j = 0; j != 3; j++) {
+			m_indices.push_back(mesh->mFaces[i].mIndices[j]);
+		}
+	}
+	m_IndexCount = m_indices.size();
+	const uint64_t indexDataSize = helper::GetByteSizeOf(m_indices);
+	const uint64_t indexDataAlignedSize = helper::Align(indexDataSize, 32);
+	const uint64_t vertexDataSize = helper::GetByteSizeOf(m_positions);
+
+	{
+		nri::TextureDesc textureDesc = {};
+		textureDesc.type = nri::TextureType::TEXTURE_2D;
+		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
+		textureDesc.format = texture.GetFormat();
+		textureDesc.width = texture.GetWidth();
+		textureDesc.height = texture.GetHeight();
+		textureDesc.mipNum = texture.GetMipNum();
+
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateTexture(*m_renderer->GetRenderDevice(), textureDesc, m_Texture));
+	}
+
+	{
+		nri::BufferDesc bufferDesc = {};
+		bufferDesc.size = constantBufferSize * BUFFERED_FRAME_MAX_NUM;
+		bufferDesc.usage = nri::BufferUsageBits::CONSTANT_BUFFER;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_ConstantBuffer));
+	}
+
+	{ // Geometry buffer1（duck)
+		nri::BufferDesc bufferDesc = {};
+		bufferDesc.size = indexDataAlignedSize + vertexDataSize;
+		bufferDesc.usage = nri::BufferUsageBits::VERTEX_BUFFER |
+				nri::BufferUsageBits::INDEX_BUFFER;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_GeometryBuffer));
+		m_GeometryOffset = indexDataAlignedSize;
+	}
+}
+
+void InstanceMeshPass::BindMemory() {
+	auto NRI = *m_NRI;
+
+	m_IndexCount = m_indices.size();
+	const uint64_t indexDataSize = helper::GetByteSizeOf(m_indices);
+	const uint64_t indexDataAlignedSize = helper::Align(indexDataSize, 32);
+	const uint64_t vertexDataSize = helper::GetByteSizeOf(m_positions);
+
+	utils::Texture texture;
+	std::string path =
+			utils::GetFullPath("Duck_baseColor.png", utils::DataFolder::TEXTURES);
+	if (!utils::LoadTexture(path, texture)) {
+		printf("Can not found this texture %s", path.c_str());
+	}
+
+	// Bind Memory
+	std::vector<nri::Buffer *> constantBufferArray = { m_ConstantBuffer };
+
+	nri::ResourceGroupDesc resourceGroupDesc = {};
+	resourceGroupDesc.memoryLocation = nri::MemoryLocation::HOST_UPLOAD;
+	resourceGroupDesc.bufferNum = constantBufferArray.size();
+	resourceGroupDesc.buffers = constantBufferArray.data();
+
+	m_MemoryAllocations.resize(1, nullptr);
+	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(*m_renderer->GetRenderDevice(), resourceGroupDesc,
+			m_MemoryAllocations.data()));
+
+	std::vector<nri::Buffer *> bufferArray = {
+		m_GeometryBuffer
+	};
+	std::vector<nri::Texture *> textureArray = { m_Texture }; //, m_CubemapTexture };
+	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
+	resourceGroupDesc.bufferNum = bufferArray.size();
+	resourceGroupDesc.buffers = bufferArray.data();
+	resourceGroupDesc.textureNum = textureArray.size();
+	resourceGroupDesc.textures = textureArray.data();
+
+	m_MemoryAllocations.resize(
+			1 + NRI.CalculateAllocationNumber(*m_renderer->GetRenderDevice(), resourceGroupDesc), nullptr);
+	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(
+			*m_renderer->GetRenderDevice(), resourceGroupDesc, m_MemoryAllocations.data() + 1));
+
+	// Descriptors
+	{ // Read-only texture
+		nri::Texture2DViewDesc texture2DViewDesc = {
+			m_Texture, nri::Texture2DViewType::SHADER_RESOURCE_2D,
+			texture.GetFormat()
+		};
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateTexture2DView(texture2DViewDesc, m_TextureShaderResource));
+	}
 
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
+	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
+			deviceDesc.constantBufferOffsetAlignment);
+
+	{
+		nri::BufferViewDesc bufferViewDesc = {};
+		bufferViewDesc.buffer = m_ConstantBuffer;
+		bufferViewDesc.viewType = nri::BufferViewType::CONSTANT;
+		bufferViewDesc.offset = constantBufferSize;
+		bufferViewDesc.size = constantBufferSize;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateBufferView(bufferViewDesc, m_ConstantBufferView));
+	}
+
+	// Upload data
+	{
+		std::vector<uint8_t> geometryBufferData(indexDataAlignedSize +
+				vertexDataSize);
+		memcpy(&geometryBufferData[0], m_indices.data(), indexDataSize);
+		memcpy(&geometryBufferData[indexDataAlignedSize], m_positions.data(),
+				vertexDataSize);
+
+		std::array<nri::TextureSubresourceUploadDesc, 16> subresources;
+		for (uint32_t mip = 0; mip < texture.GetMipNum(); mip++) {
+			texture.GetSubresource(subresources[mip], mip);
+		}
+
+		nri::TextureUploadDesc textureData;
+		textureData.subresources = subresources.data();
+		textureData.texture = m_Texture;
+		textureData.after = { nri::AccessBits::SHADER_RESOURCE,
+			nri::Layout::SHADER_RESOURCE };
+		textureData.planes = nri::PlaneBits::ALL;
+
+		nri::BufferUploadDesc bufferData = {};
+		bufferData.buffer = m_GeometryBuffer;
+		bufferData.data = &geometryBufferData[0];
+		bufferData.dataSize = geometryBufferData.size();
+		bufferData.after = { nri::AccessBits::INDEX_BUFFER |
+			nri::AccessBits::VERTEX_BUFFER };
+
+		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData };
+		std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData };
+
+		NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), texUploadDescArray.data(), texUploadDescArray.size(),
+				uploadDescArray.data(),
+				uploadDescArray.size()));
+	}
+}
+
+void InstanceMeshPass::BuildPipeline() {
+	auto NRI = *m_NRI;
+	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
+
+	// Pipeline
 	utils::ShaderCodeStorage shaderCodeStorage;
 	{
 		nri::DescriptorRangeDesc descriptorRangeConstant[1];
@@ -15,11 +202,10 @@ InstanceMeshPass::InstanceMeshPass(Renderer *renderer) :
 			nri::StageBits::ALL };
 
 		nri::DescriptorRangeDesc descriptorRangeTexture[3];
-		descriptorRangeTexture[0] = { 0, 2, nri::DescriptorType::TEXTURE,
+		descriptorRangeTexture[0] = { 0, 1, nri::DescriptorType::TEXTURE,
 			nri::StageBits::FRAGMENT_SHADER };
 		descriptorRangeTexture[1] = { 0, 1, nri::DescriptorType::SAMPLER,
 			nri::StageBits::FRAGMENT_SHADER };
-		descriptorRangeTexture[2] = { 0, 1, nri::DescriptorType::STRUCTURED_BUFFER, nri::StageBits::VERTEX_SHADER };
 
 		nri::DescriptorSetDesc descriptorSetDescs[] = {
 			{ 0, descriptorRangeConstant,
@@ -102,8 +288,8 @@ InstanceMeshPass::InstanceMeshPass(Renderer *renderer) :
 
 		nri::ShaderDesc shaderStages[] = {
 			utils::LoadShader(deviceDesc.graphicsAPI,
-					"simpleMesh.vs", shaderCodeStorage),
-			utils::LoadShader(deviceDesc.graphicsAPI, "simpleMesh.fs",
+					"simpleMesh1.vs", shaderCodeStorage),
+			utils::LoadShader(deviceDesc.graphicsAPI, "simpleMesh1.fs",
 					shaderCodeStorage),
 		};
 
@@ -120,134 +306,67 @@ InstanceMeshPass::InstanceMeshPass(Renderer *renderer) :
 				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_Pipeline));
 	}
 
-	// Load Scene Mesh
-	const aiScene *scene =
-			aiImportFile("data/rubber_duck/scene.gltf",
-					aiProcess_Triangulate | aiProcess_MakeLeftHanded);
-	if (!scene || !scene->HasMeshes()) {
-		printf("Unable to load data/rubber_duck/scene.gltf\n");
-		exit(255);
-	}
-
-	// Load texture
-	utils::Texture texture;
-	std::string path =
-			utils::GetFullPath("Duck_baseColor.png", utils::DataFolder::TEXTURES);
-	if (!utils::LoadTexture(path, texture)) {
-		printf("Can not found this texture %s", path.c_str());
-	}
-
-	tinyddsloader::DDSFile ddsImage;
-	path = utils::GetFullPath("test.dds", utils::DataFolder::TEXTURES);
-	ddsImage.Load(path.c_str());
-
-	// GPU Resource
-	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
-			deviceDesc.constantBufferOffsetAlignment);
-
-	const aiMesh *mesh = scene->mMeshes[0];
-	std::vector<Vertex> positions;
-	std::vector<uint32_t> indices;
-	for (unsigned int i = 0; i != mesh->mNumVertices; i++) {
-		const aiVector3D v = mesh->mVertices[i];
-		const aiVector3D uv0 = mesh->mTextureCoords[0][i];
-		const aiVector3D n = mesh->mNormals[i];
-		positions.push_back({ vec3(v.x, v.y, v.z), vec2(uv0.x, uv0.y), vec3(n.x, n.y, n.z) });
-	}
-
-	for (unsigned int i = 0; i != mesh->mNumFaces; i++) {
-		for (int j = 0; j != 3; j++) {
-			indices.push_back(mesh->mFaces[i].mIndices[j]);
-		}
-	}
-	m_IndexCount = indices.size();
-	const uint64_t indexDataSize = helper::GetByteSizeOf(indices);
-	const uint64_t indexDataAlignedSize = helper::Align(indexDataSize, 32);
-	const uint64_t vertexDataSize = helper::GetByteSizeOf(positions);
-
+	// Descriptor sets
 	{
-		nri::TextureDesc textureDesc = {};
-		textureDesc.type = nri::TextureType::TEXTURE_2D;
-		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-		textureDesc.format = texture.GetFormat();
-		textureDesc.width = texture.GetWidth();
-		textureDesc.height = texture.GetHeight();
-		textureDesc.mipNum = texture.GetMipNum();
+		// Texture
+		NRI_ABORT_ON_FAILURE(
+				NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_PipelineLayout, 1,
+						&m_TextureDescriptorSet, 1, 0));
+
+		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_TextureShaderResource }; //, m_CubemapTextureShaderResource };
+
+		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
+		descriptorRangeUpdateDescs[0].descriptorNum = shaderResoruceViewArray.size();
+		descriptorRangeUpdateDescs[0].descriptors = shaderResoruceViewArray.data();
+
+		descriptorRangeUpdateDescs[1].descriptorNum = 1;
+		descriptorRangeUpdateDescs[1].descriptors = &m_Sampler;
+
+		NRI.UpdateDescriptorRanges(*m_TextureDescriptorSet, 0,
+				helper::GetCountOf(descriptorRangeUpdateDescs),
+				descriptorRangeUpdateDescs);
 
 		NRI_ABORT_ON_FAILURE(
-				NRI.CreateTexture(*m_renderer->GetRenderDevice(), textureDesc, m_Texture));
-	}
+				NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_PipelineLayout, 0,
+						&m_ConstantBufferDescriptorSet, 1, 0));
 
-	{
-		nri::TextureDesc textureDesc = {};
-		textureDesc.type = nri::TextureType::TEXTURE_2D;
-		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-		textureDesc.format = nri::Format::BC7_RGBA_UNORM;
-		textureDesc.width = ddsImage.GetWidth();
-		textureDesc.height = ddsImage.GetHeight();
-		textureDesc.mipNum = 0;
-		textureDesc.layerNum = ddsImage.GetArraySize();
-		NRI_ABORT_ON_FAILURE(
-				NRI.CreateTexture(*m_renderer->GetRenderDevice(), textureDesc, m_CubemapTexture));
-	}
-
-	{
-		nri::BufferDesc bufferDesc = {};
-		bufferDesc.size = constantBufferSize * BUFFERED_FRAME_MAX_NUM;
-		bufferDesc.usage = nri::BufferUsageBits::CONSTANT_BUFFER;
-		NRI_ABORT_ON_FAILURE(
-				NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_ConstantBuffer));
-	}
-
-	{ // Geometry buffer1（duck)
-		nri::BufferDesc bufferDesc = {};
-		bufferDesc.size = indexDataAlignedSize + vertexDataSize;
-		bufferDesc.usage = nri::BufferUsageBits::VERTEX_BUFFER |
-				nri::BufferUsageBits::INDEX_BUFFER;
-		NRI_ABORT_ON_FAILURE(
-				NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_GeometryBuffer));
-		m_GeometryOffset = indexDataAlignedSize;
-	}
-
-	std::vector<nri::Buffer *> constantBufferArray = { m_ConstantBuffer };
-
-	nri::ResourceGroupDesc resourceGroupDesc = {};
-	resourceGroupDesc.memoryLocation = nri::MemoryLocation::HOST_UPLOAD;
-	resourceGroupDesc.bufferNum = constantBufferArray.size();
-	resourceGroupDesc.buffers = constantBufferArray.data();
-
-	m_MemoryAllocations.resize(1, nullptr);
-	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(*m_renderer->GetRenderDevice(), resourceGroupDesc,
-			m_MemoryAllocations.data()));
-
-	std::vector<nri::Buffer *> bufferArray = {
-		m_GeometryBuffer
-	};
-	std::vector<nri::Texture *> textureArray = { m_Texture, m_CubemapTexture };
-	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
-	resourceGroupDesc.bufferNum = bufferArray.size();
-	resourceGroupDesc.buffers = bufferArray.data();
-	resourceGroupDesc.textureNum = textureArray.size();
-	resourceGroupDesc.textures = textureArray.data();
-
-	m_MemoryAllocations.resize(
-			1 + NRI.CalculateAllocationNumber(*m_renderer->GetRenderDevice(), resourceGroupDesc), nullptr);
-	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(
-			*m_renderer->GetRenderDevice(), resourceGroupDesc, m_MemoryAllocations.data() + 1));
-
-	// Descriptors
-	{ // Read-only texture
-		nri::Texture2DViewDesc texture2DViewDesc = {
-			m_Texture, nri::Texture2DViewType::SHADER_RESOURCE_2D,
-			texture.GetFormat()
+		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDesc = {
+			&m_ConstantBufferView, 1
 		};
-		NRI_ABORT_ON_FAILURE(
-				NRI.CreateTexture2DView(texture2DViewDesc, m_TextureShaderResource));
+		NRI.UpdateDescriptorRanges(*m_ConstantBufferDescriptorSet, 0, 1,
+				&descriptorRangeUpdateDesc);
 	}
+}
 
+void InstanceMeshPass::Render(RenderInfo &info, Camera &camera) {
+	vec3 cameraPos = camera.state.globalPosition;
+	auto NRI = *m_NRI;
 	{
-		nri::Texture2DViewDesc textureViewDesc = { .texture = m_CubemapTexture, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_CUBE, .format = nri::Format::BC7_RGBA_UNORM };
-		NRI_ABORT_ON_FAILURE(
-				NRI.CreateTexture2DView(textureViewDesc, m_CubemapTextureShaderResource));
+		helper::Annotation annotation(NRI, info.cmdBuffer, "SimpleMesh");
+
+		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
+		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
+		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &cameraPos, sizeof(glm::vec4));
+		NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer, 0,
+				nri::IndexType::UINT32);
+		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, 1, &m_GeometryBuffer,
+				&m_GeometryOffset);
+		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
+				*m_renderer->GetGloablDescriptorSet(), nullptr);
+		NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_TextureDescriptorSet,
+				nullptr);
+		{
+			const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
+				600.f, 0.0f, 1.0f };
+			NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
+
+			nri::Rect scissor = { 0, 0, 900, 600 };
+			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
+		}
+		uint32_t instanceCount = 1;
+#ifdef INSTANCE
+		instanceCount = 1024 * 32;
+#endif
+		NRI.CmdDrawIndexed(info.cmdBuffer, { m_IndexCount, instanceCount, 0, 0, 0 });
 	}
 }

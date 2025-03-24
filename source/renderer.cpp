@@ -24,7 +24,8 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 			m_DescriptorPool));
 }
 
-void Renderer::OnStart() {
+void Renderer::OnStart(nri::DescriptorSet *globalSet) {
+	m_GloablFrameDescriptorSet = globalSet;
 	skyPass = std::make_shared<SkyRenderPass>(this);
 	gridPass = std::make_shared<GridRenderPass>(this);
 }
