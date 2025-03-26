@@ -6,6 +6,9 @@ InstanceMeshPass::InstanceMeshPass(Renderer *renderer) :
 		CommonRenderPass(renderer) {
 	m_NRI = &m_renderer->GetNRI();
 	auto NRI = *m_NRI;
+	AllocGPUMemory();
+	BindMemory();
+	BuildPipeline();
 }
 
 void InstanceMeshPass::AllocGPUMemory() {
@@ -140,6 +143,18 @@ void InstanceMeshPass::BindMemory() {
 				NRI.CreateTexture2DView(texture2DViewDesc, m_TextureShaderResource));
 	}
 
+	{ // Sampler
+		nri::SamplerDesc samplerDesc = {};
+		samplerDesc.addressModes = { nri::AddressMode::REPEAT,
+			nri::AddressMode::REPEAT, nri::AddressMode::REPEAT };
+		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
+			nri::Filter::LINEAR };
+		samplerDesc.anisotropy = 4;
+		samplerDesc.mipMax = 16.0f;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
+	}
+
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
 	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
 			deviceDesc.constantBufferOffsetAlignment);
@@ -201,7 +216,7 @@ void InstanceMeshPass::BuildPipeline() {
 		descriptorRangeConstant[0] = { 0, 1, nri::DescriptorType::CONSTANT_BUFFER,
 			nri::StageBits::ALL };
 
-		nri::DescriptorRangeDesc descriptorRangeTexture[3];
+		nri::DescriptorRangeDesc descriptorRangeTexture[2];
 		descriptorRangeTexture[0] = { 0, 1, nri::DescriptorType::TEXTURE,
 			nri::StageBits::FRAGMENT_SHADER };
 		descriptorRangeTexture[1] = { 0, 1, nri::DescriptorType::SAMPLER,
@@ -342,7 +357,7 @@ void InstanceMeshPass::Render(RenderInfo &info, Camera &camera) {
 	vec3 cameraPos = camera.state.globalPosition;
 	auto NRI = *m_NRI;
 	{
-		helper::Annotation annotation(NRI, info.cmdBuffer, "SimpleMesh");
+		helper::Annotation annotation(NRI, info.cmdBuffer, "SimpleMeshTEST");
 
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
@@ -352,7 +367,7 @@ void InstanceMeshPass::Render(RenderInfo &info, Camera &camera) {
 		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, 1, &m_GeometryBuffer,
 				&m_GeometryOffset);
 		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
-				*m_renderer->GetGloablDescriptorSet(), nullptr);
+				*m_ConstantBufferDescriptorSet, nullptr);
 		NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_TextureDescriptorSet,
 				nullptr);
 		{

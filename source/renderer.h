@@ -1,7 +1,6 @@
 #pragma once
 #include "NRIDescs.h"
 #include "NRIFramework.h"
-#include "render_pass/gridRenderPass.h"
 #include <memory>
 
 struct RenderInfo {
@@ -10,6 +9,8 @@ struct RenderInfo {
 };
 
 class SkyRenderPass;
+class GridRenderPass;
+class InstanceMeshPass;
 class Renderer {
 public:
 	Renderer(NRIInterface &NRI, nri::Device *device);
@@ -37,4 +38,5 @@ private:
 private:
 	std::shared_ptr<SkyRenderPass> skyPass = nullptr;
 	std::shared_ptr<GridRenderPass> gridPass = nullptr;
+	std::shared_ptr<InstanceMeshPass> meshPass = nullptr;
 };

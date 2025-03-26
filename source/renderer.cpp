@@ -1,8 +1,10 @@
 #include "renderer.h"
 #include "Camera.h"
 #include "render_pass/gridRenderPass.h"
+#include "render_pass/instanceMeshPass.h"
 #include "render_pass/skyRenderPass.h"
 #include <memory>
+
 
 Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 		m_Device(device), m_NRI(NRI) {
@@ -13,7 +15,7 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	NRI.SetDebugName(m_ComputeQueue, "ComputeQueue");
 
 	nri::DescriptorPoolDesc descriptorPoolDesc = {};
-	descriptorPoolDesc.descriptorSetMaxNum = BUFFERED_FRAME_MAX_NUM + 5;
+	descriptorPoolDesc.descriptorSetMaxNum = BUFFERED_FRAME_MAX_NUM + 6;
 	descriptorPoolDesc.constantBufferMaxNum = BUFFERED_FRAME_MAX_NUM;
 	descriptorPoolDesc.storageBufferMaxNum = 2;
 	descriptorPoolDesc.structuredBufferMaxNum = 2;
@@ -25,12 +27,14 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 }
 
 void Renderer::OnStart(nri::DescriptorSet *globalSet) {
-	m_GloablFrameDescriptorSet = globalSet;
+	// m_GloablFrameDescriptorSet = globalSet;
 	skyPass = std::make_shared<SkyRenderPass>(this);
 	gridPass = std::make_shared<GridRenderPass>(this);
+	meshPass = std::make_shared<InstanceMeshPass>(this);
 }
 
 void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	skyPass->Render(info, camera);
 	gridPass->Render(info, camera);
+	meshPass->Render(info, camera);
 }

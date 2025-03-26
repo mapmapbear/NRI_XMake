@@ -264,9 +264,8 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 				NRI.CreateCommandAllocator(*m_ComputeQueue, frame.commandAllocatorCompute));
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateCommandBuffer(*frame.commandAllocatorCompute, frame.commandBufferCompute));
-		testRenderPtr->OnStart(frame.constantBufferDescriptorSet);
 	}
-
+	testRenderPtr->OnStart(nullptr);
 	// Pipeline
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_Device);
 	utils::ShaderCodeStorage shaderCodeStorage;
