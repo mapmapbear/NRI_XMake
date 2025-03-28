@@ -8,12 +8,6 @@ NRI_RESOURCE( cbuffer, CommonConstants, b, 0, 0 )
 	float4x4 projectMat;
 };
 
-struct InstanceData
-{
-    float4x4 modelMat;
-};
-NRI_RESOURCE(StructuredBuffer<InstanceData>, gInstanceData, t, 0, 1);
-
 struct inputVS
 {
     float3 in_position : POSITION0;
@@ -72,12 +66,13 @@ float4x4 inverse(float4x4 m) {
 outputVS main(inputVS input)
 {
     outputVS output;
-    float4x4 testMat = {
-        float4(1.0, 0.0, 0.0, gInstanceData[input.instanceID].modelMat[3].x), 
-        float4(0.0, 1.0, 0.0, gInstanceData[input.instanceID].modelMat[3].y), 
-        float4(0.0, 0.0, 1.0, gInstanceData[input.instanceID].modelMat[3].z), 
-        float4(0.0, 0.0, 0.0, 1.0)
-    };
+    // float4x4 testMat = {
+    //     float4(1.0, 0.0, 0.0, gInstanceData[input.instanceID].modelMat[3].x), 
+    //     float4(0.0, 1.0, 0.0, gInstanceData[input.instanceID].modelMat[3].y), 
+    //     float4(0.0, 0.0, 1.0, gInstanceData[input.instanceID].modelMat[3].z), 
+    //     float4(0.0, 0.0, 0.0, 1.0)
+    // };
+    float4x4 testMat = modelMat;
     float4x4 vpMat = mul(viewMat, testMat);
 	float4x4 mvpMat = mul(projectMat, vpMat);
 	output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));

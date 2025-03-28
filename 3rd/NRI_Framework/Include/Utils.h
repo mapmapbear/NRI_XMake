@@ -4,7 +4,7 @@
 
 #undef OPAQUE
 #undef TRANSPARENT
-
+#include "tinyddsLoader/tinyddsloader.h"
 namespace utils {
 struct Texture;
 struct Scene;
@@ -48,8 +48,7 @@ bool LoadFile(const std::string &path, std::vector<uint8_t> &data);
 nri::ShaderDesc LoadShader(nri::GraphicsAPI graphicsAPI,
 		const std::string &path, ShaderCodeStorage &storage,
 		const char *entryPointName = nullptr);
-bool LoadTexture(const std::string &path, Texture &texture,
-		bool computeAvgColorAndAlphaMode = false);
+bool LoadTexture(const std::string &path, Texture &texture, bool isDDS = false, bool computeAvgColorAndAlphaMode = false);
 void LoadTextureFromMemory(nri::Format format, uint32_t width, uint32_t height,
 		const uint8_t *pixels, Texture &texture);
 bool LoadTextureFromMemory(const std::string &name, const uint8_t *data,
@@ -60,6 +59,7 @@ bool LoadScene(const std::string &path, Scene &scene, bool allowUpdate);
 struct Texture {
 	std::string name;
 	Mip *mips = nullptr;
+	tinyddsloader::DDSFile data;
 	AlphaMode alphaMode = AlphaMode::OPAQUE;
 	nri::Format format = nri::Format::UNKNOWN;
 	uint16_t width = 0;
@@ -85,8 +85,10 @@ struct Texture {
 	inline uint16_t GetHeight() const { return height; }
 
 	inline uint16_t GetDepth() const { return depth; }
-
-	inline nri::Format GetFormat() const { return format; }
+	inline nri::Format GetFormat(bool isDDS = false) const {
+		return format;
+	}
+	static nri::Format ConvertDXGIFormatToNRI(tinyddsloader::DDSFile::DXGIFormat format);
 };
 
 struct Material {

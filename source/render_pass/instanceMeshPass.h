@@ -27,13 +27,32 @@ public:
 private:
 	nri::PipelineLayout *m_PipelineLayout = nullptr;
 	nri::Pipeline *m_Pipeline = nullptr;
-	nri::Texture *m_Texture = nullptr;
+// ------------------------------------
+//             Material Data
+	nri::Texture *m_texture_albedo = nullptr;
+	nri::Texture *m_texture_normal = nullptr;
+	nri::Texture *m_texture_mr = nullptr;
+	nri::Texture *m_texture_ao = nullptr;
+	nri::Texture *m_texture_emissive = nullptr;
+
+	utils::Texture m_texture_albedo_data;
+	utils::Texture m_texture_normal_data;
+	utils::Texture m_texture_mr_data;
+	utils::Texture m_texture_ao_data;
+	utils::Texture m_texture_emissive_data;
+
+	nri::Descriptor *m_texture_albedo_view = nullptr;
+	nri::Descriptor *m_texture_normal_view = nullptr;
+	nri::Descriptor *m_texture_mr_view = nullptr;
+	nri::Descriptor *m_texture_ao_view = nullptr;
+	nri::Descriptor *m_texture_emissive_view = nullptr;
+
+// --------------------------------------------
 	nri::Texture *m_CubemapTexture = nullptr;
 	nri::Buffer *m_ConstantBuffer = nullptr;
 	nri::Buffer *m_GeometryBuffer = nullptr;
 	nri::Buffer *m_MatrixStorageBuffer = nullptr;
 
-	nri::Descriptor *m_TextureShaderResource = nullptr;
 	nri::Descriptor *m_CubemapTextureShaderResource = nullptr;
 	nri::Descriptor *m_MatrixStorageBufferSRV = nullptr;
 	nri::Descriptor *m_ConstantBufferView = nullptr;

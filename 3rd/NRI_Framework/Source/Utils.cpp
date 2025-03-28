@@ -15,25 +15,25 @@
 #include "tinyddsloader.h"
 
 struct Shader {
-    const char* ext;
-    nri::StageBits stage;
+	const char *ext;
+	nri::StageBits stage;
 };
 
-constexpr std::array<Shader, 13> gShaderExts = {{
-    {"", nri::StageBits::NONE},
-    {".vs.", nri::StageBits::VERTEX_SHADER},
-    {".tcs.", nri::StageBits::TESS_CONTROL_SHADER},
-    {".tes.", nri::StageBits::TESS_EVALUATION_SHADER},
-    {".gs.", nri::StageBits::GEOMETRY_SHADER},
-    {".fs.", nri::StageBits::FRAGMENT_SHADER},
-    {".cs.", nri::StageBits::COMPUTE_SHADER},
-    {".rgen.", nri::StageBits::RAYGEN_SHADER},
-    {".rmiss.", nri::StageBits::MISS_SHADER},
-    {"<noimpl>", nri::StageBits::INTERSECTION_SHADER},
-    {".rchit.", nri::StageBits::CLOSEST_HIT_SHADER},
-    {".rahit.", nri::StageBits::ANY_HIT_SHADER},
-    {"<noimpl>", nri::StageBits::CALLABLE_SHADER},
-}};
+constexpr std::array<Shader, 13> gShaderExts = { {
+		{ "", nri::StageBits::NONE },
+		{ ".vs.", nri::StageBits::VERTEX_SHADER },
+		{ ".tcs.", nri::StageBits::TESS_CONTROL_SHADER },
+		{ ".tes.", nri::StageBits::TESS_EVALUATION_SHADER },
+		{ ".gs.", nri::StageBits::GEOMETRY_SHADER },
+		{ ".fs.", nri::StageBits::FRAGMENT_SHADER },
+		{ ".cs.", nri::StageBits::COMPUTE_SHADER },
+		{ ".rgen.", nri::StageBits::RAYGEN_SHADER },
+		{ ".rmiss.", nri::StageBits::MISS_SHADER },
+		{ "<noimpl>", nri::StageBits::INTERSECTION_SHADER },
+		{ ".rchit.", nri::StageBits::CLOSEST_HIT_SHADER },
+		{ ".rahit.", nri::StageBits::ANY_HIT_SHADER },
+		{ "<noimpl>", nri::StageBits::CALLABLE_SHADER },
+} };
 
 //========================================================================================================================
 // MISC
@@ -224,332 +224,561 @@ constexpr std::array<Shader, 13> gShaderExts = {{
 //     }
 // }
 
-inline const char* GetShaderExt(nri::GraphicsAPI graphicsAPI) {
-    if (graphicsAPI == nri::GraphicsAPI::D3D11)
-        return ".dxbc";
-    else if (graphicsAPI == nri::GraphicsAPI::D3D12)
-        return ".dxil";
+inline const char *GetShaderExt(nri::GraphicsAPI graphicsAPI) {
+	if (graphicsAPI == nri::GraphicsAPI::D3D11) {
+		return ".dxbc";
+	} else if (graphicsAPI == nri::GraphicsAPI::D3D12) {
+		return ".dxil";
+	}
 
-    return ".spirv";
+	return ".spirv";
 }
 
 static struct FormatMapping {
-    uint32_t detexFormat;
-    nri::Format nriFormat;
+	uint32_t detexFormat;
+	nri::Format nriFormat;
 } formatTable[] = {
-    // Uncompressed formats.
-    {DETEX_PIXEL_FORMAT_RGB8, nri::Format::UNKNOWN},
-    {DETEX_PIXEL_FORMAT_RGBA8, nri::Format::RGBA8_UNORM},
-    {DETEX_PIXEL_FORMAT_R8, nri::Format::R8_UNORM},
-    {DETEX_PIXEL_FORMAT_SIGNED_R8, nri::Format::R8_SNORM},
-    {DETEX_PIXEL_FORMAT_RG8, nri::Format::RG8_UNORM},
-    {DETEX_PIXEL_FORMAT_SIGNED_RG8, nri::Format::RG8_SNORM},
-    {DETEX_PIXEL_FORMAT_R16, nri::Format::R16_UNORM},
-    {DETEX_PIXEL_FORMAT_SIGNED_R16, nri::Format::R16_SNORM},
-    {DETEX_PIXEL_FORMAT_RG16, nri::Format::RG16_UNORM},
-    {DETEX_PIXEL_FORMAT_SIGNED_RG16, nri::Format::RG16_SNORM},
-    {DETEX_PIXEL_FORMAT_RGB16, nri::Format::UNKNOWN},
-    {DETEX_PIXEL_FORMAT_RGBA16, nri::Format::RGBA16_UNORM},
-    {DETEX_PIXEL_FORMAT_FLOAT_R16, nri::Format::R16_SFLOAT},
-    {DETEX_PIXEL_FORMAT_FLOAT_RG16, nri::Format::RG16_SFLOAT},
-    {DETEX_PIXEL_FORMAT_FLOAT_RGB16, nri::Format::UNKNOWN},
-    {DETEX_PIXEL_FORMAT_FLOAT_RGBA16, nri::Format::RGBA16_SFLOAT},
-    {DETEX_PIXEL_FORMAT_FLOAT_R32, nri::Format::R32_SFLOAT},
-    {DETEX_PIXEL_FORMAT_FLOAT_RG32, nri::Format::RG32_SFLOAT},
-    {DETEX_PIXEL_FORMAT_FLOAT_RGB32, nri::Format::RGB32_SFLOAT},
-    {DETEX_PIXEL_FORMAT_FLOAT_RGBA32, nri::Format::RGBA32_SFLOAT},
-    {DETEX_PIXEL_FORMAT_A8, nri::Format::UNKNOWN},
-    // Compressed formats.
-    {DETEX_TEXTURE_FORMAT_BC1, nri::Format::BC1_RGBA_UNORM},
-    {DETEX_TEXTURE_FORMAT_BC1A, nri::Format::UNKNOWN},
-    {DETEX_TEXTURE_FORMAT_BC2, nri::Format::BC2_RGBA_UNORM},
-    {DETEX_TEXTURE_FORMAT_BC3, nri::Format::BC3_RGBA_UNORM},
-    {DETEX_TEXTURE_FORMAT_RGTC1, nri::Format::BC4_R_UNORM},
-    {DETEX_TEXTURE_FORMAT_SIGNED_RGTC1, nri::Format::BC4_R_SNORM},
-    {DETEX_TEXTURE_FORMAT_RGTC2, nri::Format::BC5_RG_UNORM},
-    {DETEX_TEXTURE_FORMAT_SIGNED_RGTC2, nri::Format::BC5_RG_SNORM},
-    {DETEX_TEXTURE_FORMAT_BPTC_FLOAT, nri::Format::BC6H_RGB_UFLOAT},
-    {DETEX_TEXTURE_FORMAT_BPTC_SIGNED_FLOAT, nri::Format::BC6H_RGB_SFLOAT},
-    {DETEX_TEXTURE_FORMAT_BPTC, nri::Format::BC7_RGBA_UNORM},
-    {DETEX_TEXTURE_FORMAT_ETC1, nri::Format::UNKNOWN},
-    {DETEX_TEXTURE_FORMAT_ETC2, nri::Format::UNKNOWN},
-    {DETEX_TEXTURE_FORMAT_ETC2_PUNCHTHROUGH, nri::Format::UNKNOWN},
-    {DETEX_TEXTURE_FORMAT_ETC2_EAC, nri::Format::UNKNOWN},
-    {DETEX_TEXTURE_FORMAT_EAC_R11, nri::Format::UNKNOWN},
-    {DETEX_TEXTURE_FORMAT_EAC_SIGNED_R11, nri::Format::UNKNOWN},
-    {DETEX_TEXTURE_FORMAT_EAC_RG11, nri::Format::UNKNOWN},
-    {DETEX_TEXTURE_FORMAT_EAC_SIGNED_RG11, nri::Format::UNKNOWN}};
+	// Uncompressed formats.
+	{ DETEX_PIXEL_FORMAT_RGB8, nri::Format::UNKNOWN },
+	{ DETEX_PIXEL_FORMAT_RGBA8, nri::Format::RGBA8_UNORM },
+	{ DETEX_PIXEL_FORMAT_R8, nri::Format::R8_UNORM },
+	{ DETEX_PIXEL_FORMAT_SIGNED_R8, nri::Format::R8_SNORM },
+	{ DETEX_PIXEL_FORMAT_RG8, nri::Format::RG8_UNORM },
+	{ DETEX_PIXEL_FORMAT_SIGNED_RG8, nri::Format::RG8_SNORM },
+	{ DETEX_PIXEL_FORMAT_R16, nri::Format::R16_UNORM },
+	{ DETEX_PIXEL_FORMAT_SIGNED_R16, nri::Format::R16_SNORM },
+	{ DETEX_PIXEL_FORMAT_RG16, nri::Format::RG16_UNORM },
+	{ DETEX_PIXEL_FORMAT_SIGNED_RG16, nri::Format::RG16_SNORM },
+	{ DETEX_PIXEL_FORMAT_RGB16, nri::Format::UNKNOWN },
+	{ DETEX_PIXEL_FORMAT_RGBA16, nri::Format::RGBA16_UNORM },
+	{ DETEX_PIXEL_FORMAT_FLOAT_R16, nri::Format::R16_SFLOAT },
+	{ DETEX_PIXEL_FORMAT_FLOAT_RG16, nri::Format::RG16_SFLOAT },
+	{ DETEX_PIXEL_FORMAT_FLOAT_RGB16, nri::Format::UNKNOWN },
+	{ DETEX_PIXEL_FORMAT_FLOAT_RGBA16, nri::Format::RGBA16_SFLOAT },
+	{ DETEX_PIXEL_FORMAT_FLOAT_R32, nri::Format::R32_SFLOAT },
+	{ DETEX_PIXEL_FORMAT_FLOAT_RG32, nri::Format::RG32_SFLOAT },
+	{ DETEX_PIXEL_FORMAT_FLOAT_RGB32, nri::Format::RGB32_SFLOAT },
+	{ DETEX_PIXEL_FORMAT_FLOAT_RGBA32, nri::Format::RGBA32_SFLOAT },
+	{ DETEX_PIXEL_FORMAT_A8, nri::Format::UNKNOWN },
+	// Compressed formats.
+	{ DETEX_TEXTURE_FORMAT_BC1, nri::Format::BC1_RGBA_UNORM },
+	{ DETEX_TEXTURE_FORMAT_BC1A, nri::Format::UNKNOWN },
+	{ DETEX_TEXTURE_FORMAT_BC2, nri::Format::BC2_RGBA_UNORM },
+	{ DETEX_TEXTURE_FORMAT_BC3, nri::Format::BC3_RGBA_UNORM },
+	{ DETEX_TEXTURE_FORMAT_RGTC1, nri::Format::BC4_R_UNORM },
+	{ DETEX_TEXTURE_FORMAT_SIGNED_RGTC1, nri::Format::BC4_R_SNORM },
+	{ DETEX_TEXTURE_FORMAT_RGTC2, nri::Format::BC5_RG_UNORM },
+	{ DETEX_TEXTURE_FORMAT_SIGNED_RGTC2, nri::Format::BC5_RG_SNORM },
+	{ DETEX_TEXTURE_FORMAT_BPTC_FLOAT, nri::Format::BC6H_RGB_UFLOAT },
+	{ DETEX_TEXTURE_FORMAT_BPTC_SIGNED_FLOAT, nri::Format::BC6H_RGB_SFLOAT },
+	{ DETEX_TEXTURE_FORMAT_BPTC, nri::Format::BC7_RGBA_UNORM },
+	{ DETEX_TEXTURE_FORMAT_ETC1, nri::Format::UNKNOWN },
+	{ DETEX_TEXTURE_FORMAT_ETC2, nri::Format::UNKNOWN },
+	{ DETEX_TEXTURE_FORMAT_ETC2_PUNCHTHROUGH, nri::Format::UNKNOWN },
+	{ DETEX_TEXTURE_FORMAT_ETC2_EAC, nri::Format::UNKNOWN },
+	{ DETEX_TEXTURE_FORMAT_EAC_R11, nri::Format::UNKNOWN },
+	{ DETEX_TEXTURE_FORMAT_EAC_SIGNED_R11, nri::Format::UNKNOWN },
+	{ DETEX_TEXTURE_FORMAT_EAC_RG11, nri::Format::UNKNOWN },
+	{ DETEX_TEXTURE_FORMAT_EAC_SIGNED_RG11, nri::Format::UNKNOWN }
+};
 
 static nri::Format GetFormatNRI(uint32_t detexFormat) {
-    for (auto& entry : formatTable) {
-        if (entry.detexFormat == detexFormat)
-            return entry.nriFormat;
-    }
+	for (auto &entry : formatTable) {
+		if (entry.detexFormat == detexFormat) {
+			return entry.nriFormat;
+		}
+	}
 
-    return nri::Format::UNKNOWN;
+	return nri::Format::UNKNOWN;
 }
 
 static nri::Format MakeSRGBFormat(nri::Format format) {
-    switch (format) {
-        case nri::Format::RGBA8_UNORM:
-            return nri::Format::RGBA8_SRGB;
+	switch (format) {
+		case nri::Format::RGBA8_UNORM:
+			return nri::Format::RGBA8_SRGB;
 
-        case nri::Format::BC1_RGBA_UNORM:
-            return nri::Format::BC1_RGBA_SRGB;
+		case nri::Format::BC1_RGBA_UNORM:
+			return nri::Format::BC1_RGBA_SRGB;
 
-        case nri::Format::BC2_RGBA_UNORM:
-            return nri::Format::BC2_RGBA_SRGB;
+		case nri::Format::BC2_RGBA_UNORM:
+			return nri::Format::BC2_RGBA_SRGB;
 
-        case nri::Format::BC3_RGBA_UNORM:
-            return nri::Format::BC3_RGBA_SRGB;
+		case nri::Format::BC3_RGBA_UNORM:
+			return nri::Format::BC3_RGBA_SRGB;
 
-        case nri::Format::BC7_RGBA_UNORM:
-            return nri::Format::BC7_RGBA_SRGB;
+		case nri::Format::BC7_RGBA_UNORM:
+			return nri::Format::BC7_RGBA_SRGB;
 
-        default:
-            return format;
-    }
+		default:
+			return format;
+	}
 }
 
 //========================================================================================================================
 // TEXTURE
 //========================================================================================================================
 
-inline detexTexture** ToTexture(utils::Mip* mips) {
-    return (detexTexture**)mips;
+inline detexTexture **ToTexture(utils::Mip *mips) {
+	return (detexTexture **)mips;
 }
 
-inline detexTexture* ToMip(utils::Mip mip) {
-    return (detexTexture*)mip;
+inline detexTexture *ToMip(utils::Mip mip) {
+	return (detexTexture *)mip;
 }
 
 utils::Texture::~Texture() {
-    detexFreeTexture(ToTexture(mips), mipNum);
+	detexFreeTexture(ToTexture(mips), mipNum);
 }
 
-void utils::Texture::GetSubresource(nri::TextureSubresourceUploadDesc& subresource, uint32_t mipIndex, uint32_t arrayIndex) const {
-    // TODO: 3D images are not supported, "subresource.slices" needs to be allocated to store pointers to all slices of the current mipmap
-    assert(GetDepth() == 1);
-    (void)(arrayIndex); // TODO: unused
+void utils::Texture::GetSubresource(nri::TextureSubresourceUploadDesc &subresource, uint32_t mipIndex, uint32_t arrayIndex) const {
+	// TODO: 3D images are not supported, "subresource.slices" needs to be allocated to store pointers to all slices of the current mipmap
+	assert(GetDepth() == 1);
+	(void)(arrayIndex); // TODO: unused
 
-    detexTexture* mip = ToMip(mips[mipIndex]);
+	detexTexture *mip = ToMip(mips[mipIndex]);
 
-    int rowPitch, slicePitch;
-    detexComputePitch(mip->format, mip->width, mip->height, &rowPitch, &slicePitch);
+	int rowPitch, slicePitch;
+	detexComputePitch(mip->format, mip->width, mip->height, &rowPitch, &slicePitch);
 
-    subresource.slices = mip->data;
-    subresource.sliceNum = 1;
-    subresource.rowPitch = (uint32_t)rowPitch;
-    subresource.slicePitch = (uint32_t)slicePitch;
+	subresource.slices = mip->data;
+	subresource.sliceNum = 1;
+	subresource.rowPitch = (uint32_t)rowPitch;
+	subresource.slicePitch = (uint32_t)slicePitch;
+}
+
+nri::Format utils::Texture::ConvertDXGIFormatToNRI(tinyddsloader::DDSFile::DXGIFormat format) {
+	switch (format) {
+		// 32 bits per channel
+		case tinyddsloader::DDSFile::DXGIFormat::R32G32B32A32_Float:
+			return nri::Format::RGBA32_SFLOAT;
+		case tinyddsloader::DDSFile::DXGIFormat::R32G32B32A32_UInt:
+			return nri::Format::RGBA32_UINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R32G32B32A32_SInt:
+			return nri::Format::RGBA32_SINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R32G32B32_Float:
+			return nri::Format::RGB32_SFLOAT;
+		case tinyddsloader::DDSFile::DXGIFormat::R32G32B32_UInt:
+			return nri::Format::RGB32_UINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R32G32B32_SInt:
+			return nri::Format::RGB32_SINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R32G32_Float:
+			return nri::Format::RG32_SFLOAT;
+		case tinyddsloader::DDSFile::DXGIFormat::R32G32_UInt:
+			return nri::Format::RG32_UINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R32G32_SInt:
+			return nri::Format::RG32_SINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R32_Float:
+			return nri::Format::R32_SFLOAT;
+		case tinyddsloader::DDSFile::DXGIFormat::R32_UInt:
+			return nri::Format::R32_UINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R32_SInt:
+			return nri::Format::R32_SINT;
+
+		// 16 bits per channel
+		case tinyddsloader::DDSFile::DXGIFormat::R16G16B16A16_Float:
+			return nri::Format::RGBA16_SFLOAT;
+		case tinyddsloader::DDSFile::DXGIFormat::R16G16B16A16_UNorm:
+			return nri::Format::RGBA16_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::R16G16B16A16_UInt:
+			return nri::Format::RGBA16_UINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R16G16B16A16_SNorm:
+			return nri::Format::RGBA16_SNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::R16G16B16A16_SInt:
+			return nri::Format::RGBA16_SINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R16G16_Float:
+			return nri::Format::RG16_SFLOAT;
+		case tinyddsloader::DDSFile::DXGIFormat::R16G16_UNorm:
+			return nri::Format::RG16_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::R16G16_UInt:
+			return nri::Format::RG16_UINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R16G16_SNorm:
+			return nri::Format::RG16_SNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::R16G16_SInt:
+			return nri::Format::RG16_SINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R16_Float:
+			return nri::Format::R16_SFLOAT;
+		case tinyddsloader::DDSFile::DXGIFormat::R16_UNorm:
+			return nri::Format::R16_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::R16_UInt:
+			return nri::Format::R16_UINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R16_SNorm:
+			return nri::Format::R16_SNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::R16_SInt:
+			return nri::Format::R16_SINT;
+
+		// 8 bits per channel
+		case tinyddsloader::DDSFile::DXGIFormat::R8G8B8A8_UNorm:
+			return nri::Format::RGBA8_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::R8G8B8A8_UNorm_SRGB:
+			return nri::Format::RGBA8_SRGB;
+		case tinyddsloader::DDSFile::DXGIFormat::R8G8B8A8_UInt:
+			return nri::Format::RGBA8_UINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R8G8B8A8_SNorm:
+			return nri::Format::RGBA8_SNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::R8G8B8A8_SInt:
+			return nri::Format::RGBA8_SINT;
+		case tinyddsloader::DDSFile::DXGIFormat::B8G8R8A8_UNorm:
+			return nri::Format::BGRA8_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::B8G8R8A8_UNorm_SRGB:
+			return nri::Format::BGRA8_SRGB;
+		case tinyddsloader::DDSFile::DXGIFormat::R8G8_UNorm:
+			return nri::Format::RG8_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::R8G8_UInt:
+			return nri::Format::RG8_UINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R8G8_SNorm:
+			return nri::Format::RG8_SNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::R8G8_SInt:
+			return nri::Format::RG8_SINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R8_UNorm:
+			return nri::Format::R8_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::R8_UInt:
+			return nri::Format::R8_UINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R8_SNorm:
+			return nri::Format::R8_SNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::R8_SInt:
+			return nri::Format::R8_SINT;
+
+		// Packed formats
+		case tinyddsloader::DDSFile::DXGIFormat::R10G10B10A2_UNorm:
+			return nri::Format::R10_G10_B10_A2_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::R10G10B10A2_UInt:
+			return nri::Format::R10_G10_B10_A2_UINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R11G11B10_Float:
+			return nri::Format::R11_G11_B10_UFLOAT;
+		case tinyddsloader::DDSFile::DXGIFormat::R9G9B9E5_SHAREDEXP:
+			return nri::Format::R9_G9_B9_E5_UFLOAT;
+		case tinyddsloader::DDSFile::DXGIFormat::B5G6R5_UNorm:
+			return nri::Format::B5_G6_R5_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::B5G5R5A1_UNorm:
+			return nri::Format::B5_G5_R5_A1_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::B4G4R4A4_UNorm:
+			return nri::Format::B4_G4_R4_A4_UNORM;
+
+		// Block-compressed formats
+		case tinyddsloader::DDSFile::DXGIFormat::BC1_UNorm:
+			return nri::Format::BC1_RGBA_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::BC1_UNorm_SRGB:
+			return nri::Format::BC1_RGBA_SRGB;
+		case tinyddsloader::DDSFile::DXGIFormat::BC2_UNorm:
+			return nri::Format::BC2_RGBA_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::BC2_UNorm_SRGB:
+			return nri::Format::BC2_RGBA_SRGB;
+		case tinyddsloader::DDSFile::DXGIFormat::BC3_UNorm:
+			return nri::Format::BC3_RGBA_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::BC3_UNorm_SRGB:
+			return nri::Format::BC3_RGBA_SRGB;
+		case tinyddsloader::DDSFile::DXGIFormat::BC4_UNorm:
+			return nri::Format::BC4_R_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::BC4_SNorm:
+			return nri::Format::BC4_R_SNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::BC5_UNorm:
+			return nri::Format::BC5_RG_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::BC5_SNorm:
+			return nri::Format::BC5_RG_SNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::BC6H_UF16:
+			return nri::Format::BC6H_RGB_UFLOAT;
+		case tinyddsloader::DDSFile::DXGIFormat::BC6H_SF16:
+			return nri::Format::BC6H_RGB_SFLOAT;
+		case tinyddsloader::DDSFile::DXGIFormat::BC7_UNorm:
+			return nri::Format::BC7_RGBA_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::BC7_UNorm_SRGB:
+			return nri::Format::BC7_RGBA_SRGB;
+
+		// Depth-stencil formats
+		case tinyddsloader::DDSFile::DXGIFormat::D16_UNorm:
+			return nri::Format::D16_UNORM;
+		case tinyddsloader::DDSFile::DXGIFormat::D24_UNorm_S8_UInt:
+			return nri::Format::D24_UNORM_S8_UINT;
+		case tinyddsloader::DDSFile::DXGIFormat::D32_Float:
+			return nri::Format::D32_SFLOAT;
+		case tinyddsloader::DDSFile::DXGIFormat::D32_Float_S8X24_UInt:
+			return nri::Format::D32_SFLOAT_S8_UINT_X24;
+		case tinyddsloader::DDSFile::DXGIFormat::R24_UNorm_X8_Typeless:
+			return nri::Format::R24_UNORM_X8;
+		case tinyddsloader::DDSFile::DXGIFormat::X24_Typeless_G8_UInt:
+			return nri::Format::X24_G8_UINT;
+		case tinyddsloader::DDSFile::DXGIFormat::R32_Float_X8X24_Typeless:
+			return nri::Format::R32_SFLOAT_X8_X24;
+		case tinyddsloader::DDSFile::DXGIFormat::X32_Typeless_G8X24_UInt:
+			return nri::Format::X32_G8_UINT_X24;
+
+		// Typeless and other formats not directly supported by NRI
+		case tinyddsloader::DDSFile::DXGIFormat::R32G32B32A32_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::R32G32B32_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::R16G16B16A16_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::R32G32_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::R32G8X24_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::R10G10B10A2_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::R8G8B8A8_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::R16G16_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::R32_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::R24G8_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::R8G8_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::R16_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::R8_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::B8G8R8A8_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::B8G8R8X8_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::BC1_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::BC2_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::BC3_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::BC4_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::BC5_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::BC6H_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::BC7_Typeless:
+		case tinyddsloader::DDSFile::DXGIFormat::A8_UNorm:
+		case tinyddsloader::DDSFile::DXGIFormat::R1_UNorm:
+		case tinyddsloader::DDSFile::DXGIFormat::R8G8_B8G8_UNorm:
+		case tinyddsloader::DDSFile::DXGIFormat::G8R8_G8B8_UNorm:
+		case tinyddsloader::DDSFile::DXGIFormat::B8G8R8X8_UNorm:
+		case tinyddsloader::DDSFile::DXGIFormat::R10G10B10_XR_BIAS_A2_UNorm:
+		case tinyddsloader::DDSFile::DXGIFormat::B8G8R8X8_UNorm_SRGB:
+		case tinyddsloader::DDSFile::DXGIFormat::AYUV:
+		case tinyddsloader::DDSFile::DXGIFormat::Y410:
+		case tinyddsloader::DDSFile::DXGIFormat::Y416:
+		case tinyddsloader::DDSFile::DXGIFormat::NV12:
+		case tinyddsloader::DDSFile::DXGIFormat::P010:
+		case tinyddsloader::DDSFile::DXGIFormat::P016:
+		case tinyddsloader::DDSFile::DXGIFormat::YUV420_OPAQUE:
+		case tinyddsloader::DDSFile::DXGIFormat::YUY2:
+		case tinyddsloader::DDSFile::DXGIFormat::Y210:
+		case tinyddsloader::DDSFile::DXGIFormat::Y216:
+		case tinyddsloader::DDSFile::DXGIFormat::NV11:
+		case tinyddsloader::DDSFile::DXGIFormat::AI44:
+		case tinyddsloader::DDSFile::DXGIFormat::IA44:
+		case tinyddsloader::DDSFile::DXGIFormat::P8:
+		case tinyddsloader::DDSFile::DXGIFormat::A8P8:
+		case tinyddsloader::DDSFile::DXGIFormat::P208:
+		case tinyddsloader::DDSFile::DXGIFormat::V208:
+		case tinyddsloader::DDSFile::DXGIFormat::V408:
+			return nri::Format::UNKNOWN;
+		case tinyddsloader::DDSFile::DXGIFormat::Unknown:
+			break;
+	}
+	return nri::Format::UNKNOWN; // Default case
 }
 
 bool utils::Texture::IsBlockCompressed() const {
-    return detexFormatIsCompressed(ToMip(mips[0])->format);
+	return detexFormatIsCompressed(ToMip(mips[0])->format);
 }
 
-const char* utils::GetFileName(const std::string& path) {
-    const size_t slashPos = path.find_last_of("\\/");
-    if (slashPos != std::string::npos)
-        return path.c_str() + slashPos + 1;
+const char *utils::GetFileName(const std::string &path) {
+	const size_t slashPos = path.find_last_of("\\/");
+	if (slashPos != std::string::npos) {
+		return path.c_str() + slashPos + 1;
+	}
 
-    return "";
+	return "";
 }
 
 //========================================================================================================================
 // UTILS
 //========================================================================================================================
 
-std::string utils::GetFullPath(const std::string& localPath, DataFolder dataFolder) {
-    std::string path = "data/"; // it's a symbolic link
-    if (dataFolder == DataFolder::SHADERS)
-        path = "_Shaders/"; // special folder with generated files
-    else if (dataFolder == DataFolder::TEXTURES)
-        path += "Textures/";
-    else if (dataFolder == DataFolder::SCENES)
-        path += "Scenes/";
-    else if (dataFolder == DataFolder::TESTS)
-        path = "Tests/"; // special folder stored in Git
-    else if(dataFolder == DataFolder::TESTSHADER)
-        path = "_Shaders1/";
+std::string utils::GetFullPath(const std::string &localPath, DataFolder dataFolder) {
+	std::string path = "data/"; // it's a symbolic link
+	if (dataFolder == DataFolder::SHADERS) {
+		path = "_Shaders/"; // special folder with generated files
+	} else if (dataFolder == DataFolder::TEXTURES) {
+		path += "Textures/";
+	} else if (dataFolder == DataFolder::SCENES) {
+		path += "Scenes/";
+	} else if (dataFolder == DataFolder::TESTS) {
+		path = "Tests/"; // special folder stored in Git
+	} else if (dataFolder == DataFolder::TESTSHADER) {
+		path = "_Shaders1/";
+	}
 
-    return path + localPath;
+	return path + localPath;
 }
 
-bool utils::LoadFile(const std::string& path, std::vector<uint8_t>& data) {
-    FILE* file = fopen(path.c_str(), "rb");
+bool utils::LoadFile(const std::string &path, std::vector<uint8_t> &data) {
+	FILE *file = fopen(path.c_str(), "rb");
 
-    if (file == nullptr) {
-        printf("ERROR: File '%s' is not found!\n", path.c_str());
-        data.clear();
-        return false;
-    }
+	if (file == nullptr) {
+		printf("ERROR: File '%s' is not found!\n", path.c_str());
+		data.clear();
+		return false;
+	}
 
-    printf("Loading file '%s'...\n", GetFileName(path));
+	printf("Loading file '%s'...\n", GetFileName(path));
 
-    fseek(file, 0, SEEK_END);
-    const size_t size = ftell(file); // 32-bit size
-    fseek(file, 0, SEEK_SET);
+	fseek(file, 0, SEEK_END);
+	const size_t size = ftell(file); // 32-bit size
+	fseek(file, 0, SEEK_SET);
 
-    data.resize(size);
-    const size_t readSize = fread(&data[0], size, 1, file);
-    fclose(file);
+	data.resize(size);
+	const size_t readSize = fread(&data[0], size, 1, file);
+	fclose(file);
 
-    return !data.empty() && readSize == 1;
+	return !data.empty() && readSize == 1;
 }
 
-nri::ShaderDesc utils::LoadShader(nri::GraphicsAPI graphicsAPI, const std::string& shaderName, ShaderCodeStorage& storage, const char* entryPointName) {
-    const char* ext = GetShaderExt(graphicsAPI);
-    std::string path = GetFullPath(shaderName + ext, DataFolder::TESTSHADER);
-    nri::ShaderDesc shaderDesc = {};
+nri::ShaderDesc utils::LoadShader(nri::GraphicsAPI graphicsAPI, const std::string &shaderName, ShaderCodeStorage &storage, const char *entryPointName) {
+	const char *ext = GetShaderExt(graphicsAPI);
+	std::string path = GetFullPath(shaderName + ext, DataFolder::TESTSHADER);
+	nri::ShaderDesc shaderDesc = {};
 
-    size_t i = 1;
-    for (; i < gShaderExts.size(); i++) {
-        if (path.rfind(gShaderExts[i].ext) != std::string::npos) {
-            storage.push_back(std::vector<uint8_t>());
-            std::vector<uint8_t>& code = storage.back();
+	size_t i = 1;
+	for (; i < gShaderExts.size(); i++) {
+		if (path.rfind(gShaderExts[i].ext) != std::string::npos) {
+			storage.push_back(std::vector<uint8_t>());
+			std::vector<uint8_t> &code = storage.back();
 
-            if (LoadFile(path, code)) {
-                shaderDesc.stage = gShaderExts[i].stage;
-                shaderDesc.bytecode = code.data();
-                shaderDesc.size = code.size();
-                shaderDesc.entryPointName = entryPointName;
-            }
+			if (LoadFile(path, code)) {
+				shaderDesc.stage = gShaderExts[i].stage;
+				shaderDesc.bytecode = code.data();
+				shaderDesc.size = code.size();
+				shaderDesc.entryPointName = entryPointName;
+			}
 
-            break;
-        }
-    }
+			break;
+		}
+	}
 
-    if (i == gShaderExts.size()) {
-        printf("ERROR: Shader '%s' has invalid shader extension!\n", shaderName.c_str());
+	if (i == gShaderExts.size()) {
+		printf("ERROR: Shader '%s' has invalid shader extension!\n", shaderName.c_str());
 
-        NRI_ABORT_ON_FALSE(false);
-    };
+		NRI_ABORT_ON_FALSE(false);
+	};
 
-    return shaderDesc;
+	return shaderDesc;
 }
 
 namespace utils {
-static void PostProcessTexture(const std::string& name, Texture& texture, bool computeAvgColorAndAlphaMode, detexTexture** dTexture, int mipNum) {
-    texture.mips = (Mip*)dTexture;
-    texture.name = name;
-    texture.format = GetFormatNRI(dTexture[0]->format);
-    texture.width = (uint16_t)dTexture[0]->width;
-    texture.height = (uint16_t)dTexture[0]->height;
-    texture.mipNum = (uint8_t)mipNum;
+static void PostProcessTexture(const std::string &name, Texture &texture, bool computeAvgColorAndAlphaMode, detexTexture **dTexture, int mipNum) {
+	texture.mips = (Mip *)dTexture;
+	texture.name = name;
+	texture.format = GetFormatNRI(dTexture[0]->format);
+	texture.width = (uint16_t)dTexture[0]->width;
+	texture.height = (uint16_t)dTexture[0]->height;
+	texture.mipNum = (uint8_t)mipNum;
 
-    // TODO: detex doesn't support cubemaps and 3D textures
-    texture.layerNum = 1;
-    texture.depth = 1;
+	// TODO: detex doesn't support cubemaps and 3D textures
+	texture.layerNum = 1;
+	texture.depth = 1;
 
-    texture.alphaMode = AlphaMode::OPAQUE;
-    if (computeAvgColorAndAlphaMode) {
-        // Alpha mode
-        if (texture.format == nri::Format::BC1_RGBA_UNORM || texture.format == nri::Format::BC1_RGBA_SRGB) {
-            bool hasTransparency = false;
-            for (int i = mipNum - 1; i >= 0 && !hasTransparency; i--) {
-                const size_t size = detexTextureSize(dTexture[i]->width_in_blocks, dTexture[i]->height_in_blocks, dTexture[i]->format);
-                const uint8_t* bc1 = dTexture[i]->data;
+	texture.alphaMode = AlphaMode::OPAQUE;
+	if (computeAvgColorAndAlphaMode) {
+		// Alpha mode
+		if (texture.format == nri::Format::BC1_RGBA_UNORM || texture.format == nri::Format::BC1_RGBA_SRGB) {
+			bool hasTransparency = false;
+			for (int i = mipNum - 1; i >= 0 && !hasTransparency; i--) {
+				const size_t size = detexTextureSize(dTexture[i]->width_in_blocks, dTexture[i]->height_in_blocks, dTexture[i]->format);
+				const uint8_t *bc1 = dTexture[i]->data;
 
-                for (size_t j = 0; j < size && !hasTransparency; j += 8) {
-                    const uint16_t* c = (uint16_t*)bc1;
-                    if (c[0] <= c[1]) {
-                        const uint32_t bits = *(uint32_t*)(bc1 + 4);
-                        for (uint32_t k = 0; k < 32 && !hasTransparency; k += 2)
-                            hasTransparency = ((bits >> k) & 0x3) == 0x3;
-                    }
-                    bc1 += 8;
-                }
-            }
+				for (size_t j = 0; j < size && !hasTransparency; j += 8) {
+					const uint16_t *c = (uint16_t *)bc1;
+					if (c[0] <= c[1]) {
+						const uint32_t bits = *(uint32_t *)(bc1 + 4);
+						for (uint32_t k = 0; k < 32 && !hasTransparency; k += 2) {
+							hasTransparency = ((bits >> k) & 0x3) == 0x3;
+						}
+					}
+					bc1 += 8;
+				}
+			}
 
-            if (hasTransparency)
-                texture.alphaMode = AlphaMode::PREMULTIPLIED;
-        }
+			if (hasTransparency) {
+				texture.alphaMode = AlphaMode::PREMULTIPLIED;
+			}
+		}
 
-        // Decompress last mip
-        std::vector<uint8_t> image;
-        detexTexture* lastMip = dTexture[mipNum - 1];
-        uint8_t* rgba8 = lastMip->data;
-        if (lastMip->format != DETEX_PIXEL_FORMAT_RGBA8) {
-            // Convert to RGBA8 if the texture is compressed
-            image.resize(lastMip->width * lastMip->height * detexGetPixelSize(DETEX_PIXEL_FORMAT_RGBA8));
-            detexDecompressTextureLinear(lastMip, &image[0], DETEX_PIXEL_FORMAT_RGBA8);
-            rgba8 = &image[0];
-        }
+		// Decompress last mip
+		std::vector<uint8_t> image;
+		detexTexture *lastMip = dTexture[mipNum - 1];
+		uint8_t *rgba8 = lastMip->data;
+		if (lastMip->format != DETEX_PIXEL_FORMAT_RGBA8) {
+			// Convert to RGBA8 if the texture is compressed
+			image.resize(lastMip->width * lastMip->height * detexGetPixelSize(DETEX_PIXEL_FORMAT_RGBA8));
+			detexDecompressTextureLinear(lastMip, &image[0], DETEX_PIXEL_FORMAT_RGBA8);
+			rgba8 = &image[0];
+		}
 
-        // Average color
-        vec4 avgColor = vec4(0.0);
-        // const size_t pixelNum = lastMip->width * lastMip->height;
-        // for (size_t i = 0; i < pixelNum; i++)
-        //     avgColor += Packing::unorm_to_float4<8, 8, 8, 8>(*(uint32_t*)(rgba8 + i * 4));
-        // avgColor /= float(pixelNum);
+		// Average color
+		vec4 avgColor = vec4(0.0);
+		// const size_t pixelNum = lastMip->width * lastMip->height;
+		// for (size_t i = 0; i < pixelNum; i++)
+		//     avgColor += Packing::unorm_to_float4<8, 8, 8, 8>(*(uint32_t*)(rgba8 + i * 4));
+		// avgColor /= float(pixelNum);
 
-        if (texture.alphaMode != AlphaMode::PREMULTIPLIED && avgColor.w < 254.0f / 255.0f)
-            texture.alphaMode = AlphaMode::TRANSPARENT;
+		if (texture.alphaMode != AlphaMode::PREMULTIPLIED && avgColor.w < 254.0f / 255.0f) {
+			texture.alphaMode = AlphaMode::TRANSPARENT;
+		}
 
-        if (texture.alphaMode == AlphaMode::TRANSPARENT && avgColor.w == 0.0f) {
-            printf("WARNING: Texture '%s' is fully transparent!\n", name.c_str());
-            texture.alphaMode = AlphaMode::OFF;
-        }
-    }
+		if (texture.alphaMode == AlphaMode::TRANSPARENT && avgColor.w == 0.0f) {
+			printf("WARNING: Texture '%s' is fully transparent!\n", name.c_str());
+			texture.alphaMode = AlphaMode::OFF;
+		}
+	}
 }
 } // namespace utils
 
-bool utils::LoadTextureFromMemory(const std::string& name, const uint8_t* data, int dataSize,
-    Texture& texture, bool computeAvgColorAndAlphaMode) {
-    printf("Loading embedded texture '%s'...\n", name.c_str());
+bool utils::LoadTextureFromMemory(const std::string &name, const uint8_t *data, int dataSize,
+		Texture &texture, bool computeAvgColorAndAlphaMode) {
+	printf("Loading embedded texture '%s'...\n", name.c_str());
 
-    int x, y, comp;
-    unsigned char* image = stbi_load_from_memory((stbi_uc const*)data, dataSize, &x, &y, &comp, STBI_rgb_alpha);
-    if (!image) {
-        printf("Could not read memory for embedded texture %s. Reason: %s", name.c_str(), stbi_failure_reason());
-        return false;
-    }
-    detexTexture** dTexture = (detexTexture**)malloc(sizeof(detexTexture*));
-    dTexture[0] = (detexTexture*)malloc(sizeof(detexTexture));
-    dTexture[0]->format = DETEX_PIXEL_FORMAT_RGBA8;
-    dTexture[0]->width = x;
-    dTexture[0]->height = y;
-    dTexture[0]->width_in_blocks = x;
-    dTexture[0]->height_in_blocks = y;
-    size_t size = x * y * detexGetPixelSize(DETEX_PIXEL_FORMAT_RGBA8);
-    dTexture[0]->data = (uint8_t*)malloc(size);
-    memcpy(dTexture[0]->data, image, size);
-    stbi_image_free(image);
+	int x, y, comp;
+	unsigned char *image = stbi_load_from_memory((stbi_uc const *)data, dataSize, &x, &y, &comp, STBI_rgb_alpha);
+	if (!image) {
+		printf("Could not read memory for embedded texture %s. Reason: %s", name.c_str(), stbi_failure_reason());
+		return false;
+	}
+	detexTexture **dTexture = (detexTexture **)malloc(sizeof(detexTexture *));
+	dTexture[0] = (detexTexture *)malloc(sizeof(detexTexture));
+	dTexture[0]->format = DETEX_PIXEL_FORMAT_RGBA8;
+	dTexture[0]->width = x;
+	dTexture[0]->height = y;
+	dTexture[0]->width_in_blocks = x;
+	dTexture[0]->height_in_blocks = y;
+	size_t size = x * y * detexGetPixelSize(DETEX_PIXEL_FORMAT_RGBA8);
+	dTexture[0]->data = (uint8_t *)malloc(size);
+	memcpy(dTexture[0]->data, image, size);
+	stbi_image_free(image);
 
-    const int kMipNum = 1;
-    // PostProcessTexture(name, texture, computeAvgColorAndAlphaMode, dTexture, kMipNum);
-    return true;
+	const int kMipNum = 1;
+	// PostProcessTexture(name, texture, computeAvgColorAndAlphaMode, dTexture, kMipNum);
+	return true;
 }
 
-bool utils::LoadTexture(const std::string& path, Texture& texture, bool computeAvgColorAndAlphaMode) {
-    printf("Loading texture '%s'...\n", GetFileName(path));
+bool utils::LoadTexture(const std::string &path, Texture &texture, bool isDDS, bool computeAvgColorAndAlphaMode) {
+	printf("Loading texture '%s'...\n", GetFileName(path));
 
-    detexTexture** dTexture = nullptr;
-    int mipNum = 0;
+	detexTexture **dTexture = nullptr;
+	int mipNum = 0;
+	if (isDDS) {
+		texture.data.Load(path.c_str());
+		texture.width = texture.data.GetWidth();
+		texture.height = texture.data.GetHeight();
+		texture.depth = texture.data.GetDepth();
+		texture.mipNum = texture.data.GetMipCount();
+		texture.layerNum = texture.data.GetArraySize();
+		texture.format = utils::Texture::ConvertDXGIFormatToNRI(texture.data.GetFormat());
+		return true;
+	}
 
-    if (!detexLoadTextureFileWithMipmaps(path.c_str(), 32, &dTexture, &mipNum)) {
-        printf("ERROR: Can't load texture '%s'\n", path.c_str());
+	if (!detexLoadTextureFileWithMipmaps(path.c_str(), 32, &dTexture, &mipNum)) {
+		printf("ERROR: Can't load texture '%s'\n", path.c_str());
 
-        return false;
-    }
+		return false;
+	}
 
-    PostProcessTexture(path, texture, computeAvgColorAndAlphaMode, dTexture, mipNum);
+	PostProcessTexture(path, texture, computeAvgColorAndAlphaMode, dTexture, mipNum);
 
-    return true;
+	return true;
 }
 
-void utils::LoadTextureFromMemory(nri::Format format, uint32_t width, uint32_t height, const uint8_t* pixels, Texture& texture) {
-    assert(format == nri::Format::R8_UNORM);
+void utils::LoadTextureFromMemory(nri::Format format, uint32_t width, uint32_t height, const uint8_t *pixels, Texture &texture) {
+	assert(format == nri::Format::R8_UNORM);
 
-    detexTexture** dTexture;
-    detexLoadTextureFromMemory(DETEX_PIXEL_FORMAT_R8, width, height, pixels, &dTexture);
+	detexTexture **dTexture;
+	detexLoadTextureFromMemory(DETEX_PIXEL_FORMAT_R8, width, height, pixels, &dTexture);
 
-    texture.mipNum = 1;
-    texture.layerNum = 1;
-    texture.depth = 1;
-    texture.format = format;
-    texture.alphaMode = AlphaMode::OPAQUE;
-    texture.mips = (Mip*)dTexture;
+	texture.mipNum = 1;
+	texture.layerNum = 1;
+	texture.depth = 1;
+	texture.format = format;
+	texture.alphaMode = AlphaMode::OPAQUE;
+	texture.mips = (Mip *)dTexture;
 }
 
 // static const char* cgltfErrorToString(cgltf_result res) {

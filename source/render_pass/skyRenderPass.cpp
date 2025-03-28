@@ -111,6 +111,10 @@ void SkyRenderPass::AllocGPUMemory() {
 	std::string path = utils::GetFullPath("barcelona.dds", utils::DataFolder::TEXTURES);
 	ddsImage.Load(path.c_str());
 
+	if (!utils::LoadTexture(path, texture, true)) {
+		printf("Can not found this texture %s", path.c_str());
+	}
+
 	{
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;

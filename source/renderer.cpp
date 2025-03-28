@@ -19,7 +19,7 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	descriptorPoolDesc.constantBufferMaxNum = BUFFERED_FRAME_MAX_NUM;
 	descriptorPoolDesc.storageBufferMaxNum = 2;
 	descriptorPoolDesc.structuredBufferMaxNum = 2;
-	descriptorPoolDesc.textureMaxNum = 20;
+	descriptorPoolDesc.textureMaxNum = 50;
 	descriptorPoolDesc.samplerMaxNum = 10;
 
 	NRI_ABORT_ON_FAILURE(NRI.CreateDescriptorPool(*m_Device, descriptorPoolDesc,
