@@ -67,10 +67,17 @@ __declspec(dllexport) extern const char* D3D12SDKPath = "]] .. agility_sdk_dir .
         local runtime_dir = get_config("rundir") or "bin"
         -- local agility_sdk_dir = get_config("NRI_AGILITY_SDK_DIR") or "AgilitySDK"
         local build_dir = get_config("buildir") or "build"
-        local dest_path = path.join(path.join(build_dir, "windows/x64/debug"), agility_sdk_dir)
-
-        print("NRI: copying Agility SDK binaries to '" .. dest_path .. "'")
-        os.cp("3rd/Directx12Agility/build/native/bin/x64", dest_path)
+        local dest_path = path.join(path.join(build_dir, "windows/x64/debug"), "AgilitySDK/x64")
+        if os.isdir(dest_path) then
+            print("delete old dest dir...")
+            os.rm(dest_path)
+            print("NRI: copying Agility SDK binaries to '" .. dest_path .. "'")
+            os.cp("3rd/Directx12Agility/build/native/bin/x64", dest_path)
+        else 
+            print("NRI: copying Agility SDK binaries to '" .. dest_path .. "'")
+            os.cp("3rd/Directx12Agility/build/native/bin/x64", dest_path)
+        end
+        
     end)
 
 
