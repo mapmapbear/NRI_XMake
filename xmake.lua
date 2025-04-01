@@ -29,12 +29,13 @@ target("NRI")
     add_deps("D3D12Ma")
     add_defines("NOMINMAX", "NRI_ENABLE_D3D12_SUPPORT")
     if is_mode("debug") then
-        add_defines("NRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS")
+        add_defines("NRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS", "NRI_ENABLE_AGILITY_SDK_SUPPORT")
     end
     add_includedirs("3rd/NRI/Include", {public = true})
     add_includedirs("3rd/NRI/Source/Shared/", {public = true})
     add_includedirs("3rd/d3d12ma/include/", {public = true})
     add_includedirs("3rd/WinPixEventRuntime/Include/WinPixEventRuntime/")
+    add_includedirs("3rd/Directx12Agility/build/native/include", {public = true})
     add_files("3rd/NRI/Source/Creation/*.cpp")
     add_files("3rd/NRI/Source/D3D12/*.cpp")
     add_files("3rd/NRI/Source/Shared/*.cpp")
@@ -42,10 +43,41 @@ target("NRI")
     add_files("3rd/NRI/Source/Validation/*.cpp")
     add_links("3rd/WinPixEventRuntime/bin/x64/WinPixEventRuntime.lib")
     add_syslinks("dxgi", "d3d12", "dxguid")
+    on_config(function(target)
+        local header_path = "3rd/NRI/Include/NRIAgilitySDK.h"
+        local agility_sdk_version = "615"
+        local agility_sdk_dir = "AgilitySDK"
+
+        local content = [[
+// This file is auto-generated during project deployment. Do not modify!
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+__declspec(dllexport) extern const uint32_t D3D12SDKVersion = ]] .. agility_sdk_version .. [[;
+__declspec(dllexport) extern const char* D3D12SDKPath = "]] .. agility_sdk_dir .. [[/x64/";
+
+#ifdef __cplusplus
+}
+#endif
+]]
+
+        io.writefile(header_path, content)
+
+        local runtime_dir = get_config("rundir") or "bin"
+        -- local agility_sdk_dir = get_config("NRI_AGILITY_SDK_DIR") or "AgilitySDK"
+        local build_dir = get_config("buildir") or "build"
+        local dest_path = path.join(path.join(build_dir, "windows/x64/debug"), agility_sdk_dir)
+
+        print("NRI: copying Agility SDK binaries to '" .. dest_path .. "'")
+        os.cp("3rd/Directx12Agility/build/native/bin/x64", dest_path)
+    end)
+
 
 target("NRIFramework")
     set_kind("static")
     add_deps("NRI", "ImGUI", "TinyddsLoader")
+    add_defines("NRI_ENABLE_AGILITY_SDK_SUPPORT")
     add_includedirs("3rd/NRI_Framework/Include", {public = true})
     add_includedirs("3rd/NRI/Include", {public = true})
     add_includedirs("3rd/imgui/", {public = true})

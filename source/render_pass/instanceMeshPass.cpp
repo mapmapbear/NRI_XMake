@@ -86,7 +86,7 @@ void InstanceMeshPass::AllocGPUMemory() {
 		textureDesc.format = m_texture_albedo_data.GetFormat(true);
 		textureDesc.width = m_texture_albedo_data.GetWidth();
 		textureDesc.height = m_texture_albedo_data.GetHeight();
-		textureDesc.mipNum = m_texture_albedo_data.GetMipNum();
+		textureDesc.mipNum = 1;
 		textureDesc.depth = m_texture_albedo_data.GetDepth();
 
 		NRI_ABORT_ON_FAILURE(
@@ -100,7 +100,7 @@ void InstanceMeshPass::AllocGPUMemory() {
 		textureDesc.format = m_texture_normal_data.GetFormat(true);
 		textureDesc.width = m_texture_normal_data.GetWidth();
 		textureDesc.height = m_texture_normal_data.GetHeight();
-		textureDesc.mipNum = m_texture_normal_data.GetMipNum();
+		textureDesc.mipNum = 1;
 		textureDesc.depth = m_texture_normal_data.GetDepth();
 
 		NRI_ABORT_ON_FAILURE(
@@ -114,7 +114,7 @@ void InstanceMeshPass::AllocGPUMemory() {
 		textureDesc.format = m_texture_mr_data.GetFormat(true);
 		textureDesc.width = m_texture_mr_data.GetWidth();
 		textureDesc.height = m_texture_mr_data.GetHeight();
-		textureDesc.mipNum = m_texture_mr_data.GetMipNum();
+		textureDesc.mipNum = 1;
 		textureDesc.depth = m_texture_mr_data.GetDepth();
 
 		NRI_ABORT_ON_FAILURE(
@@ -128,7 +128,7 @@ void InstanceMeshPass::AllocGPUMemory() {
 		textureDesc.format = m_texture_ao_data.GetFormat(true);
 		textureDesc.width = m_texture_ao_data.GetWidth();
 		textureDesc.height = m_texture_ao_data.GetHeight();
-		textureDesc.mipNum = m_texture_ao_data.GetMipNum();
+		textureDesc.mipNum = 1;
 		textureDesc.depth = m_texture_ao_data.GetDepth();
 
 		NRI_ABORT_ON_FAILURE(
@@ -142,7 +142,7 @@ void InstanceMeshPass::AllocGPUMemory() {
 		textureDesc.format = m_texture_emissive_data.GetFormat(true);
 		textureDesc.width = m_texture_emissive_data.GetWidth();
 		textureDesc.height = m_texture_emissive_data.GetHeight();
-		textureDesc.mipNum = m_texture_emissive_data.GetMipNum();
+		textureDesc.mipNum = 1;
 		textureDesc.depth = m_texture_emissive_data.GetDepth();
 
 		NRI_ABORT_ON_FAILURE(
