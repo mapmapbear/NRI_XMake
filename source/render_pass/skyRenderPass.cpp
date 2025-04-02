@@ -88,7 +88,7 @@ void SkyRenderPass::BuildPipeline() {
 		NRI_ABORT_ON_FAILURE(
 				NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_SkyPipelineLayout, 0,
 						&m_SkyTextureDescriptorSet, 1, 0));
-
+		NRI.SetDebugName(m_SkyTextureDescriptorSet, "m_SkyTextureDescriptorSet");
 		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_HDRTextureShaderResource };
 
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};

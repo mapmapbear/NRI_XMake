@@ -83,6 +83,7 @@ private:
 	nri::Descriptor *m_HDRTextureShaderResource = nullptr;
 	nri::Descriptor *m_CubemapTextureShaderResource = nullptr;
 	nri::Descriptor *m_DepthAttachment = nullptr;
+	nri::Descriptor *m_ColorAttachment = nullptr;
 	nri::Descriptor *m_Sampler = nullptr;
 	nri::Descriptor *m_CubeSampler = nullptr;
 	nri::Descriptor *m_PosStorageShaderResource = nullptr;
@@ -96,6 +97,7 @@ private:
 	nri::Texture *m_HDRTexture = nullptr;
 	nri::Texture *m_CubemapTexture = nullptr;
 	nri::Texture *m_DepthTexture = nullptr;
+	nri::Texture *m_ColorTexture = nullptr;
 
 	std::array<Frame, BUFFERED_FRAME_MAX_NUM> m_Frames = {};
 	std::vector<BackBuffer> m_SwapChainBuffers;
@@ -268,38 +270,50 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	testRenderPtr->OnStart(nullptr);
 	utils::ShaderCodeStorage shaderCodeStorage;
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_Device);
-	
-	// Compute pipeline
-	{
-		nri::DescriptorRangeDesc descriptorRangeComp[2];
-		descriptorRangeComp[0] = { 0, 1, nri::DescriptorType::STRUCTURED_BUFFER,
-			nri::StageBits::COMPUTE_SHADER };
-		descriptorRangeComp[1] = { 0, 1, nri::DescriptorType::STORAGE_BUFFER,
-			nri::StageBits::COMPUTE_SHADER };
 
-		nri::DescriptorSetDesc descriptorSetDesc = { 0, descriptorRangeComp, 2 };
+	// // Compute pipeline
+	// {
+	// 	nri::DescriptorRangeDesc descriptorRangeComp[2];
+	// 	descriptorRangeComp[0] = { 0, 1, nri::DescriptorType::STRUCTURED_BUFFER,
+	// 		nri::StageBits::COMPUTE_SHADER };
+	// 	descriptorRangeComp[1] = { 0, 1, nri::DescriptorType::STORAGE_BUFFER,
+	// 		nri::StageBits::COMPUTE_SHADER };
 
-		struct bindRoot {
-			vec4 a;
-		};
-		nri::RootConstantDesc rootConstant = { 0, sizeof(bindRoot),
-			nri::StageBits::COMPUTE_SHADER };
+	// 	nri::DescriptorSetDesc descriptorSetDesc = { 0, descriptorRangeComp, 2 };
 
-		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
-		pipelineLayoutDesc.descriptorSetNum = 1;
-		pipelineLayoutDesc.descriptorSets = &descriptorSetDesc;
-		pipelineLayoutDesc.rootConstantNum = 1;
-		pipelineLayoutDesc.rootConstants = &rootConstant;
-		pipelineLayoutDesc.shaderStages = nri::StageBits::COMPUTE_SHADER;
-		NRI_ABORT_ON_FAILURE(NRI.CreatePipelineLayout(*m_Device, pipelineLayoutDesc, m_ComputePipelineLayout));
-		NRI.SetDebugName(m_ComputePipelineLayout, "Compute Pipeline Layout");
-		nri::ComputePipelineDesc computePipelineDesc = {};
-		computePipelineDesc.pipelineLayout = m_ComputePipelineLayout;
-		computePipelineDesc.shader = utils::LoadShader(nri::GraphicsAPI::D3D12, "instanceGenBuffer.cs", shaderCodeStorage);
-		NRI_ABORT_ON_FAILURE(NRI.CreateComputePipeline(*m_Device, computePipelineDesc, m_ComputePipeline));
-	}
+	// 	struct bindRoot {
+	// 		vec4 a;
+	// 	};
+	// 	nri::RootConstantDesc rootConstant = { 0, sizeof(bindRoot),
+	// 		nri::StageBits::COMPUTE_SHADER };
+
+	// 	nri::PipelineLayoutDesc pipelineLayoutDesc = {};
+	// 	pipelineLayoutDesc.descriptorSetNum = 1;
+	// 	pipelineLayoutDesc.descriptorSets = &descriptorSetDesc;
+	// 	pipelineLayoutDesc.rootConstantNum = 1;
+	// 	pipelineLayoutDesc.rootConstants = &rootConstant;
+	// 	pipelineLayoutDesc.shaderStages = nri::StageBits::COMPUTE_SHADER;
+	// 	NRI_ABORT_ON_FAILURE(NRI.CreatePipelineLayout(*m_Device, pipelineLayoutDesc, m_ComputePipelineLayout));
+	// 	NRI.SetDebugName(m_ComputePipelineLayout, "Compute Pipeline Layout");
+	// 	nri::ComputePipelineDesc computePipelineDesc = {};
+	// 	computePipelineDesc.pipelineLayout = m_ComputePipelineLayout;
+	// 	computePipelineDesc.shader = utils::LoadShader(nri::GraphicsAPI::D3D12, "instanceGenBuffer.cs", shaderCodeStorage);
+	// 	NRI_ABORT_ON_FAILURE(NRI.CreateComputePipeline(*m_Device, computePipelineDesc, m_ComputePipeline));
+	// }
 
 	m_DescriptorPool = &testRenderPtr->GetDescriptorPool();
+
+	{
+		nri::TextureDesc textureDesc = {};
+		textureDesc.type = nri::TextureType::TEXTURE_2D;
+		textureDesc.usage = nri::TextureUsageBits::COLOR_ATTACHMENT;
+		textureDesc.format = nri::Format::RGBA8_UNORM;
+		textureDesc.width = (uint16_t)GetWindowResolution().first;
+		textureDesc.height = (uint16_t)GetWindowResolution().second;
+		textureDesc.mipNum = 1;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateTexture(*m_Device, textureDesc, m_ColorTexture));
+	}
 
 	{
 		nri::TextureDesc textureDesc = {};
@@ -314,7 +328,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	}
 
 	nri::ResourceGroupDesc resourceGroupDesc = {};
-	std::vector<nri::Texture *> textureArray = { m_DepthTexture };
+	std::vector<nri::Texture *> textureArray = { m_DepthTexture, m_ColorTexture };
 	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
 	resourceGroupDesc.textureNum = textureArray.size();
 	resourceGroupDesc.textures = textureArray.data();
@@ -328,9 +342,15 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	textureData.subresources = nullptr;
 	textureData.texture = m_DepthTexture;
 	textureData.after = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT };
-	textureData.planes = nri::PlaneBits::DEPTH;
+	textureData.planes = nri::PlaneBits::ALL;
 
-	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData };
+	nri::TextureUploadDesc textureData1;
+	textureData1.subresources = nullptr;
+	textureData1.texture = m_ColorTexture;
+	textureData1.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT };
+	textureData1.planes = nri::PlaneBits::ALL;
+
+	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData, textureData1 };
 
 	NRI_ABORT_ON_FAILURE(NRI.UploadData(*m_GraphicsQueue, texUploadDescArray.data(), texUploadDescArray.size(),
 			nullptr,
@@ -341,6 +361,15 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(textureViewDesc, m_DepthAttachment));
 	}
+
+	{
+		nri::Texture2DViewDesc textureViewDesc = { .texture = m_ColorTexture, .viewType = nri::Texture2DViewType::COLOR_ATTACHMENT, .format = nri::Format::RGBA8_UNORM };
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateTexture2DView(textureViewDesc, m_ColorAttachment));
+	}
+
+	testRenderPtr->InitPresentPass(m_ColorTexture, m_SwapChain);
+
 	// User interface
 	bool initialized = InitUI(NRI, NRI, *m_Device, swapChainFormat);
 	m_Camera.Initialize(glm::vec3(0.0f, 0.0f, -3.5f), glm::vec3(0.0f, 0.0f, 0.0f));
@@ -403,6 +432,8 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 	nri::CommandBuffer *commandBuffer = frame.commandBuffer;
 	nri::CommandBuffer *commandBufferCompute = frame.commandBufferCompute;
 
+	nri::AttachmentsDesc presentDesc = {};
+
 	NRI.BeginCommandBuffer(*commandBuffer, m_DescriptorPool);
 	{
 		nri::TextureBarrierDesc textureBarrierDescs = {};
@@ -418,9 +449,13 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 
 		nri::AttachmentsDesc attachmentsDesc = {};
 		attachmentsDesc.colorNum = 1;
-		attachmentsDesc.colors = &currentBackBuffer.colorAttachment;
+		// attachmentsDesc.colors = &currentBackBuffer.colorAttachment;
+		attachmentsDesc.colors = &m_ColorAttachment;
 		attachmentsDesc.depthStencil = m_DepthAttachment;
 		attachmentsDesc.viewMask = 0;
+
+		presentDesc = attachmentsDesc;
+		presentDesc.colors = &currentBackBuffer.colorAttachment;
 
 		NRI.CmdBeginRendering(*commandBuffer, attachmentsDesc);
 		{
@@ -439,80 +474,6 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 			}
 			RenderInfo info = { .desc = attachmentsDesc, .cmdBuffer = *commandBuffer };
 			testRenderPtr->OnRender(info, m_Camera);
-
-			// {
-			// 	helper::Annotation annotation(NRI, *commandBuffer, "SkyBox");
-			// 	NRI.CmdSetPipelineLayout(*commandBuffer, *m_SkyPipelineLayout);
-			// 	NRI.CmdSetPipeline(*commandBuffer, *m_SkyPipeline);
-			// 	NRI.CmdSetRootConstants(*commandBuffer, 0, &skyParams, sizeof(vec4));
-			// 	// NRI.CmdSetDescriptorSet(*commandBuffer, 0,
-			// 	// 		*frame.constantBufferDescriptorSet, nullptr);
-			// 	NRI.CmdSetDescriptorSet(*commandBuffer, 0, *m_SkyTextureDescriptorSet,
-			// 			nullptr);
-			// 	{
-			// 		const nri::Viewport viewport = { 0.0f, 0.0f, (float)w,
-			// 			(float)h, 0.0f, 1.0f };
-			// 		NRI.CmdSetViewports(*commandBuffer, &viewport, 1);
-
-			// 		nri::Rect scissor = { 0, 0, w, h };
-			// 		NRI.CmdSetScissors(*commandBuffer, &scissor, 1);
-			// 	}
-			// 	NRI.CmdDraw(*commandBuffer, { 3, 1, 0, 0 });
-			// }
-
-			// {
-			// 	helper::Annotation annotation(NRI, *commandBuffer, "Grid");
-			// 	NRI.CmdSetPipelineLayout(*commandBuffer, *m_GridPipelineLayout);
-			// 	NRI.CmdSetPipeline(*commandBuffer, *m_GridPipeline);
-			// 	struct {
-			// 		mat4 mvp;
-			// 		vec4 camPos;
-			// 		vec4 origin;
-			// 	} params = {
-			// 		.mvp = m_Camera.state.mClipToView * m_Camera.state.mWorldToView,
-			// 		.camPos = vec4(m_Camera.state.globalPosition, 1.0),
-			// 		.origin = vec4(0.0)
-			// 	};
-			// 	NRI.CmdSetRootConstants(*commandBuffer, 0, &params, sizeof(params));
-			// 	{
-			// 		const nri::Viewport viewport = { 0.0f, 0.0f, (float)w,
-			// 			(float)h, 0.0f, 1.0f };
-			// 		NRI.CmdSetViewports(*commandBuffer, &viewport, 1);
-
-			// 		nri::Rect scissor = { 0, 0, w, h };
-			// 		NRI.CmdSetScissors(*commandBuffer, &scissor, 1);
-			// 	}
-			// 	NRI.CmdDraw(*commandBuffer, { 6, 1, 0, 0 });
-			// }
-
-			// 			{
-			// 				helper::Annotation annotation(NRI, *commandBuffer, "SimpleMesh");
-
-			// 				NRI.CmdSetPipelineLayout(*commandBuffer, *m_PipelineLayout);
-			// 				NRI.CmdSetPipeline(*commandBuffer, *m_Pipeline);
-			// 				NRI.CmdSetRootConstants(*commandBuffer, 0, &cameraPos, sizeof(glm::vec4));
-			// 				NRI.CmdSetIndexBuffer(*commandBuffer, *m_GeometryBuffer, 0,
-			// 						nri::IndexType::UINT32);
-			// 				NRI.CmdSetVertexBuffers(*commandBuffer, 0, 1, &m_GeometryBuffer,
-			// 						&m_GeometryOffset);
-			// 				NRI.CmdSetDescriptorSet(*commandBuffer, 0,
-			// 						*frame.constantBufferDescriptorSet, nullptr);
-			// 				NRI.CmdSetDescriptorSet(*commandBuffer, 1, *m_TextureDescriptorSet,
-			// 						nullptr);
-			// 				{
-			// 					const nri::Viewport viewport = { 0.0f, 0.0f, (float)w,
-			// 						(float)h, 0.0f, 1.0f };
-			// 					NRI.CmdSetViewports(*commandBuffer, &viewport, 1);
-
-			// 					nri::Rect scissor = { 0, 0, w, h };
-			// 					NRI.CmdSetScissors(*commandBuffer, &scissor, 1);
-			// 				}
-			// 				uint32_t instanceCount = 1;
-			// #ifdef INSTANCE
-			// 				instanceCount = 1024 * 32;
-			// #endif
-			// 				NRI.CmdDrawIndexed(*commandBuffer, { g_indexCount, instanceCount, 0, 0, 0 });
-			// 			}
 		}
 		NRI.CmdEndRendering(*commandBuffer);
 
@@ -524,6 +485,14 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 			helper::Annotation annotation(NRI, *commandBuffer, "UI");
 
 			RenderUI(NRI, NRI, *m_Streamer, *commandBuffer, 1.0f, true);
+		}
+		NRI.CmdEndRendering(*commandBuffer);
+
+		NRI.CmdBeginRendering(*commandBuffer, presentDesc);
+		{
+			RenderInfo presentinfo = { .desc = presentDesc, .cmdBuffer = *commandBuffer };
+			NRI.CmdSetDescriptorPool(*commandBuffer, *m_DescriptorPool);
+			testRenderPtr->OnPresent(presentinfo);
 		}
 		NRI.CmdEndRendering(*commandBuffer);
 
