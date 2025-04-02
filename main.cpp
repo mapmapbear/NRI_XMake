@@ -480,19 +480,20 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		// Singleview
 		attachmentsDesc.viewMask = 0;
 
-		NRI.CmdBeginRendering(*commandBuffer, attachmentsDesc);
-		{
-			helper::Annotation annotation(NRI, *commandBuffer, "UI");
-
-			RenderUI(NRI, NRI, *m_Streamer, *commandBuffer, 1.0f, true);
-		}
-		NRI.CmdEndRendering(*commandBuffer);
+		// NRI.CmdBeginRendering(*commandBuffer, attachmentsDesc);
+		// {
+			
+		// }
+		// NRI.CmdEndRendering(*commandBuffer);
 
 		NRI.CmdBeginRendering(*commandBuffer, presentDesc);
 		{
 			RenderInfo presentinfo = { .desc = presentDesc, .cmdBuffer = *commandBuffer };
 			NRI.CmdSetDescriptorPool(*commandBuffer, *m_DescriptorPool);
 			testRenderPtr->OnPresent(presentinfo);
+
+			helper::Annotation annotation(NRI, *commandBuffer, "UI");
+			RenderUI(NRI, NRI, *m_Streamer, *commandBuffer, 1.0f, true);
 		}
 		NRI.CmdEndRendering(*commandBuffer);
 

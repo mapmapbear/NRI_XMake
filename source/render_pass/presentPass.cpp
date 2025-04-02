@@ -89,7 +89,7 @@ void PresentPass::BuildPipeline() {
 		utils::ShaderCodeStorage shaderCodeStorage;
 		nri::ShaderDesc shaderStages[] = {
 			utils::LoadShader(nri::GraphicsAPI::D3D12,
-					"skybox.vs", shaderCodeStorage),
+					"present.vs", shaderCodeStorage),
 			utils::LoadShader(nri::GraphicsAPI::D3D12, "present.fs",
 					shaderCodeStorage),
 		};

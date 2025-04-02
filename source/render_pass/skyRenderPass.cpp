@@ -47,7 +47,7 @@ void SkyRenderPass::BuildPipeline() {
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 		colorAttachmentDesc.format = nri::Format::RGBA8_UNORM;
 		colorAttachmentDesc.colorWriteMask = nri::ColorWriteBits::RGBA;
-		colorAttachmentDesc.blendEnabled = true;
+		colorAttachmentDesc.blendEnabled = false;
 		colorAttachmentDesc.colorBlend = { nri::BlendFactor::SRC_ALPHA,
 			nri::BlendFactor::ONE_MINUS_SRC_ALPHA,
 			nri::BlendFunc::ADD };
