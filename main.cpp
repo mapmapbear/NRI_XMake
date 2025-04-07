@@ -8,12 +8,6 @@
 // STB
 #include "stb_image.h"
 
-// ASSIMP
-#include <assimp/cimport.h>
-#include <assimp/postprocess.h>
-#include <assimp/scene.h>
-#include <assimp/version.h>
-#include <vector>
 
 #define INSTANCE
 
@@ -218,6 +212,9 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 
 	testRenderPtr = new Renderer(NRI, m_Device);
 
+	std::string sceneFile = utils::GetFullPath(m_SceneFile, utils::DataFolder::SCENES);
+	utils::Scene m_Scene;
+	NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene, false));
 	// Fences
 	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_FrameFence));
 	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_ComputeFence));
@@ -449,7 +446,6 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 
 		nri::AttachmentsDesc attachmentsDesc = {};
 		attachmentsDesc.colorNum = 1;
-		// attachmentsDesc.colors = &currentBackBuffer.colorAttachment;
 		attachmentsDesc.colors = &m_ColorAttachment;
 		attachmentsDesc.depthStencil = m_DepthAttachment;
 		attachmentsDesc.viewMask = 0;
@@ -479,12 +475,6 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 
 		// Singleview
 		attachmentsDesc.viewMask = 0;
-
-		// NRI.CmdBeginRendering(*commandBuffer, attachmentsDesc);
-		// {
-			
-		// }
-		// NRI.CmdEndRendering(*commandBuffer);
 
 		NRI.CmdBeginRendering(*commandBuffer, presentDesc);
 		{

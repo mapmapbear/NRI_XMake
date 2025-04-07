@@ -1,13 +1,24 @@
-// © 2021 NVIDIA Corporation
-
-#pragma once
+﻿#pragma once
 
 #undef OPAQUE
 #undef TRANSPARENT
 #include "tinyddsLoader/tinyddsloader.h"
+
+#include "glm/glm.hpp"
+
+// ASSIMP
+#include <assimp/cimport.h>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
+#include <assimp/version.h>
+#include <vector>
+
 namespace utils {
 struct Texture;
 struct Scene;
+struct MeshData;
+struct MaterialData;
+struct NodeData;
 
 typedef std::vector<std::vector<uint8_t>> ShaderCodeStorage;
 typedef void *Mip;
@@ -55,6 +66,10 @@ bool LoadTextureFromMemory(const std::string &name, const uint8_t *data,
 		int dataSize, Texture &texture,
 		bool computeAvgColorAndAlphaMode);
 bool LoadScene(const std::string &path, Scene &scene, bool allowUpdate);
+
+MeshData ProcessMesh(const aiMesh *mesh);
+MaterialData ProcessMaterial(const aiMaterial *material, const std::string &basePath);
+NodeData ProcessNode(const aiNode* node, const aiScene* scene, NodeData* parentNode = nullptr);
 
 struct Texture {
 	std::string name;
@@ -151,6 +166,32 @@ struct Mesh {
 	uint32_t morphTargetNum = 0;
 
 	inline bool HasMorphTargets() const { return morphTargetNum != 0; }
+};
+
+struct MeshData {
+	unsigned int meshIndex; // 在 aiScene 中的索引
+	std::vector<glm::vec3> vertices; // 顶点位置
+	std::vector<glm::vec3> normals; // 法线
+	std::vector<glm::vec2> texCoords; // 纹理坐标
+	std::vector<unsigned int> indices; // 索引
+	unsigned int materialIndex; // 关联的材质索引
+};
+
+struct MaterialData {
+	glm::vec3 diffuseColor; // 漫反射颜色
+	glm::vec3 specularColor; // 镜面反射颜色
+	float shininess; // 光泽度
+	std::string diffuseTexture; // 漫反射纹理路径（如果有）
+	// 可根据需要扩展其他属性（如法线贴图、金属度等）
+};
+
+struct NodeData {
+    std::string name;
+    glm::mat4 localTransform;
+    glm::mat4 globalTransform;
+    NodeData* parent;
+    std::vector<NodeData> children;
+    std::vector<unsigned int> meshIndices;
 };
 
 // per mesh instance data

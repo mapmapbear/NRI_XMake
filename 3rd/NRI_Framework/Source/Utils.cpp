@@ -1,4 +1,4 @@
-// © 2021 NVIDIA Corporation
+﻿// © 2021 NVIDIA Corporation
 
 #include "NRIFramework.h"
 
@@ -915,12 +915,124 @@ void utils::LoadTextureFromMemory(nri::Format format, uint32_t width, uint32_t h
 //     rotation.z = std::copysign(rotation.z, col1.x - col0.y);
 // }
 
-// bool utils::LoadScene(const std::string& path, Scene& scene, bool allowUpdate) {
-//     printf("Loading scene '%s'...\n", GetFileName(path));
+utils::MeshData utils::ProcessMesh(const aiMesh *mesh) {
+	utils::MeshData meshData;
+	meshData.meshIndex = 0;
+	meshData.materialIndex = mesh->mMaterialIndex;
+	for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
+		glm::vec3 vertex = { mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z };
+		meshData.vertices.push_back(vertex);
 
-//     std::filesystem::path normPath(path.c_str());
-//     normPath = std::filesystem::canonical(normPath);
+		if (mesh->HasNormals()) {
+			glm::vec3 normal = { mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z };
+			meshData.normals.push_back(normal);
+		}
 
+		if (mesh->HasTextureCoords(0)) {
+			glm::vec2 texCoord = { mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y };
+			meshData.texCoords.push_back(texCoord);
+		}
+	}
+	for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
+		const aiFace &face = mesh->mFaces[i];
+		for (unsigned int j = 0; j < face.mNumIndices; ++j) {
+			meshData.indices.push_back(face.mIndices[j]);
+		}
+	}
+	return meshData;
+}
+
+utils::MaterialData ProcessMaterial(const aiMaterial *material, const std::string &basePath) {
+	utils::MaterialData matData;
+	aiColor3D diffuse;
+	if (material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse) == AI_SUCCESS) {
+		matData.diffuseColor = { diffuse.r, diffuse.g, diffuse.b };
+	} else {
+		matData.diffuseColor = { 1.0f, 1.0f, 1.0f }; // 默认白色
+	}
+
+	aiColor3D specular;
+	if (material->Get(AI_MATKEY_COLOR_SPECULAR, specular) == AI_SUCCESS) {
+		matData.specularColor = { specular.r, specular.g, specular.b };
+	} else {
+		matData.specularColor = { 0.0f, 0.0f, 0.0f }; // 默认无镜面
+	}
+
+	float shininess;
+	if (material->Get(AI_MATKEY_SHININESS, shininess) != AI_SUCCESS) {
+		shininess = 32.0f; // 默认值
+	}
+	matData.shininess = shininess;
+
+	aiString texturePath;
+	if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
+		matData.diffuseTexture = basePath + "/" + texturePath.C_Str();
+	}
+
+	return matData;
+}
+
+glm::mat4 ConvertToGLMMat4(const aiMatrix4x4 &mat) {
+	return glm::mat4(
+			mat.a1, mat.b1, mat.c1, mat.d1,
+			mat.a2, mat.b2, mat.c2, mat.d2,
+			mat.a3, mat.b3, mat.c3, mat.d3,
+			mat.a4, mat.b4, mat.c4, mat.d4);
+}
+
+glm::mat4 CovertToGlobalGLMMat4(const aiNode *node) {
+	if (node->mParent == nullptr) {
+		return ConvertToGLMMat4(node->mTransformation);
+	} else {
+		return ConvertToGLMMat4(node->mTransformation) * CovertToGlobalGLMMat4(node->mParent);
+	}
+}
+
+utils::NodeData utils::ProcessNode(const aiNode *node, const aiScene *scene, NodeData *parentNode) {
+	NodeData nodeData;
+	nodeData.name = node->mName.C_Str();
+	nodeData.localTransform = ConvertToGLMMat4(node->mTransformation);
+	nodeData.parent = parentNode;
+	if (parentNode) {
+		// 全局变换 = 父节点的全局变换 × 当前节点的局部变换
+		nodeData.globalTransform = parentNode->globalTransform * nodeData.localTransform;
+	} else {
+		// 如果没有父节点（根节点），全局变换等于局部变换
+		nodeData.globalTransform = nodeData.localTransform;
+	}
+
+	for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
+		nodeData.meshIndices.push_back(node->mMeshes[i]);
+	}
+
+	for (unsigned int i = 0; i < node->mNumChildren; ++i) {
+		nodeData.children.push_back(utils::ProcessNode(node->mChildren[i], scene, &nodeData));
+	}
+	return nodeData;
+}
+
+bool utils::LoadScene(const std::string &path, Scene &scene, bool allowUpdate) {
+	printf("Loading scene '%s'...\n", GetFileName(path));
+
+	const aiScene *ai_Scene = aiImportFile("data/DamagedHelmet/glTF/DamagedHelmet.gltf",
+			aiProcess_Triangulate | aiProcess_MakeLeftHanded);
+	NodeData rootNode;
+	std::vector<MeshData> meshes;
+	std::vector<MaterialData> materials;
+	meshes.resize(ai_Scene->mNumMeshes);
+	for (unsigned int i = 0; i < ai_Scene->mNumMeshes; ++i) {
+		meshes[i] = utils::ProcessMesh(ai_Scene->mMeshes[i]);
+	}
+
+	// materials.resize(ai_Scene->mNumMaterials);
+	// std::string basePath = path.substr(0, path.find_last_of("/\\"));
+	// for (unsigned int i = 0; i < ai_Scene->mNumMaterials; ++i) {
+	// 	materials[i] = utils::ProcessMaterial(ai_Scene->mMaterials[i], basePath);
+	// }
+
+	rootNode = ProcessNode(ai_Scene->mRootNode, ai_Scene);
+	return true;
+}
 //     cgltf_options options{};
 
 //     cgltf_data* objects{};
