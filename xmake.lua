@@ -49,18 +49,18 @@ target("NRI")
         local agility_sdk_dir = "AgilitySDK"
 
         local content = [[
-// This file is auto-generated during project deployment. Do not modify!
-#ifdef __cplusplus
-extern "C" {
-#endif
+        // This file is auto-generated during project deployment. Do not modify!
+        #ifdef __cplusplus
+        extern "C" {
+        #endif
 
-__declspec(dllexport) extern const uint32_t D3D12SDKVersion = ]] .. agility_sdk_version .. [[;
-__declspec(dllexport) extern const char* D3D12SDKPath = "]] .. agility_sdk_dir .. [[/x64/";
+        __declspec(dllexport) extern const uint32_t D3D12SDKVersion = ]] .. agility_sdk_version .. [[;
+        __declspec(dllexport) extern const char* D3D12SDKPath = "]] .. agility_sdk_dir .. [[/x64/";
 
-#ifdef __cplusplus
-}
-#endif
-]]
+        #ifdef __cplusplus
+        }
+        #endif
+        ]]
 
         io.writefile(header_path, content)
 
@@ -90,8 +90,10 @@ target("NRIFramework")
     add_includedirs("3rd/imgui/", {public = true})
     add_includedirs("3rd/Detex", {public = true})
     add_includedirs("3rd/tinyddsLoader/", {public = true})
+    add_includedirs("3rd/nvtt3/include/", {public = true})
     add_includedirs("3rd/", {public = true})
     add_files("3rd/NRI_Framework/Source/*.cpp")
+    add_links("3rd/nvtt3/lib/x64-v142/nvtt30205.lib")
     add_packages("glfw", "glm", "assimp")
 
 target("DemoApp")

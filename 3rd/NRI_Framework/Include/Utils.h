@@ -13,6 +13,8 @@
 #include <assimp/version.h>
 #include <vector>
 
+#include "nvtt/nvtt.h"
+
 namespace utils {
 struct Texture;
 struct Scene;
@@ -69,7 +71,7 @@ bool LoadScene(const std::string &path, Scene &scene, bool allowUpdate);
 
 MeshData ProcessMesh(const aiMesh *mesh);
 MaterialData ProcessMaterial(const aiMaterial *material, const std::string &basePath);
-NodeData ProcessNode(const aiNode* node, const aiScene* scene, NodeData* parentNode = nullptr);
+NodeData ProcessNode(const aiNode *node, const aiScene *scene, Scene& outScene, NodeData *parentNode = nullptr);
 
 struct Texture {
 	std::string name;
@@ -186,12 +188,12 @@ struct MaterialData {
 };
 
 struct NodeData {
-    std::string name;
-    glm::mat4 localTransform;
-    glm::mat4 globalTransform;
-    NodeData* parent;
-    std::vector<NodeData> children;
-    std::vector<unsigned int> meshIndices;
+	std::string name;
+	glm::mat4 localTransform;
+	glm::mat4 globalTransform;
+	NodeData *parent;
+	std::vector<NodeData> children;
+	std::vector<unsigned int> meshIndices;
 };
 
 // per mesh instance data
@@ -309,6 +311,10 @@ struct Scene {
 	std::vector<uint32_t> morphMeshes;
 	mat4 mSceneToWorld = mat4(1.0);
 	// cBoxf aabb;
+
+	std::vector<MaterialData> materialDatas;
+	std::vector<MeshData> meshDatas;
+	std::vector<NodeData> nodeDatas;
 
 	uint32_t totalInstancedPrimitivesNum = 0;
 	uint32_t morphMeshTotalIndicesNum = 0;

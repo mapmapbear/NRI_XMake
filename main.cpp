@@ -211,10 +211,6 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	NRI.SetDebugName(m_ComputeQueue, "ComputeQueue");
 
 	testRenderPtr = new Renderer(NRI, m_Device);
-
-	std::string sceneFile = utils::GetFullPath(m_SceneFile, utils::DataFolder::SCENES);
-	utils::Scene m_Scene;
-	NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene, false));
 	// Fences
 	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_FrameFence));
 	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_ComputeFence));

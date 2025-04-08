@@ -25,6 +25,10 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	NRI_ABORT_ON_FAILURE(NRI.CreateDescriptorPool(*m_Device, descriptorPoolDesc,
 			m_DescriptorPool));
 	NRI.SetDebugName(m_DescriptorPool, "m_DescriptorPool");
+
+	std::string sceneFile = utils::GetFullPath("Camera/Camera.gltf", utils::DataFolder::ROOT);
+
+	NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene, false));
 }
 
 void Renderer::OnStart(nri::DescriptorSet *globalSet) {

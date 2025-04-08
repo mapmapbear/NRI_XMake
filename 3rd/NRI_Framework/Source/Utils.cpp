@@ -942,7 +942,7 @@ utils::MeshData utils::ProcessMesh(const aiMesh *mesh) {
 	return meshData;
 }
 
-utils::MaterialData ProcessMaterial(const aiMaterial *material, const std::string &basePath) {
+utils::MaterialData utils::ProcessMaterial(const aiMaterial *material, const std::string &basePath) {
 	utils::MaterialData matData;
 	aiColor3D diffuse;
 	if (material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse) == AI_SUCCESS) {
@@ -988,7 +988,7 @@ glm::mat4 CovertToGlobalGLMMat4(const aiNode *node) {
 	}
 }
 
-utils::NodeData utils::ProcessNode(const aiNode *node, const aiScene *scene, NodeData *parentNode) {
+utils::NodeData utils::ProcessNode(const aiNode *node, const aiScene *scene, Scene &outScene, NodeData *parentNode) {
 	NodeData nodeData;
 	nodeData.name = node->mName.C_Str();
 	nodeData.localTransform = ConvertToGLMMat4(node->mTransformation);
@@ -1004,9 +1004,9 @@ utils::NodeData utils::ProcessNode(const aiNode *node, const aiScene *scene, Nod
 	for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
 		nodeData.meshIndices.push_back(node->mMeshes[i]);
 	}
-
+	outScene.nodeDatas.push_back(nodeData);
 	for (unsigned int i = 0; i < node->mNumChildren; ++i) {
-		nodeData.children.push_back(utils::ProcessNode(node->mChildren[i], scene, &nodeData));
+		nodeData.children.push_back(utils::ProcessNode(node->mChildren[i], scene, outScene, &nodeData));
 	}
 	return nodeData;
 }
@@ -1014,23 +1014,59 @@ utils::NodeData utils::ProcessNode(const aiNode *node, const aiScene *scene, Nod
 bool utils::LoadScene(const std::string &path, Scene &scene, bool allowUpdate) {
 	printf("Loading scene '%s'...\n", GetFileName(path));
 
-	const aiScene *ai_Scene = aiImportFile("data/DamagedHelmet/glTF/DamagedHelmet.gltf",
+	const aiScene *ai_Scene = aiImportFile(path.c_str(),
 			aiProcess_Triangulate | aiProcess_MakeLeftHanded);
 	NodeData rootNode;
-	std::vector<MeshData> meshes;
-	std::vector<MaterialData> materials;
+	std::vector<MeshData> &meshes = scene.meshDatas;
+	std::vector<MaterialData> &materials = scene.materialDatas;
 	meshes.resize(ai_Scene->mNumMeshes);
 	for (unsigned int i = 0; i < ai_Scene->mNumMeshes; ++i) {
 		meshes[i] = utils::ProcessMesh(ai_Scene->mMeshes[i]);
 	}
 
-	// materials.resize(ai_Scene->mNumMaterials);
-	// std::string basePath = path.substr(0, path.find_last_of("/\\"));
-	// for (unsigned int i = 0; i < ai_Scene->mNumMaterials; ++i) {
-	// 	materials[i] = utils::ProcessMaterial(ai_Scene->mMaterials[i], basePath);
-	// }
+	materials.resize(ai_Scene->mNumMaterials);
+	std::string basePath = path.substr(0, path.find_last_of("/\\"));
+	for (unsigned int i = 0; i < ai_Scene->mNumMaterials; ++i) {
+		materials[i] = utils::ProcessMaterial(ai_Scene->mMaterials[i], basePath);
+	}
 
-	rootNode = ProcessNode(ai_Scene->mRootNode, ai_Scene);
+	rootNode = ProcessNode(ai_Scene->mRootNode, ai_Scene, scene);
+	// Compress All Tex
+	for (auto &mat : materials) {
+		std::string src_img = mat.diffuseTexture;
+		std::string dst_img = src_img.substr(0, src_img.find_last_of('.')) + ".dds";
+		nvtt::Surface image;
+		image.load(src_img.c_str());
+		nvtt::Context context(true);
+		nvtt::CompressionOptions compressionOptions;
+		compressionOptions.setFormat(nvtt::Format_BC7);
+		nvtt::OutputOptions outputOptions;
+		outputOptions.setFileName(dst_img.c_str());
+		const int numMipmaps = image.countMipmaps();
+		if (!context.outputHeader(image, numMipmaps, compressionOptions, outputOptions)) {
+			std::cerr << "Writing the DDS header failed!";
+			return 1;
+		}
+
+		for (int mip = 0; mip < numMipmaps; mip++) {
+			// Compress this image and write its data.
+			if (!context.compress(image, 0 /* face */, mip, compressionOptions, outputOptions)) {
+				std::cerr << "Compressing and writing the DDS file failed!";
+				return 1;
+			}
+
+			if (mip == numMipmaps - 1) {
+				break;
+			}
+
+			image.toLinearFromSrgb();
+			// image.premultiplyAlpha();
+
+			image.buildNextMipmap(nvtt::MipmapFilter_Box);
+			// image.demultiplyAlpha();
+			image.toSrgb();
+		}
+	}
 	return true;
 }
 //     cgltf_options options{};

@@ -38,6 +38,7 @@ private:
 	nri::Queue *m_ComputeQueue = nullptr;
 
 	nri::DescriptorSet *m_GloablFrameDescriptorSet = nullptr;
+	utils::Scene m_Scene;
 
 private:
 	std::shared_ptr<SkyRenderPass> skyPass = nullptr;
