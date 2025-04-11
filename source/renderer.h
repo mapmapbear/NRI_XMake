@@ -13,6 +13,7 @@ class SkyRenderPass;
 class GridRenderPass;
 class InstanceMeshPass;
 class PresentPass;
+class CommonMeshPass;
 class Renderer {
 public:
 	Renderer(NRIInterface &NRI, nri::Device *device);
@@ -44,5 +45,6 @@ private:
 	std::shared_ptr<SkyRenderPass> skyPass = nullptr;
 	std::shared_ptr<GridRenderPass> gridPass = nullptr;
 	std::shared_ptr<InstanceMeshPass> meshPass = nullptr;
+	std::shared_ptr<CommonMeshPass> simplePass = nullptr;
 	std::shared_ptr<PresentPass> presentPass = nullptr;
 };

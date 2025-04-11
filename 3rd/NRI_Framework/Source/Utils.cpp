@@ -1031,45 +1031,50 @@ bool utils::LoadScene(const std::string &path, Scene &scene, bool allowUpdate) {
 	}
 
 	rootNode = ProcessNode(ai_Scene->mRootNode, ai_Scene, scene);
+
 	// Compress All Tex
+	nvtt::Context context(true);
+	nvtt::CompressionOptions compressionOptions;
+	compressionOptions.setFormat(nvtt::Format_BC7);
+	std::unique_ptr<nvtt::OutputOptions> outputOptions = std::make_unique<nvtt::OutputOptions>();
 	for (auto &mat : materials) {
 		std::string src_img = mat.diffuseTexture;
-		std::string dst_img = src_img.substr(0, src_img.find_last_of('.')) + ".dds";
-		nvtt::Surface image;
-		image.load(src_img.c_str());
-		nvtt::Context context(true);
-		nvtt::CompressionOptions compressionOptions;
-		compressionOptions.setFormat(nvtt::Format_BC7);
-		nvtt::OutputOptions outputOptions;
-		outputOptions.setFileName(dst_img.c_str());
-		const int numMipmaps = image.countMipmaps();
-		if (!context.outputHeader(image, numMipmaps, compressionOptions, outputOptions)) {
-			std::cerr << "Writing the DDS header failed!";
-			return 1;
-		}
+		if (!src_img.empty()) {
+			std::string dst_img = src_img.substr(0, src_img.find_last_of('.')) + ".dds";
+			if (!std::filesystem::exists(dst_img)) {
+				nvtt::Surface image;
+				image.load(src_img.c_str());
 
-		for (int mip = 0; mip < numMipmaps; mip++) {
-			// Compress this image and write its data.
-			if (!context.compress(image, 0 /* face */, mip, compressionOptions, outputOptions)) {
-				std::cerr << "Compressing and writing the DDS file failed!";
-				return 1;
+				nvtt::OutputOptions outputOptions;
+				outputOptions.setFileName(dst_img.c_str());
+				const int numMipmaps = image.countMipmaps();
+				if (!context.outputHeader(image, 1, compressionOptions, outputOptions)) {
+					std::cerr << std::format("Writing the DDS header failed!: {}\n", src_img);
+					return 1;
+				}
+
+				if (!context.compress(image, 0 /* face */, 0, compressionOptions, outputOptions)) {
+					std::cerr << "Compressing and writing the DDS file failed!";
+					return 1;
+				}
 			}
-
-			if (mip == numMipmaps - 1) {
-				break;
-			}
-
-			image.toLinearFromSrgb();
-			// image.premultiplyAlpha();
-
-			image.buildNextMipmap(nvtt::MipmapFilter_Box);
-			// image.demultiplyAlpha();
-			image.toSrgb();
+			// 	for (int mip = 0; mip < numMipmaps; mip++) {
+			// 		if (!context.compress(image, 0 /* face */, mip, compressionOptions, outputOptions)) {
+			// 			std::cerr << "Compressing and writing the DDS file failed!";
+			// 			return 1;
+			// 		}
+			// 		if (mip == numMipmaps - 1) {
+			// 			break;
+			// 		}
+			// 		image.toLinearFromSrgb();
+			// 		image.buildNextMipmap(nvtt::MipmapFilter_Box);
+			// 		image.toSrgb();
+			// 	}
+			// }
 		}
 	}
 	return true;
 }
-//     cgltf_options options{};
 
 //     cgltf_data* objects{};
 //     cgltf_result res = cgltf_parse_file(&options, path.c_str(), &objects);

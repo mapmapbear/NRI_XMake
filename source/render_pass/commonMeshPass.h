@@ -1,24 +1,12 @@
 #pragma once
 #include "commonRenderPass.h"
 
-// struct Vertex {
-// 	vec3 position;
-// 	vec2 uv;
-// 	vec3 normal;
-// 	Vertex(vec3 pos, vec2 uv, vec3 nor) :
-// 			position(pos), uv(uv), normal(nor) {}
-// };
 
-// struct ConstantBufferLayout {
-// 	glm::mat4 modelMat;
-// 	glm::mat4 viewMat;
-// 	glm::mat4 projectMat;
-// };
 
 class Renderer;
-class InstanceMeshPass : public CommonRenderPass {
+class CommonMeshPass : public CommonRenderPass {
 public:
-	InstanceMeshPass(Renderer *renderer);
+	CommonMeshPass(Renderer *renderer, utils::Scene &scene);
 	void Render(struct RenderInfo &info, Camera &camera) override;
 	void BuildPipeline() override;
 	void AllocGPUMemory() override;
@@ -27,8 +15,8 @@ public:
 private:
 	nri::PipelineLayout *m_PipelineLayout = nullptr;
 	nri::Pipeline *m_Pipeline = nullptr;
-// ------------------------------------
-//             Material Data
+	// ------------------------------------
+	//             Material Data
 	nri::Texture *m_texture_albedo = nullptr;
 	nri::Texture *m_texture_normal = nullptr;
 	nri::Texture *m_texture_mr = nullptr;
@@ -47,10 +35,10 @@ private:
 	nri::Descriptor *m_texture_ao_view = nullptr;
 	nri::Descriptor *m_texture_emissive_view = nullptr;
 
-// --------------------------------------------
+	// --------------------------------------------
 	nri::Texture *m_CubemapTexture = nullptr;
 	nri::Buffer *m_ConstantBuffer = nullptr;
-	nri::Buffer *m_GeometryBuffer = nullptr;
+	nri::Buffer *m_GeometryBuffer = {};
 	nri::Buffer *m_MatrixStorageBuffer = nullptr;
 
 	nri::Descriptor *m_CubemapTextureShaderResource = nullptr;
@@ -66,4 +54,6 @@ private:
 
 	std::vector<Vertex> m_positions;
 	std::vector<uint32_t> m_indices;
+
+	utils::Scene &m_Scene;
 };

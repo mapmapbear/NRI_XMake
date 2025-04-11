@@ -1,10 +1,12 @@
 #include "renderer.h"
 #include "Camera.h"
+#include "render_pass/commonMeshPass.h"
 #include "render_pass/gridRenderPass.h"
 #include "render_pass/instanceMeshPass.h"
 #include "render_pass/presentPass.h"
 #include "render_pass/skyRenderPass.h"
 #include <memory>
+
 
 Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 		m_Device(device), m_NRI(NRI) {
@@ -35,6 +37,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	skyPass = std::make_shared<SkyRenderPass>(this);
 	gridPass = std::make_shared<GridRenderPass>(this);
 	meshPass = std::make_shared<InstanceMeshPass>(this);
+	simplePass = std::make_shared<CommonMeshPass>(this, m_Scene);
 }
 void Renderer::InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain) {
 	presentPass = std::make_shared<PresentPass>(this, colorRT, swawpchain);

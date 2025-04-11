@@ -2,6 +2,20 @@
 #include "NRIDescs.h"
 #include "NRIFramework.h"
 
+struct Vertex {
+	vec3 position;
+	vec2 uv;
+	vec3 normal;
+	Vertex(vec3 pos, vec2 uv, vec3 nor) :
+			position(pos), uv(uv), normal(nor) {}
+};
+
+struct ConstantBufferLayout {
+	glm::mat4 modelMat;
+	glm::mat4 viewMat;
+	glm::mat4 projectMat;
+};
+
 class Renderer;
 class CommonRenderPass {
 public:
