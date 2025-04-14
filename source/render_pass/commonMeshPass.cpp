@@ -2,13 +2,14 @@
 #include "../renderer.h"
 #include "NRIDescs.h"
 #include "assimp/scene.h"
+#include <stddef.h>
 
 CommonMeshPass::CommonMeshPass(Renderer *renderer, utils::Scene &scene) :
 		CommonRenderPass(renderer), m_Scene(scene) {
 	m_NRI = &m_renderer->GetNRI();
 	// m_Scene = scene;
 	auto NRI = *m_NRI;
-	AllocGPUMemory();
+	// AllocGPUMemory();
 	// BindMemory();
 	// BuildPipeline();
 }
@@ -59,12 +60,10 @@ void CommonMeshPass::AllocGPUMemory() {
 				NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_ConstantBuffer));
 	}
 
-	std::vector<std::pair<uint64_t, uint64_t>> meshOffsets;
 	uint64_t previousVertexOffset = 0;
 	uint64_t previousIndexAndVertexSize = 0;
-	uint64_t indexDataAlignedTotalSize = 0;
-	uint64_t vertexDataTotalSize = 0;
-	for (size_t i = 0; m_Scene.meshDatas.size(); ++i) {
+
+	for (size_t i = 0; i < m_Scene.meshDatas.size(); ++i) {
 		utils::MeshData &node = m_Scene.meshDatas.at(i);
 		const uint64_t indexDataSize = helper::GetByteSizeOf(node.indices);
 		const uint64_t indexDataAlignedSize = helper::Align(indexDataSize, 32);
@@ -75,11 +74,11 @@ void CommonMeshPass::AllocGPUMemory() {
 		uint64_t vertexOffset = (i == 0) ? indexDataAlignedSize : (previousVertexOffset + indexDataAlignedSize);
 
 		// Store the offsets
-		meshOffsets.push_back({ indexOffset, vertexOffset });
+		m_sceneMeshOffsets.push_back({ indexOffset, vertexOffset });
 
 		// Update running totals
-		indexDataAlignedTotalSize += indexDataAlignedSize;
-		vertexDataTotalSize += vertexDataSize;
+		m_indexDataAlignedTotalSize += indexDataAlignedSize;
+		m_vertexDataTotalSize += vertexDataSize;
 
 		// Update for the next mesh
 		previousIndexAndVertexSize = (i == 0) ? indexDataAlignedSize + vertexDataSize : (previousIndexAndVertexSize + indexDataAlignedSize + vertexDataSize);
@@ -89,11 +88,12 @@ void CommonMeshPass::AllocGPUMemory() {
 	// Total Geometry
 	{
 		nri::BufferDesc bufferDesc = {};
-		bufferDesc.size = indexDataAlignedTotalSize + vertexDataTotalSize;
+		bufferDesc.size = m_indexDataAlignedTotalSize + m_vertexDataTotalSize;
 		bufferDesc.usage = nri::BufferUsageBits::VERTEX_BUFFER |
 				nri::BufferUsageBits::INDEX_BUFFER;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_GeometryBuffer));
+		NRI.SetDebugName(m_GeometryBuffer, "m_GeometryBuffer");
 	}
 
 	// {
@@ -170,10 +170,10 @@ void CommonMeshPass::AllocGPUMemory() {
 void CommonMeshPass::BindMemory() {
 	auto NRI = *m_NRI;
 
-	m_IndexCount = m_indices.size();
-	const uint64_t indexDataSize = helper::GetByteSizeOf(m_indices);
-	const uint64_t indexDataAlignedSize = helper::Align(indexDataSize, 32);
-	const uint64_t vertexDataSize = helper::GetByteSizeOf(m_positions);
+	// m_IndexCount = m_indices.size();
+	// const uint64_t indexDataSize = helper::GetByteSizeOf(m_indices);
+	// const uint64_t indexDataAlignedSize = helper::Align(indexDataSize, 32);
+	// const uint64_t vertexDataSize = helper::GetByteSizeOf(m_positions);
 
 	// Bind Memory
 	std::vector<nri::Buffer *> constantBufferArray = { m_ConstantBuffer };
@@ -218,11 +218,12 @@ void CommonMeshPass::BindMemory() {
 
 	// Upload data
 	{
-		std::vector<uint8_t> geometryBufferData(indexDataAlignedSize +
-				vertexDataSize);
-		memcpy(&geometryBufferData[0], m_indices.data(), indexDataSize);
-		memcpy(&geometryBufferData[indexDataAlignedSize], m_positions.data(),
-				vertexDataSize);
+		std::vector<uint8_t> geometryBufferData(m_indexDataAlignedTotalSize +
+				m_vertexDataTotalSize);
+		for (size_t i = 0; i < m_Scene.meshDatas.size(); ++i) {
+			memcpy(&geometryBufferData[m_sceneMeshOffsets[i].first], m_Scene.meshDatas[i].indices.data(), helper::GetByteSizeOf(m_Scene.meshDatas[i].indices));
+			memcpy(&geometryBufferData[m_sceneMeshOffsets[i].second], m_Scene.meshDatas[i].vertices.data(), helper::GetByteSizeOf(m_Scene.meshDatas[i].vertices));
+		}
 
 		nri::BufferUploadDesc bufferData = {};
 		bufferData.buffer = m_GeometryBuffer;
@@ -259,92 +260,92 @@ void CommonMeshPass::BindMemory() {
 		// 	texUploadDescArray.push_back(textureData);
 		// }
 
-		{
-			auto imgData = m_texture_albedo_data.data.GetImageData(0, 0);
-			nri::TextureSubresourceUploadDesc sub_resource_desc = {};
-			sub_resource_desc.slices = imgData->m_mem;
-			sub_resource_desc.sliceNum = 1;
-			sub_resource_desc.rowPitch = imgData->m_memPitch;
-			sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
+		// {
+		// 	auto imgData = m_texture_albedo_data.data.GetImageData(0, 0);
+		// 	nri::TextureSubresourceUploadDesc sub_resource_desc = {};
+		// 	sub_resource_desc.slices = imgData->m_mem;
+		// 	sub_resource_desc.sliceNum = 1;
+		// 	sub_resource_desc.rowPitch = imgData->m_memPitch;
+		// 	sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
 
-			nri::TextureUploadDesc textureData;
-			textureData.subresources = &sub_resource_desc;
-			textureData.texture = m_texture_albedo;
-			textureData.after = { nri::AccessBits::SHADER_RESOURCE,
-				nri::Layout::SHADER_RESOURCE };
-			textureData.planes = nri::PlaneBits::ALL;
-			texUploadDescArray.push_back(textureData);
-		}
+		// 	nri::TextureUploadDesc textureData;
+		// 	textureData.subresources = &sub_resource_desc;
+		// 	textureData.texture = m_texture_albedo;
+		// 	textureData.after = { nri::AccessBits::SHADER_RESOURCE,
+		// 		nri::Layout::SHADER_RESOURCE };
+		// 	textureData.planes = nri::PlaneBits::ALL;
+		// 	texUploadDescArray.push_back(textureData);
+		// }
 
-		{
-			auto imgData = m_texture_normal_data.data.GetImageData(0, 0);
-			nri::TextureSubresourceUploadDesc sub_resource_desc = {};
-			sub_resource_desc.slices = imgData->m_mem;
-			sub_resource_desc.sliceNum = 1;
-			sub_resource_desc.rowPitch = imgData->m_memPitch;
-			sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
+		// {
+		// 	auto imgData = m_texture_normal_data.data.GetImageData(0, 0);
+		// 	nri::TextureSubresourceUploadDesc sub_resource_desc = {};
+		// 	sub_resource_desc.slices = imgData->m_mem;
+		// 	sub_resource_desc.sliceNum = 1;
+		// 	sub_resource_desc.rowPitch = imgData->m_memPitch;
+		// 	sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
 
-			nri::TextureUploadDesc textureData;
-			textureData.subresources = &sub_resource_desc;
-			textureData.texture = m_texture_normal;
-			textureData.after = { nri::AccessBits::SHADER_RESOURCE,
-				nri::Layout::SHADER_RESOURCE };
-			textureData.planes = nri::PlaneBits::ALL;
-			texUploadDescArray.push_back(textureData);
-		}
+		// 	nri::TextureUploadDesc textureData;
+		// 	textureData.subresources = &sub_resource_desc;
+		// 	textureData.texture = m_texture_normal;
+		// 	textureData.after = { nri::AccessBits::SHADER_RESOURCE,
+		// 		nri::Layout::SHADER_RESOURCE };
+		// 	textureData.planes = nri::PlaneBits::ALL;
+		// 	texUploadDescArray.push_back(textureData);
+		// }
 
-		{
-			auto imgData = m_texture_mr_data.data.GetImageData(0, 0);
-			nri::TextureSubresourceUploadDesc sub_resource_desc = {};
-			sub_resource_desc.slices = imgData->m_mem;
-			sub_resource_desc.sliceNum = 1;
-			sub_resource_desc.rowPitch = imgData->m_memPitch;
-			sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
+		// {
+		// 	auto imgData = m_texture_mr_data.data.GetImageData(0, 0);
+		// 	nri::TextureSubresourceUploadDesc sub_resource_desc = {};
+		// 	sub_resource_desc.slices = imgData->m_mem;
+		// 	sub_resource_desc.sliceNum = 1;
+		// 	sub_resource_desc.rowPitch = imgData->m_memPitch;
+		// 	sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
 
-			nri::TextureUploadDesc textureData;
-			textureData.subresources = &sub_resource_desc;
-			textureData.texture = m_texture_mr;
-			textureData.after = { nri::AccessBits::SHADER_RESOURCE,
-				nri::Layout::SHADER_RESOURCE };
-			textureData.planes = nri::PlaneBits::ALL;
-			texUploadDescArray.push_back(textureData);
-		}
+		// 	nri::TextureUploadDesc textureData;
+		// 	textureData.subresources = &sub_resource_desc;
+		// 	textureData.texture = m_texture_mr;
+		// 	textureData.after = { nri::AccessBits::SHADER_RESOURCE,
+		// 		nri::Layout::SHADER_RESOURCE };
+		// 	textureData.planes = nri::PlaneBits::ALL;
+		// 	texUploadDescArray.push_back(textureData);
+		// }
 
-		{
-			auto imgData = m_texture_ao_data.data.GetImageData(0, 0);
-			nri::TextureSubresourceUploadDesc sub_resource_desc = {};
-			sub_resource_desc.slices = imgData->m_mem;
-			sub_resource_desc.sliceNum = 1;
-			sub_resource_desc.rowPitch = imgData->m_memPitch;
-			sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
+		// {
+		// 	auto imgData = m_texture_ao_data.data.GetImageData(0, 0);
+		// 	nri::TextureSubresourceUploadDesc sub_resource_desc = {};
+		// 	sub_resource_desc.slices = imgData->m_mem;
+		// 	sub_resource_desc.sliceNum = 1;
+		// 	sub_resource_desc.rowPitch = imgData->m_memPitch;
+		// 	sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
 
-			nri::TextureUploadDesc textureData;
-			textureData.subresources = &sub_resource_desc;
-			textureData.texture = m_texture_ao;
-			textureData.after = { nri::AccessBits::SHADER_RESOURCE,
-				nri::Layout::SHADER_RESOURCE };
-			textureData.planes = nri::PlaneBits::ALL;
-			texUploadDescArray.push_back(textureData);
-		}
+		// 	nri::TextureUploadDesc textureData;
+		// 	textureData.subresources = &sub_resource_desc;
+		// 	textureData.texture = m_texture_ao;
+		// 	textureData.after = { nri::AccessBits::SHADER_RESOURCE,
+		// 		nri::Layout::SHADER_RESOURCE };
+		// 	textureData.planes = nri::PlaneBits::ALL;
+		// 	texUploadDescArray.push_back(textureData);
+		// }
 
-		{
-			auto imgData = m_texture_emissive_data.data.GetImageData(0, 0);
-			nri::TextureSubresourceUploadDesc sub_resource_desc = {};
-			sub_resource_desc.slices = imgData->m_mem;
-			sub_resource_desc.sliceNum = 1;
-			sub_resource_desc.rowPitch = imgData->m_memPitch;
-			sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
+		// {
+		// 	auto imgData = m_texture_emissive_data.data.GetImageData(0, 0);
+		// 	nri::TextureSubresourceUploadDesc sub_resource_desc = {};
+		// 	sub_resource_desc.slices = imgData->m_mem;
+		// 	sub_resource_desc.sliceNum = 1;
+		// 	sub_resource_desc.rowPitch = imgData->m_memPitch;
+		// 	sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
 
-			nri::TextureUploadDesc textureData;
-			textureData.subresources = &sub_resource_desc;
-			textureData.texture = m_texture_emissive;
-			textureData.after = { nri::AccessBits::SHADER_RESOURCE,
-				nri::Layout::SHADER_RESOURCE };
-			textureData.planes = nri::PlaneBits::ALL;
-			texUploadDescArray.push_back(textureData);
-		}
+		// 	nri::TextureUploadDesc textureData;
+		// 	textureData.subresources = &sub_resource_desc;
+		// 	textureData.texture = m_texture_emissive;
+		// 	textureData.after = { nri::AccessBits::SHADER_RESOURCE,
+		// 		nri::Layout::SHADER_RESOURCE };
+		// 	textureData.planes = nri::PlaneBits::ALL;
+		// 	texUploadDescArray.push_back(textureData);
+		// }
 
-		NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), texUploadDescArray.data(), texUploadDescArray.size(),
+		NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), nullptr, 0,
 				uploadDescArray.data(),
 				uploadDescArray.size()));
 	}

@@ -55,5 +55,9 @@ private:
 	std::vector<Vertex> m_positions;
 	std::vector<uint32_t> m_indices;
 
+	uint64_t m_indexDataAlignedTotalSize = 0;
+	uint64_t m_vertexDataTotalSize = 0;
+	std::vector<std::pair<uint64_t, uint64_t>> m_sceneMeshOffsets;
+
 	utils::Scene &m_Scene;
 };
