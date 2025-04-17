@@ -13,21 +13,19 @@ Result AccelerationStructureVK::Create(const AccelerationStructureDesc& accelera
     VkAccelerationStructureBuildSizesInfoKHR sizesInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
     m_Device.GetAccelerationStructureBuildSizesInfo(accelerationStructureDesc, sizesInfo);
 
+    if (accelerationStructureDesc.optimizedSize)
+        sizesInfo.accelerationStructureSize = std::min(sizesInfo.accelerationStructureSize, accelerationStructureDesc.optimizedSize);
+
+    m_BuildScratchSize = sizesInfo.buildScratchSize;
+    m_UpdateScratchSize = sizesInfo.updateScratchSize;
+    m_Type = GetAccelerationStructureType(accelerationStructureDesc.type);
+    m_Flags = accelerationStructureDesc.flags;
+
     BufferDesc bufferDesc = {};
     bufferDesc.size = sizesInfo.accelerationStructureSize;
     bufferDesc.usage = BufferUsageBits::ACCELERATION_STRUCTURE_STORAGE;
 
-    Buffer* buffer = nullptr;
-    Result result = m_Device.CreateImplementation<BufferVK>(buffer, bufferDesc);
-    if (result == Result::SUCCESS) {
-        m_Buffer = (BufferVK*)buffer;
-        m_BuildScratchSize = sizesInfo.buildScratchSize;
-        m_UpdateScratchSize = sizesInfo.updateScratchSize;
-        m_Type = GetAccelerationStructureType(accelerationStructureDesc.type);
-        m_AccelerationStructureSize = sizesInfo.accelerationStructureSize;
-    }
-
-    return result;
+    return m_Device.CreateImplementation<BufferVK>(m_Buffer, bufferDesc);
 }
 
 Result AccelerationStructureVK::Create(const AccelerationStructureVKDesc& accelerationStructureDesc) {
@@ -36,8 +34,10 @@ Result AccelerationStructureVK::Create(const AccelerationStructureVKDesc& accele
 
     m_OwnsNativeObjects = false;
     m_Handle = (VkAccelerationStructureKHR)accelerationStructureDesc.vkAccelerationStructure;
+
     m_BuildScratchSize = accelerationStructureDesc.buildScratchSize;
     m_UpdateScratchSize = accelerationStructureDesc.updateScratchSize;
+    m_Flags = accelerationStructureDesc.flags;
 
     // Device address
     if (m_Device.m_IsSupported.deviceAddress) {
@@ -55,13 +55,13 @@ Result AccelerationStructureVK::FinishCreation() {
     if (!m_Buffer)
         return Result::FAILURE;
 
-    VkAccelerationStructureCreateInfoKHR accelerationStructureCreateInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
-    accelerationStructureCreateInfo.type = m_Type;
-    accelerationStructureCreateInfo.size = m_AccelerationStructureSize;
-    accelerationStructureCreateInfo.buffer = m_Buffer->GetHandle();
+    VkAccelerationStructureCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
+    createInfo.type = m_Type;
+    createInfo.size = m_Buffer->GetDesc().size;
+    createInfo.buffer = m_Buffer->GetHandle();
 
     const auto& vk = m_Device.GetDispatchTable();
-    VkResult result = vk.CreateAccelerationStructureKHR(m_Device, &accelerationStructureCreateInfo, m_Device.GetVkAllocationCallbacks(), &m_Handle);
+    VkResult result = vk.CreateAccelerationStructureKHR(m_Device, &createInfo, m_Device.GetVkAllocationCallbacks(), &m_Handle);
     RETURN_ON_FAILURE(&m_Device, result == VK_SUCCESS, GetReturnCode(result), "vkCreateAccelerationStructureKHR returned %d", (int32_t)result);
 
     // Device address
@@ -76,9 +76,7 @@ Result AccelerationStructureVK::FinishCreation() {
 
 NRI_INLINE void AccelerationStructureVK::SetDebugName(const char* name) {
     m_Device.SetDebugNameToTrivialObject(VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR, (uint64_t)m_Handle, name);
-
-    if (m_Buffer)
-        m_Buffer->SetDebugName(name);
+    m_Buffer->SetDebugName(name);
 }
 
 NRI_INLINE Result AccelerationStructureVK::CreateDescriptor(Descriptor*& descriptor) const {
@@ -91,7 +89,7 @@ NRI_INLINE Result AccelerationStructureVK::CreateDescriptor(Descriptor*& descrip
         return Result::SUCCESS;
     }
 
-    Destroy(m_Device.GetAllocationCallbacks(), descriptorImpl);
+    Destroy(descriptorImpl);
 
     return Result::SUCCESS;
 }

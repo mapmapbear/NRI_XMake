@@ -64,10 +64,12 @@ NriStruct(FormatProps) {
     uint32_t unused         : 7;
 };
 
+// Threadsafe: yes
 NriStruct(HelperInterface) {
     // Optimized memory allocation for a group of resources
+    // "allocations" must have entries >= returned by "CalculateAllocationNumber"
     uint32_t    (NRI_CALL *CalculateAllocationNumber)   (const NriRef(Device) device, const NriRef(ResourceGroupDesc) resourceGroupDesc);
-    Nri(Result) (NRI_CALL *AllocateAndBindMemory)       (NriRef(Device) device, const NriRef(ResourceGroupDesc) resourceGroupDesc, NriPtr(Memory)* allocations);
+    Nri(Result) (NRI_CALL *AllocateAndBindMemory)       (NriRef(Device) device, const NriRef(ResourceGroupDesc) resourceGroupDesc, NriOut NriPtr(Memory)* allocations);
 
     // Populate resources with data (not for streaming!)
     Nri(Result) (NRI_CALL *UploadData)                  (NriRef(Queue) queue, const NriPtr(TextureUploadDesc) textureUploadDescs, uint32_t textureUploadDescNum,
@@ -107,13 +109,13 @@ static inline Nri(PipelineLayoutSettingsDesc) NriFunc(FitPipelineLayoutSettingsI
     uint32_t rootDescriptorNum = NriDeref(pipelineLayoutSettingsDesc)->rootDescriptorNum;
 
     // Apply global limits
-    if (rootConstantSize > NriDeref(deviceDesc)->pipelineLayoutRootConstantMaxSize)
-        rootConstantSize = NriDeref(deviceDesc)->pipelineLayoutRootConstantMaxSize;
+    if (rootConstantSize > NriDeref(deviceDesc)->pipelineLayout.rootConstantMaxSize)
+        rootConstantSize = NriDeref(deviceDesc)->pipelineLayout.rootConstantMaxSize;
 
-    if (rootDescriptorNum > NriDeref(deviceDesc)->pipelineLayoutRootDescriptorMaxNum)
-        rootDescriptorNum = NriDeref(deviceDesc)->pipelineLayoutRootDescriptorMaxNum;
+    if (rootDescriptorNum > NriDeref(deviceDesc)->pipelineLayout.rootDescriptorMaxNum)
+        rootDescriptorNum = NriDeref(deviceDesc)->pipelineLayout.rootDescriptorMaxNum;
 
-    uint32_t pipelineLayoutDescriptorSetMaxNum = NriDeref(deviceDesc)->pipelineLayoutDescriptorSetMaxNum;
+    uint32_t pipelineLayoutDescriptorSetMaxNum = NriDeref(deviceDesc)->pipelineLayout.descriptorSetMaxNum;
 
     // D3D12 has limited-size root signature
     if (NriDeref(deviceDesc)->graphicsAPI == NriScopedMember(GraphicsAPI, D3D12)) {
@@ -175,18 +177,18 @@ static inline Nri(TextureBarrierDesc) NriFunc(TextureBarrierFromUnknown)(NriPtr(
     Nri(Dim_t) layerOffset NriDefault(0),
     Nri(Dim_t) layerNum NriDefault(Nri(REMAINING_LAYERS)))
 {
-    Nri(TextureBarrierDesc) textureBarrierDesc = NriZero;
-    textureBarrierDesc.texture = texture;
-    textureBarrierDesc.before.access = NriScopedMember(AccessBits, UNKNOWN);
-    textureBarrierDesc.before.layout = NriScopedMember(Layout, UNKNOWN);
-    textureBarrierDesc.before.stages = NriScopedMember(StageBits, ALL);
-    textureBarrierDesc.after = after;
-    textureBarrierDesc.mipOffset = mipOffset;
-    textureBarrierDesc.mipNum = mipNum;
-    textureBarrierDesc.layerOffset = layerOffset;
-    textureBarrierDesc.layerNum = layerNum;
+    Nri(TextureBarrierDesc) textureBarrier = NriZero;
+    textureBarrier.texture = texture;
+    textureBarrier.before.access = NriScopedMember(AccessBits, UNKNOWN);
+    textureBarrier.before.layout = NriScopedMember(Layout, UNKNOWN);
+    textureBarrier.before.stages = NriScopedMember(StageBits, ALL);
+    textureBarrier.after = after;
+    textureBarrier.mipOffset = mipOffset;
+    textureBarrier.mipNum = mipNum;
+    textureBarrier.layerOffset = layerOffset;
+    textureBarrier.layerNum = layerNum;
 
-    return textureBarrierDesc;
+    return textureBarrier;
 }
 
 static inline Nri(TextureBarrierDesc) NriFunc(TextureBarrierFromState)(NriRef(TextureBarrierDesc) prevState,

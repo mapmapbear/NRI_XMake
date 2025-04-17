@@ -59,7 +59,7 @@ static void FillRasterizerState(D3D12_RASTERIZER_DESC& rasterizerDesc, const Gra
 
     if (graphicsPipelineDesc.multisample) {
         rasterizerDesc.MultisampleEnable = graphicsPipelineDesc.multisample->sampleNum > 1 ? TRUE : FALSE;
-        rasterizerDesc.ForcedSampleCount = graphicsPipelineDesc.multisample->sampleNum > 1 ? graphicsPipelineDesc.multisample->sampleNum : 0;
+        // TODO: rasterizerDesc.ForcedSampleCount?
     }
 }
 
@@ -96,7 +96,7 @@ static void FillRasterizerState(D3D12_RASTERIZER_DESC1& rasterizerDesc, const Gr
 
     if (graphicsPipelineDesc.multisample) {
         rasterizerDesc.MultisampleEnable = graphicsPipelineDesc.multisample->sampleNum > 1 ? TRUE : FALSE;
-        rasterizerDesc.ForcedSampleCount = graphicsPipelineDesc.multisample->sampleNum > 1 ? graphicsPipelineDesc.multisample->sampleNum : 0;
+        // TODO: rasterizerDesc.ForcedSampleCount?
     }
 }
 
@@ -215,7 +215,7 @@ Result PipelineD3D12::CreateFromStream(const GraphicsPipelineDesc& graphicsPipel
 
     PipelineStateStream stateStream = {};
     stateStream.rootSignature = *m_PipelineLayout;
-    stateStream.nodeMask = NRI_NODE_MASK;
+    stateStream.nodeMask = NODE_MASK;
 
     // Shaders
     for (uint32_t i = 0; i < graphicsPipelineDesc.shaderNum; i++) {
@@ -242,24 +242,8 @@ Result PipelineD3D12::CreateFromStream(const GraphicsPipelineDesc& graphicsPipel
     uint32_t attributeNum = graphicsPipelineDesc.vertexInput ? graphicsPipelineDesc.vertexInput->attributeNum : 0;
     Scratch<D3D12_INPUT_ELEMENT_DESC> scratch1 = AllocateScratch(m_Device, D3D12_INPUT_ELEMENT_DESC, attributeNum);
     if (graphicsPipelineDesc.vertexInput) {
-        const VertexInputDesc& vi = *graphicsPipelineDesc.vertexInput;
-
         stateStream.inputLayout.desc.pInputElementDescs = scratch1;
         FillInputLayout(stateStream.inputLayout.desc, graphicsPipelineDesc);
-
-        // Strides
-        uint32_t maxBindingSlot = 0;
-        for (uint32_t i = 0; i < vi.streamNum; i++) {
-            const VertexStreamDesc& stream = vi.streams[i];
-            if (stream.bindingSlot > maxBindingSlot)
-                maxBindingSlot = stream.bindingSlot;
-        }
-
-        m_VertexStreamStrides.resize(maxBindingSlot + 1);
-        for (uint32_t i = 0; i < graphicsPipelineDesc.vertexInput->streamNum; i++) {
-            const VertexStreamDesc& stream = vi.streams[i];
-            m_VertexStreamStrides[stream.bindingSlot] = stream.stride;
-        }
     }
 
     // Input assembly
@@ -277,7 +261,7 @@ Result PipelineD3D12::CreateFromStream(const GraphicsPipelineDesc& graphicsPipel
         stateStream.flags = D3D12_PIPELINE_STATE_FLAG_DYNAMIC_DEPTH_BIAS;
 #endif
 
-        // Depth stencil
+    // Depth stencil
 #ifdef NRI_ENABLE_AGILITY_SDK_SUPPORT
     FillDepthStencilState(stateStream.depthStencil.desc, graphicsPipelineDesc.outputMerger);
 #else
@@ -333,7 +317,7 @@ Result PipelineD3D12::Create(const GraphicsPipelineDesc& graphicsPipelineDesc) {
         return CreateFromStream(graphicsPipelineDesc);
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipleineStateDesc = {};
-    graphicsPipleineStateDesc.NodeMask = NRI_NODE_MASK;
+    graphicsPipleineStateDesc.NodeMask = NODE_MASK;
     graphicsPipleineStateDesc.pRootSignature = *m_PipelineLayout;
 
     // Shaders
@@ -357,24 +341,8 @@ Result PipelineD3D12::Create(const GraphicsPipelineDesc& graphicsPipelineDesc) {
     uint32_t attributeNum = graphicsPipelineDesc.vertexInput ? graphicsPipelineDesc.vertexInput->attributeNum : 0;
     Scratch<D3D12_INPUT_ELEMENT_DESC> scratch = AllocateScratch(m_Device, D3D12_INPUT_ELEMENT_DESC, attributeNum);
     if (graphicsPipelineDesc.vertexInput) {
-        const VertexInputDesc& vi = *graphicsPipelineDesc.vertexInput;
-
         graphicsPipleineStateDesc.InputLayout.pInputElementDescs = scratch;
         FillInputLayout(graphicsPipleineStateDesc.InputLayout, graphicsPipelineDesc);
-
-        // Strides
-        uint32_t maxBindingSlot = 0;
-        for (uint32_t i = 0; i < vi.streamNum; i++) {
-            const VertexStreamDesc& stream = vi.streams[i];
-            if (stream.bindingSlot > maxBindingSlot)
-                maxBindingSlot = stream.bindingSlot;
-        }
-
-        m_VertexStreamStrides.resize(maxBindingSlot + 1);
-        for (uint32_t i = 0; i < vi.streamNum; i++) {
-            const VertexStreamDesc& stream = vi.streams[i];
-            m_VertexStreamStrides[stream.bindingSlot] = stream.stride;
-        }
     }
 
     // Input assembly
@@ -414,7 +382,7 @@ Result PipelineD3D12::Create(const ComputePipelineDesc& computePipelineDesc) {
     m_PipelineLayout = (const PipelineLayoutD3D12*)computePipelineDesc.pipelineLayout;
 
     D3D12_COMPUTE_PIPELINE_STATE_DESC computePipleineStateDesc = {};
-    computePipleineStateDesc.NodeMask = NRI_NODE_MASK;
+    computePipleineStateDesc.NodeMask = NODE_MASK;
     computePipleineStateDesc.pRootSignature = *m_PipelineLayout;
 
     FillShaderBytecode(computePipleineStateDesc.CS, computePipelineDesc.shader);
@@ -426,9 +394,6 @@ Result PipelineD3D12::Create(const ComputePipelineDesc& computePipelineDesc) {
 }
 
 Result PipelineD3D12::Create(const RayTracingPipelineDesc& rayTracingPipelineDesc) {
-    if (m_Device.GetVersion() < 5)
-        return Result::UNSUPPORTED;
-
     m_PipelineLayout = (const PipelineLayoutD3D12*)rayTracingPipelineDesc.pipelineLayout;
 
     ID3D12RootSignature* rootSignature = *m_PipelineLayout;
@@ -439,23 +404,30 @@ Result PipelineD3D12::Create(const RayTracingPipelineDesc& rayTracingPipelineDes
         + 1                     // shader config
         + 1                     // node mask
         + shaderNum             // DXIL libraries
-        + rayTracingPipelineDesc.shaderGroupDescNum
+        + rayTracingPipelineDesc.shaderGroupNum
         + (rootSignature ? 1 : 0);
     Scratch<D3D12_STATE_SUBOBJECT> stateSubobjects = AllocateScratch(m_Device, D3D12_STATE_SUBOBJECT, stateObjectNum);
 
-    D3D12_RAYTRACING_PIPELINE_CONFIG rayTracingPipelineConfig = {};
+    D3D12_RAYTRACING_PIPELINE_CONFIG1 rayTracingPipelineConfig = {};
     {
-        rayTracingPipelineConfig.MaxTraceRecursionDepth = rayTracingPipelineDesc.recursionDepthMax;
+        rayTracingPipelineConfig.MaxTraceRecursionDepth = rayTracingPipelineDesc.recursionMaxDepth;
+        rayTracingPipelineConfig.Flags = D3D12_RAYTRACING_PIPELINE_FLAG_NONE;
 
-        stateSubobjects[stateSubobjectNum].Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
+        if (rayTracingPipelineDesc.flags & RayTracingPipelineBits::SKIP_TRIANGLES)
+            rayTracingPipelineConfig.Flags |= D3D12_RAYTRACING_PIPELINE_FLAG_SKIP_TRIANGLES;
+        if (rayTracingPipelineDesc.flags & RayTracingPipelineBits::SKIP_AABBS)
+            rayTracingPipelineConfig.Flags |= D3D12_RAYTRACING_PIPELINE_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
+        // TODO: if (rayTracingPipelineDesc.flags & RayTracingPipelineBits::ALLOW_MICROMAPS)
+
+        stateSubobjects[stateSubobjectNum].Type = m_Device.GetDesc().tiers.rayTracing > 1 ? D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG1 : D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
         stateSubobjects[stateSubobjectNum].pDesc = &rayTracingPipelineConfig;
         stateSubobjectNum++;
     }
 
     D3D12_RAYTRACING_SHADER_CONFIG rayTracingShaderConfig = {};
     {
-        rayTracingShaderConfig.MaxPayloadSizeInBytes = rayTracingPipelineDesc.payloadAttributeSizeMax;
-        rayTracingShaderConfig.MaxAttributeSizeInBytes = rayTracingPipelineDesc.intersectionAttributeSizeMax;
+        rayTracingShaderConfig.MaxPayloadSizeInBytes = rayTracingPipelineDesc.rayPayloadMaxSize;
+        rayTracingShaderConfig.MaxAttributeSizeInBytes = rayTracingPipelineDesc.rayHitAttributeMaxSize;
 
         stateSubobjects[stateSubobjectNum].Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
         stateSubobjects[stateSubobjectNum].pDesc = &rayTracingShaderConfig;
@@ -464,7 +436,7 @@ Result PipelineD3D12::Create(const RayTracingPipelineDesc& rayTracingPipelineDes
 
     D3D12_NODE_MASK nodeMask = {};
     {
-        nodeMask.NodeMask = NRI_NODE_MASK;
+        nodeMask.NodeMask = NODE_MASK;
 
         stateSubobjects[stateSubobjectNum].Type = D3D12_STATE_SUBOBJECT_TYPE_NODE_MASK;
         stateSubobjects[stateSubobjectNum].pDesc = &nodeMask;
@@ -501,15 +473,15 @@ Result PipelineD3D12::Create(const RayTracingPipelineDesc& rayTracingPipelineDes
     }
 
     uint32_t hitGroupNum = 0;
-    Scratch<D3D12_HIT_GROUP_DESC> hitGroups = AllocateScratch(m_Device, D3D12_HIT_GROUP_DESC, rayTracingPipelineDesc.shaderGroupDescNum);
-    memset(&hitGroups[0], 0, rayTracingPipelineDesc.shaderGroupDescNum * sizeof(D3D12_HIT_GROUP_DESC)); // some fields can stay untouched
-    m_ShaderGroupNames.reserve(rayTracingPipelineDesc.shaderGroupDescNum);
-    for (uint32_t i = 0; i < rayTracingPipelineDesc.shaderGroupDescNum; i++) {
+    Scratch<D3D12_HIT_GROUP_DESC> hitGroups = AllocateScratch(m_Device, D3D12_HIT_GROUP_DESC, rayTracingPipelineDesc.shaderGroupNum);
+    memset(&hitGroups[0], 0, rayTracingPipelineDesc.shaderGroupNum * sizeof(D3D12_HIT_GROUP_DESC)); // some fields can stay untouched
+    m_ShaderGroupNames.reserve(rayTracingPipelineDesc.shaderGroupNum);
+    for (uint32_t i = 0; i < rayTracingPipelineDesc.shaderGroupNum; i++) {
         bool isHitGroup = true;
         bool hasIntersectionShader = false;
         std::wstring shaderIndentifierName;
-        for (uint32_t j = 0; j < GetCountOf(rayTracingPipelineDesc.shaderGroupDescs[i].shaderIndices); j++) {
-            const uint32_t& shaderIndex = rayTracingPipelineDesc.shaderGroupDescs[i].shaderIndices[j];
+        for (uint32_t j = 0; j < GetCountOf(rayTracingPipelineDesc.shaderGroups[i].shaderIndices); j++) {
+            const uint32_t& shaderIndex = rayTracingPipelineDesc.shaderGroups[i].shaderIndices[j];
             if (shaderIndex) {
                 uint32_t lookupIndex = shaderIndex - 1;
                 const ShaderDesc& shader = rayTracingPipelineDesc.shaderLibrary->shaders[lookupIndex];
@@ -574,11 +546,17 @@ void PipelineD3D12::Bind(ID3D12GraphicsCommandList* graphicsCommandList, D3D12_P
     }
 }
 
-NRI_INLINE Result PipelineD3D12::WriteShaderGroupIdentifiers(uint32_t baseShaderGroupIndex, uint32_t shaderGroupNum, void* buffer) const {
-    uint8_t* byteBuffer = (uint8_t*)buffer;
+NRI_INLINE Result PipelineD3D12::WriteShaderGroupIdentifiers(uint32_t baseShaderGroupIndex, uint32_t shaderGroupNum, void* dst) const {
+    uint8_t* ptr = (uint8_t*)dst;
+    size_t identifierSize = (size_t)m_Device.GetDesc().shaderStage.rayTracing.shaderGroupIdentifierSize;
+    uint32_t shaderGroupIndex = baseShaderGroupIndex;
+
     for (uint32_t i = 0; i < shaderGroupNum; i++) {
-        memcpy(byteBuffer + i * D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT, m_StateObjectProperties->GetShaderIdentifier(m_ShaderGroupNames[baseShaderGroupIndex + i].c_str()),
-            (size_t)m_Device.GetDesc().rayTracingShaderGroupIdentifierSize);
+        const void* identifier = m_StateObjectProperties->GetShaderIdentifier(m_ShaderGroupNames[shaderGroupIndex].c_str());
+        memcpy(ptr, identifier, identifierSize);
+
+        ptr += identifierSize;
+        shaderGroupIndex++;
     }
 
     return Result::SUCCESS;

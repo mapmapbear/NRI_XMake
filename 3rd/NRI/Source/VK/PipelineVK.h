@@ -6,8 +6,7 @@ namespace nri {
 
 struct PipelineVK final : public DebugNameBase {
     inline PipelineVK(DeviceVK& device)
-        : m_Device(device)
-        , m_VertexStreamStrides(device.GetStdAllocator()) {
+        : m_Device(device) {
     }
 
     inline operator VkPipeline() const {
@@ -24,10 +23,6 @@ struct PipelineVK final : public DebugNameBase {
 
     inline const DepthBiasDesc& GetDepthBias() const {
         return m_DepthBias;
-    }
-
-    inline uint32_t GetVertexStreamStride(uint32_t streamSlot) const {
-        return m_VertexStreamStrides[streamSlot];
     }
 
     ~PipelineVK();
@@ -47,14 +42,13 @@ struct PipelineVK final : public DebugNameBase {
     // NRI
     //================================================================================================================
 
-    Result WriteShaderGroupIdentifiers(uint32_t baseShaderGroupIndex, uint32_t shaderGroupNum, void* buffer) const;
+    Result WriteShaderGroupIdentifiers(uint32_t baseShaderGroupIndex, uint32_t shaderGroupNum, void* dst) const;
 
 private:
     Result SetupShaderStage(VkPipelineShaderStageCreateInfo& stage, const ShaderDesc& shaderDesc, VkShaderModule& module);
 
 private:
     DeviceVK& m_Device;
-    Vector<uint32_t> m_VertexStreamStrides;
     VkPipeline m_Handle = VK_NULL_HANDLE;
     VkPipelineBindPoint m_BindPoint = (VkPipelineBindPoint)0;
     DepthBiasDesc m_DepthBias = {};

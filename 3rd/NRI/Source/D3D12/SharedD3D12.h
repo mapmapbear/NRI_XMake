@@ -3,16 +3,39 @@
 #pragma once
 
 #include <d3d12.h>
-// TO OLD, using pix3.h
-// #include <pix.h>
-#include "pix3.h"
+#include <pix.h>
+
+// Validate Windows SDK version
+static_assert(D3D12_SDK_VERSION >= 4, "Outdated Windows SDK. D3D12 Ultimate needed (SDK 1.4.9+, released 2021.04.20). Always prefer using latest SDK!");
+
+// "Self" copies require barriers in-between making "CmdZeroBuffer" implementation 2x slower
+#ifdef NRI_ENABLE_AGILITY_SDK_SUPPORT
+#    define NRI_D3D12_USE_SELF_COPIES_FOR_ZERO_BUFFER 0
+#endif
+
+// TODO: "D3D12_SDK_VERSION" and "D3D12_PREVIEW_SDK_VERSION" are inconsistent and can't be used to check features support
+#ifdef D3D12_TIGHT_ALIGNMENT_MIN_COMMITTED_RESOURCE_ALIGNEMNT
+#    define NRI_D3D12_HAS_TIGHT_ALIGNMENT
+#endif
+
+#ifdef D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_BYTE_ALIGNMENT
+#    define NRI_D3D12_HAS_OPACITY_MICROMAP
+#else
+struct D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC {
+    uint32_t unused;
+};
+
+struct D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY {
+    uint32_t unused;
+};
+#endif
 
 #include "SharedExternal.h"
 
+namespace nri {
+
 typedef size_t DescriptorPointerCPU;
 typedef uint64_t DescriptorPointerGPU;
-typedef uint16_t HeapIndexType;
-typedef uint16_t HeapOffsetType;
 
 struct MemoryTypeInfo {
     uint16_t heapFlags;
@@ -20,27 +43,41 @@ struct MemoryTypeInfo {
     bool mustBeDedicated;
 };
 
-inline nri::MemoryType Pack(const MemoryTypeInfo& memoryTypeInfo) {
-    return *(nri::MemoryType*)&memoryTypeInfo;
+constexpr D3D12_HEAP_FLAGS HEAP_FLAG_MSAA_ALIGNMENT = (D3D12_HEAP_FLAGS)(1 << 15);
+
+inline MemoryType Pack(const MemoryTypeInfo& memoryTypeInfo) {
+    return *(MemoryType*)&memoryTypeInfo;
 }
 
-inline MemoryTypeInfo Unpack(const nri::MemoryType& memoryType) {
+inline MemoryTypeInfo Unpack(const MemoryType& memoryType) {
     return *(MemoryTypeInfo*)&memoryType;
 }
 
-static_assert(sizeof(MemoryTypeInfo) == sizeof(nri::MemoryType), "Must be equal");
+static_assert(sizeof(MemoryTypeInfo) == sizeof(MemoryType), "Must be equal");
 
-namespace nri {
 enum DescriptorHeapType : uint32_t {
     RESOURCE = 0,
     SAMPLER,
     MAX_NUM
 };
 
+#define DESCRIPTOR_HANDLE_HEAP_TYPE_BIT_NUM 2
+#define DESCRIPTOR_HANDLE_HEAP_INDEX_BIT_NUM 16
+#define DESCRIPTOR_HANDLE_HEAP_OFFSET_BIT_NUM 14
+
+// TODO: no castable formats since typed resources are initially "TYPELESS"
+#define NO_CASTABLE_FORMATS 0, nullptr
+
 struct DescriptorHandle {
-    HeapIndexType heapIndex;
-    HeapOffsetType heapOffset;
+    uint32_t heapType : DESCRIPTOR_HANDLE_HEAP_TYPE_BIT_NUM;
+    uint32_t heapIndex : DESCRIPTOR_HANDLE_HEAP_INDEX_BIT_NUM;
+    uint32_t heapOffset : DESCRIPTOR_HANDLE_HEAP_OFFSET_BIT_NUM;
 };
+
+constexpr uint32_t DESCRIPTORS_BATCH_SIZE = 1024;
+
+static_assert(D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES <= (1 << DESCRIPTOR_HANDLE_HEAP_TYPE_BIT_NUM), "Out of bounds");
+static_assert(DESCRIPTORS_BATCH_SIZE <= (1 << DESCRIPTOR_HANDLE_HEAP_OFFSET_BIT_NUM), "Out of bounds");
 
 struct DescriptorHeapDesc {
     ComPtr<ID3D12DescriptorHeap> heap;
@@ -50,27 +87,27 @@ struct DescriptorHeapDesc {
     uint32_t num = 0;
 };
 
-void GetResourceDesc(D3D12_RESOURCE_DESC* desc, const BufferDesc& bufferDesc);
-void GetResourceDesc(D3D12_RESOURCE_DESC* desc, const TextureDesc& textureDesc);
-void ConvertGeometryDescs(D3D12_RAYTRACING_GEOMETRY_DESC* geometryDescs, const GeometryObject* geometryObjects, uint32_t geometryObjectNum);
+void ConvertBotomLevelGeometries(const BottomLevelGeometryDesc* geometries, uint32_t geometryNum,
+    D3D12_RAYTRACING_GEOMETRY_DESC* geometryDescs,
+    D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC* triangleDescs,
+    D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC* micromapDescs);
+
 bool GetTextureDesc(const TextureD3D12Desc& textureD3D12Desc, TextureDesc& textureDesc);
 bool GetBufferDesc(const BufferD3D12Desc& bufferD3D12Desc, BufferDesc& bufferDesc);
 uint64_t GetMemorySizeD3D12(const MemoryD3D12Desc& memoryD3D12Desc);
 D3D12_RESIDENCY_PRIORITY ConvertPriority(float priority);
-
-D3D12_HEAP_TYPE GetHeapType(MemoryLocation memoryLocation);
 D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE GetAccelerationStructureType(AccelerationStructureType accelerationStructureType);
-D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS GetAccelerationStructureBuildFlags(AccelerationStructureBuildBits accelerationStructureBuildFlags);
+D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS GetAccelerationStructureFlags(AccelerationStructureBits accelerationStructureBits);
+D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS GetMicromapFlags(MicromapBits micromapBits);
+D3D12_RAYTRACING_GEOMETRY_TYPE GetGeometryType(BottomLevelGeometryType geometryType);
+D3D12_RAYTRACING_GEOMETRY_FLAGS GetGeometryFlags(BottomLevelGeometryBits bottomLevelGeometryBits);
 D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE GetCopyMode(CopyMode copyMode);
-D3D12_RESOURCE_FLAGS GetBufferFlags(BufferUsageBits bufferUsage);
-D3D12_RESOURCE_FLAGS GetTextureFlags(TextureUsageBits textureUsage);
 D3D12_FILTER GetFilterIsotropic(Filter mip, Filter magnification, Filter minification, FilterExt filterExt, bool useComparison);
 D3D12_FILTER GetFilterAnisotropic(FilterExt filterExt, bool useComparison);
 D3D12_TEXTURE_ADDRESS_MODE GetAddressMode(AddressMode addressMode);
 D3D12_COMPARISON_FUNC GetComparisonFunc(CompareFunc compareFunc);
 D3D12_COMMAND_LIST_TYPE GetCommandListType(QueueType queueType);
 D3D12_DESCRIPTOR_HEAP_TYPE GetDescriptorHeapType(DescriptorType descriptorType);
-D3D12_HEAP_FLAGS GetHeapFlags(MemoryType memoryType);
 D3D12_PRIMITIVE_TOPOLOGY_TYPE GetPrimitiveTopologyType(Topology topology);
 D3D_PRIMITIVE_TOPOLOGY GetPrimitiveTopology(Topology topology, uint8_t tessControlPointNum);
 D3D12_FILL_MODE GetFillMode(FillMode fillMode);
@@ -85,6 +122,7 @@ D3D12_DESCRIPTOR_RANGE_TYPE GetDescriptorRangesType(DescriptorType descriptorTyp
 D3D12_RESOURCE_DIMENSION GetResourceDimension(TextureType textureType);
 D3D12_SHADING_RATE GetShadingRate(ShadingRate shadingRate);
 D3D12_SHADING_RATE_COMBINER GetShadingRateCombiner(ShadingRateCombiner shadingRateCombiner);
+
 } // namespace nri
 
 #if NRI_ENABLE_D3D_EXTENSIONS
@@ -92,7 +130,7 @@ D3D12_SHADING_RATE_COMBINER GetShadingRateCombiner(ShadingRateCombiner shadingRa
 #    include "nvShaderExtnEnums.h"
 #    include "nvapi.h"
 
-struct AmdExt {
+struct AmdExtD3D12 {
     // Funcs first
     AGS_INITIALIZE Initialize;
     AGS_DEINITIALIZE Deinitialize;
@@ -102,7 +140,7 @@ struct AmdExt {
     AGSContext* context;
     bool isWrapped;
 
-    ~AmdExt() {
+    ~AmdExtD3D12() {
         if (context && !isWrapped)
             Deinitialize(context);
 
@@ -133,9 +171,9 @@ struct PixExt {
     PIX_BEGINEVENTONCOMMANDLIST BeginEventOnCommandList;
     PIX_ENDEVENTONCOMMANDLIST EndEventOnCommandList;
     PIX_SETMARKERONCOMMANDLIST SetMarkerOnCommandList;
-    // PIX_BEGINEVENTONCOMMANDQUEUE BeginEventOnQueue;
-    // PIX_ENDEVENTONCOMMANDQUEUE EndEventOnQueue;
-    // PIX_SETMARKERONCOMMANDQUEUE SetMarkerOnQueue;
+    PIX_BEGINEVENTONCOMMANDQUEUE BeginEventOnQueue;
+    PIX_ENDEVENTONCOMMANDQUEUE EndEventOnQueue;
+    PIX_SETMARKERONCOMMANDQUEUE SetMarkerOnQueue;
     Library* library;
 
     ~PixExt() {
@@ -145,8 +183,8 @@ struct PixExt {
 };
 
 namespace D3D12MA {
-    class Allocator;
-    class Allocation;
-}
+class Allocator;
+class Allocation;
+} // namespace D3D12MA
 
 #include "DeviceD3D12.h"

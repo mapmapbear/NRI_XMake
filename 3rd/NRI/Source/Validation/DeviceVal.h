@@ -131,11 +131,13 @@ struct DeviceVal final : public DeviceBase {
     Result CreatePipeline(const GraphicsPipelineDesc& graphicsPipelineDesc, Pipeline*& pipeline);
     Result CreatePipeline(const ComputePipelineDesc& computePipelineDesc, Pipeline*& pipeline);
     Result CreatePipeline(const RayTracingPipelineDesc& pipelineDesc, Pipeline*& pipeline);
+    Result CreateMicromap(const MicromapDesc& micromapDesc, Micromap*& micromap);
     Result AllocateBuffer(const AllocateBufferDesc& bufferDesc, Buffer*& buffer);
     Result AllocateTexture(const AllocateTextureDesc& textureDesc, Texture*& texture);
     Result CreateQueryPool(const QueryPoolDesc& queryPoolDesc, QueryPool*& queryPool);
     Result CreateQueryPool(const QueryPoolVKDesc& queryPoolVKDesc, QueryPool*& queryPool);
     Result CreateSwapChain(const SwapChainDesc& swapChainDesc, SwapChain*& swapChain);
+    Result AllocateMicromap(const AllocateMicromapDesc& micromapDesc, Micromap*& micromap);
     Result CreateDescriptor(const SamplerDesc& samplerDesc, Descriptor*& sampler);
     Result CreateDescriptor(const BufferViewDesc& bufferViewDesc, Descriptor*& bufferView);
     Result CreateDescriptor(const Texture1DViewDesc& textureViewDesc, Descriptor*& textureView);
@@ -153,14 +155,15 @@ struct DeviceVal final : public DeviceBase {
     Result CreateCommandAllocator(const Queue& queue, CommandAllocator*& commandAllocator);
     Result CreateCommandAllocator(const CommandAllocatorVKDesc& commandAllocatorDesc, CommandAllocator*& commandAllocator);
     Result CreateAccelerationStructure(const AccelerationStructureDesc& accelerationStructureDesc, AccelerationStructure*& accelerationStructure);
-    Result AllocateAccelerationStructure(const AllocateAccelerationStructureDesc& accelerationStructureDesc, AccelerationStructure*& accelerationStructure);
     Result CreateAccelerationStructure(const AccelerationStructureVKDesc& accelerationStructureDesc, AccelerationStructure*& accelerationStructure);
     Result CreateAccelerationStructure(const AccelerationStructureD3D12Desc& accelerationStructureDesc, AccelerationStructure*& accelerationStructure);
+    Result AllocateAccelerationStructure(const AllocateAccelerationStructureDesc& accelerationStructureDesc, AccelerationStructure*& accelerationStructure);
 
     void DestroyFence(Fence& fence);
     void DestroyBuffer(Buffer& buffer);
     void DestroyTexture(Texture& texture);
     void DestroyPipeline(Pipeline& pipeline);
+    void DestroyMicromap(Micromap& micromap);
     void DestroyQueryPool(QueryPool& queryPool);
     void DestroySwapChain(SwapChain& swapChain);
     void DestroyDescriptor(Descriptor& descriptor);
@@ -175,6 +178,7 @@ struct DeviceVal final : public DeviceBase {
     Result AllocateMemory(const AllocateMemoryDesc& allocateMemoryDesc, Memory*& memory);
     Result BindBufferMemory(const BufferMemoryBindingDesc* memoryBindingDescs, uint32_t memoryBindingDescNum);
     Result BindTextureMemory(const TextureMemoryBindingDesc* memoryBindingDescs, uint32_t memoryBindingDescNum);
+    Result BindMicromapMemory(const MicromapMemoryBindingDesc* memoryBindingDescs, uint32_t memoryBindingDescNum);
     Result BindAccelerationStructureMemory(const AccelerationStructureMemoryBindingDesc* memoryBindingDescs, uint32_t memoryBindingDescNum);
     FormatSupportBits GetFormatSupport(Format format) const;
 

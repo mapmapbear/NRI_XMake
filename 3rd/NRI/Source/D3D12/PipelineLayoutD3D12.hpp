@@ -21,7 +21,7 @@ D3D12_ROOT_SIGNATURE_FLAGS GetRootSignatureStageFlags(const PipelineLayoutDesc& 
     // produce errors when the following flags are added. To avoid this, we
     // only add these mesh shading pipeline flags when the device
     // (and thus Windows) supports mesh shading.
-    if (device.GetDesc().isMeshShaderSupported) {
+    if (device.GetDesc().features.meshShader) {
         if (!(pipelineLayoutDesc.shaderStages & StageBits::MESH_CONTROL_SHADER))
             flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;
         if (!(pipelineLayoutDesc.shaderStages & StageBits::MESH_EVALUATION_SHADER))
@@ -84,7 +84,7 @@ Result PipelineLayoutD3D12::Create(const PipelineLayoutDesc& pipelineLayoutDesc)
     Scratch<D3D12_DESCRIPTOR_RANGE1> ranges = AllocateScratch(m_Device, D3D12_DESCRIPTOR_RANGE1, rangeMaxNum);
     Vector<D3D12_ROOT_PARAMETER1> rootParameters(allocator);
 
-    bool enableDrawParametersEmulation = pipelineLayoutDesc.enableD3D12DrawParametersEmulation && (pipelineLayoutDesc.shaderStages & StageBits::VERTEX_SHADER) != 0;
+    bool enableDrawParametersEmulation = (pipelineLayoutDesc.flags & PipelineLayoutBits::ENABLE_D3D12_DRAW_PARAMETERS_EMULATION) != 0 && (pipelineLayoutDesc.shaderStages & StageBits::VERTEX_SHADER) != 0;
 
     D3D12_ROOT_PARAMETER1 rootParameterLocal = {};
     if (enableDrawParametersEmulation) {
@@ -129,11 +129,21 @@ Result PipelineLayoutD3D12::Create(const PipelineLayoutDesc& pipelineLayoutDesc)
             rootParameter.ShaderVisibility = shaderVisibility;
             rootParameter.DescriptorTable.pDescriptorRanges = &ranges[rangeNum];
 
+            // https://microsoft.github.io/DirectX-Specs/d3d/ResourceBinding.html#flags-added-in-root-signature-version-11
             D3D12_DESCRIPTOR_RANGE_FLAGS descriptorRangeFlags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
-            if (descriptorRangeDesc.flags & DescriptorRangeBits::PARTIALLY_BOUND) {
+
+            // "PARTIALLY_BOUND" implies relaxed requirements and validation
+            // "ALLOW_UPDATE_AFTER_SET" allows descriptor updates after "bind"
+            if (descriptorRangeDesc.flags & (DescriptorRangeBits::PARTIALLY_BOUND | DescriptorRangeBits::ALLOW_UPDATE_AFTER_SET))
                 descriptorRangeFlags |= D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
-                if (rangeType != D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
+
+            // "ALLOW_UPDATE_AFTER_SET" additionally allows to change data, pointed to by descriptors
+            // Samplers are always "DATA_STATIC"
+            if (rangeType != D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER) {
+                if (descriptorRangeDesc.flags & DescriptorRangeBits::ALLOW_UPDATE_AFTER_SET)
                     descriptorRangeFlags |= D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
+                else
+                    descriptorRangeFlags |= D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
             }
 
             D3D12_DESCRIPTOR_RANGE1& descriptorRange = ranges[rangeNum + groupedRangeNum];
@@ -154,7 +164,7 @@ Result PipelineLayoutD3D12::Create(const PipelineLayoutDesc& pipelineLayoutDesc)
 
         if (descriptorSetDesc.dynamicConstantBufferNum) {
             rootParameterLocal.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-            rootParameterLocal.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+            rootParameterLocal.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE; // TODO: better flags?
             m_DynamicConstantBufferMappings[i].rootConstantNum = (uint16_t)descriptorSetDesc.dynamicConstantBufferNum;
             m_DynamicConstantBufferMappings[i].rootOffset = (uint16_t)rootParameters.size();
 
@@ -174,7 +184,7 @@ Result PipelineLayoutD3D12::Create(const PipelineLayoutDesc& pipelineLayoutDesc)
         m_BaseRootConstant = (uint32_t)rootParameters.size();
 
         for (uint32_t i = 0; i < pipelineLayoutDesc.rootConstantNum; i++) {
-            const nri::RootConstantDesc& rootConstantDesc = pipelineLayoutDesc.rootConstants[i];
+            const RootConstantDesc& rootConstantDesc = pipelineLayoutDesc.rootConstants[i];
 
             rootParameterLocal.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
             rootParameterLocal.ShaderVisibility = GetShaderVisibility(rootConstantDesc.shaderStages);
@@ -190,7 +200,7 @@ Result PipelineLayoutD3D12::Create(const PipelineLayoutDesc& pipelineLayoutDesc)
         m_BaseRootDescriptor = (uint32_t)rootParameters.size();
 
         for (uint32_t i = 0; i < pipelineLayoutDesc.rootDescriptorNum; i++) {
-            const nri::RootDescriptorDesc& rootDescriptorDesc = pipelineLayoutDesc.rootDescriptors[i];
+            const RootDescriptorDesc& rootDescriptorDesc = pipelineLayoutDesc.rootDescriptors[i];
 
             if (rootDescriptorDesc.descriptorType == DescriptorType::CONSTANT_BUFFER)
                 rootParameterLocal.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -202,7 +212,7 @@ Result PipelineLayoutD3D12::Create(const PipelineLayoutDesc& pipelineLayoutDesc)
             rootParameterLocal.ShaderVisibility = GetShaderVisibility(rootDescriptorDesc.shaderStages);
             rootParameterLocal.Descriptor.ShaderRegister = rootDescriptorDesc.registerIndex;
             rootParameterLocal.Descriptor.RegisterSpace = pipelineLayoutDesc.rootRegisterSpace;
-            rootParameterLocal.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+            rootParameterLocal.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE; // TODO: better flags?
 
             rootParameters.push_back(rootParameterLocal);
         }
@@ -221,14 +231,12 @@ Result PipelineLayoutD3D12::Create(const PipelineLayoutDesc& pipelineLayoutDesc)
         REPORT_ERROR(&m_Device, "D3D12SerializeVersionedRootSignature(): %s", (char*)errorBlob->GetBufferPointer());
     RETURN_ON_BAD_HRESULT(&m_Device, hr, "D3D12SerializeVersionedRootSignature()");
 
-    hr = m_Device->CreateRootSignature(NRI_NODE_MASK, rootSignatureBlob->GetBufferPointer(), rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&m_RootSignature));
+    hr = m_Device->CreateRootSignature(NODE_MASK, rootSignatureBlob->GetBufferPointer(), rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&m_RootSignature));
     RETURN_ON_BAD_HRESULT(&m_Device, hr, "ID3D12Device::CreateRootSignature()");
 
     m_DrawParametersEmulation = enableDrawParametersEmulation;
-    if (pipelineLayoutDesc.shaderStages & nri::StageBits::VERTEX_SHADER) {
-        RETURN_ON_FAILURE(&m_Device, m_Device.CreateDefaultDrawSignatures(m_RootSignature.GetInterface(), enableDrawParametersEmulation) != nri::Result::FAILURE,
-            nri::Result::FAILURE, "Failed to create draw signature for pipeline layout");
-    }
+    if (pipelineLayoutDesc.shaderStages & StageBits::VERTEX_SHADER)
+        RETURN_ON_FAILURE(&m_Device, m_Device.CreateDefaultDrawSignatures(m_RootSignature.GetInterface(), enableDrawParametersEmulation) != Result::FAILURE, Result::FAILURE, "Failed to create draw signature for pipeline layout");
 
     return Result::SUCCESS;
 }

@@ -7,9 +7,9 @@ SwapChainVK::SwapChainVK(DeviceVK& device)
 
 SwapChainVK::~SwapChainVK() {
     for (size_t i = 0; i < m_Textures.size(); i++)
-        Destroy(m_Device.GetAllocationCallbacks(), m_Textures[i]);
+        Destroy(m_Textures[i]);
 
-    Destroy(m_Device.GetAllocationCallbacks(), m_LatencyFence);
+    Destroy(m_LatencyFence);
 
     const auto& vk = m_Device.GetDispatchTable();
     if (m_Handle)
@@ -124,9 +124,11 @@ Result SwapChainVK::Create(const SwapChainDesc& swapChainDesc) {
         RETURN_ON_FAILURE(&m_Device, isHeightValid, Result::INVALID_ARGUMENT, "swapChainDesc.height is out of [%u, %u] range", sc.surfaceCapabilities.minImageExtent.height,
             sc.surfaceCapabilities.maxImageExtent.height);
 
-        bool isTextureNumValid = textureNum >= sc.surfaceCapabilities.minImageCount && (textureNum <= sc.surfaceCapabilities.maxImageCount || sc.surfaceCapabilities.maxImageCount == 0);
-        RETURN_ON_FAILURE(&m_Device, isTextureNumValid, Result::INVALID_ARGUMENT, "swapChainDesc.textureNum is out of [%u, %u] range", sc.surfaceCapabilities.minImageCount,
-            sc.surfaceCapabilities.maxImageCount);
+        // Silently clamp "textureNum" to supported range
+        if (textureNum < sc.surfaceCapabilities.minImageCount)
+            textureNum = sc.surfaceCapabilities.minImageCount;
+        else if (textureNum > sc.surfaceCapabilities.maxImageCount)
+            textureNum = sc.surfaceCapabilities.maxImageCount;
     }
 
     // Surface format
@@ -147,40 +149,75 @@ Result SwapChainVK::Create(const SwapChainDesc& swapChainDesc) {
         RETURN_ON_FAILURE(&m_Device, result == VK_SUCCESS, GetReturnCode(result), "vkGetPhysicalDeviceSurfaceFormats2KHR returned %d", (int32_t)result);
 
         auto priority_BT709_G22_16BIT = [](const VkSurfaceFormat2KHR& s) -> uint32_t {
-            return ((s.surfaceFormat.format == VK_FORMAT_R16G16B16A16_SFLOAT) << 0) | ((s.surfaceFormat.colorSpace == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT) << 1);
+            if (s.surfaceFormat.format != VK_FORMAT_R16G16B16A16_SFLOAT)
+                return 0;
+
+            uint32_t priority = s.surfaceFormat.colorSpace == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT ? 20 : 10;
+
+            return priority;
         };
 
         auto priority_BT709_G22_8BIT = [](const VkSurfaceFormat2KHR& s) -> uint32_t {
             // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/vkGetPhysicalDeviceSurfaceFormatsKHR.html
             // There is always a corresponding UNORM, SRGB just need to consider UNORM
-            return ((s.surfaceFormat.format == VK_FORMAT_R8G8B8A8_UNORM || s.surfaceFormat.format == VK_FORMAT_B8G8R8A8_UNORM) << 0) | ((s.surfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) << 1);
+            uint32_t priority = 0;
+            if (s.surfaceFormat.format == VK_FORMAT_R8G8B8A8_UNORM)
+                priority = 4;
+            else if (s.surfaceFormat.format == VK_FORMAT_B8G8R8A8_UNORM)
+                priority = 3;
+            else if (s.surfaceFormat.format == VK_FORMAT_R8G8B8A8_SRGB)
+                priority = 2;
+            else if (s.surfaceFormat.format == VK_FORMAT_B8G8R8A8_SRGB)
+                priority = 1;
+            else
+                return 0;
+
+            priority += s.surfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR ? 10 : 0;
+
+            return priority;
         };
 
         auto priority_BT709_G22_10BIT = [](const VkSurfaceFormat2KHR& s) -> uint32_t {
-            return ((s.surfaceFormat.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32) << 0) | ((s.surfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) << 1);
+            uint32_t priority = 0;
+            if (s.surfaceFormat.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32)
+                priority = 1;
+            else
+                return 0;
+
+            priority += s.surfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR ? 10 : 0;
+
+            return priority;
         };
 
         auto priority_BT2020_G2084_10BIT = [](const VkSurfaceFormat2KHR& s) -> uint32_t {
-            return ((s.surfaceFormat.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32) << 0) | ((s.surfaceFormat.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT) << 1);
+            uint32_t priority = 0;
+            if (s.surfaceFormat.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32)
+                priority = 1;
+            else
+                return 0;
+
+            priority += s.surfaceFormat.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT ? 10 : 0;
+
+            return priority;
         };
 
         switch (swapChainDesc.format) {
-            case nri::SwapChainFormat::BT709_G10_16BIT:
+            case SwapChainFormat::BT709_G10_16BIT:
                 std::sort(surfaceFormats + 0, surfaceFormats + formatNum, [&](VkSurfaceFormat2KHR& a1, VkSurfaceFormat2KHR& b1) {
                     return priority_BT709_G22_16BIT(a1) > priority_BT709_G22_16BIT(b1);
                 });
                 break;
-            case nri::SwapChainFormat::BT709_G22_8BIT:
+            case SwapChainFormat::BT709_G22_8BIT:
                 std::sort(surfaceFormats + 0, surfaceFormats + formatNum, [&](VkSurfaceFormat2KHR& a1, VkSurfaceFormat2KHR& b1) {
                     return priority_BT709_G22_8BIT(a1) > priority_BT709_G22_8BIT(b1);
                 });
                 break;
-            case nri::SwapChainFormat::BT709_G22_10BIT:
+            case SwapChainFormat::BT709_G22_10BIT:
                 std::sort(surfaceFormats + 0, surfaceFormats + formatNum, [&](VkSurfaceFormat2KHR& a1, VkSurfaceFormat2KHR& b1) {
                     return priority_BT709_G22_10BIT(a1) > priority_BT709_G22_10BIT(b1);
                 });
                 break;
-            case nri::SwapChainFormat::BT2020_G2084_10BIT:
+            case SwapChainFormat::BT2020_G2084_10BIT:
                 std::sort(surfaceFormats + 0, surfaceFormats + formatNum, [&](VkSurfaceFormat2KHR& a1, VkSurfaceFormat2KHR& b1) {
                     return priority_BT2020_G2084_10BIT(a1) > priority_BT2020_G2084_10BIT(b1);
                 });
@@ -227,8 +264,7 @@ Result SwapChainVK::Create(const SwapChainDesc& swapChainDesc) {
 
     { // Swap chain
         VkSwapchainCreateInfoKHR swapchainInfo = {VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
-        if (m_Device.m_IsSupported.swapChainMutableFormat)
-            swapchainInfo.flags = VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR;
+        swapchainInfo.flags = 0;
         swapchainInfo.surface = m_Surface;
         swapchainInfo.minImageCount = textureNum;
         swapchainInfo.imageFormat = surfaceFormat.surfaceFormat.format;
@@ -268,6 +304,7 @@ Result SwapChainVK::Create(const SwapChainDesc& swapChainDesc) {
         imageFormatListCreateInfo.viewFormatCount = mutableFormatNum;
 
         if (m_Device.m_IsSupported.swapChainMutableFormat) {
+            swapchainInfo.flags |= VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR;
             APPEND_EXT(imageFormatListCreateInfo);
         }
 
@@ -284,7 +321,7 @@ Result SwapChainVK::Create(const SwapChainDesc& swapChainDesc) {
         RETURN_ON_FAILURE(&m_Device, result == VK_SUCCESS, GetReturnCode(result), "vkCreateSwapchainKHR returned %d", (int32_t)result);
     }
 
-    { // Swap chain images
+    { // Textures
         uint32_t imageNum = 0;
         vk.GetSwapchainImagesKHR(m_Device, m_Handle, &imageNum, nullptr);
 
@@ -318,10 +355,10 @@ Result SwapChainVK::Create(const SwapChainDesc& swapChainDesc) {
     }
 
     // Finalize
+    m_Hwnd = swapChainDesc.window.windows.hwnd;
     m_PresentId = GetSwapChainId();
-    m_Desc = swapChainDesc;
-    m_Desc.waitable = m_Device.GetDesc().isWaitableSwapChainSupported && m_Desc.waitable;
-    m_Desc.allowLowLatency = allowLowLatency;
+    m_Waitable = m_Device.GetDesc().features.waitableSwapChain && swapChainDesc.waitable;
+    m_AllowLowLatency = allowLowLatency;
 
     return Result::SUCCESS;
 }
@@ -333,6 +370,7 @@ NRI_INLINE void SwapChainVK::SetDebugName(const char* name) {
 
 NRI_INLINE Texture* const* SwapChainVK::GetTextures(uint32_t& textureNum) const {
     textureNum = (uint32_t)m_Textures.size();
+
     return (Texture* const*)m_Textures.data();
 }
 
@@ -355,8 +393,9 @@ NRI_INLINE uint32_t SwapChainVK::AcquireNextTexture() {
 NRI_INLINE Result SwapChainVK::WaitForPresent() {
     const auto& vk = m_Device.GetDispatchTable();
 
-    if (m_Desc.waitable && GetPresentIndex(m_PresentId) != 0) {
+    if (m_Waitable && GetPresentIndex(m_PresentId) != 0) {
         VkResult result = vk.WaitForPresentKHR(m_Device, m_Handle, m_PresentId - 1, MsToUs(TIMEOUT_PRESENT));
+
         return GetReturnCode(result);
     }
 
@@ -390,7 +429,7 @@ NRI_INLINE Result SwapChainVK::Present() {
 
         VkLatencySubmissionPresentIdNV presentId = {VK_STRUCTURE_TYPE_LATENCY_SUBMISSION_PRESENT_ID_NV};
         presentId.presentID = m_PresentId;
-        if (m_Desc.allowLowLatency)
+        if (m_AllowLowLatency)
             submitInfo.pNext = &presentId;
 
         VkResult result = vk.QueueSubmit2(*m_Queue, 1, &submitInfo, VK_NULL_HANDLE);
@@ -414,14 +453,14 @@ NRI_INLINE Result SwapChainVK::Present() {
         if (m_Device.m_IsSupported.presentId)
             presentInfo.pNext = &presentId;
 
-        if (m_Desc.allowLowLatency)
+        if (m_AllowLowLatency)
             SetLatencyMarker((LatencyMarker)VK_LATENCY_MARKER_PRESENT_START_NV);
 
         result = vk.QueuePresentKHR(*m_Queue, &presentInfo);
         if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR && result != VK_ERROR_OUT_OF_DATE_KHR && result != VK_ERROR_SURFACE_LOST_KHR)
             REPORT_ERROR(&m_Device, "vkQueuePresentKHR returned %d", (int32_t)result);
 
-        if (m_Desc.allowLowLatency)
+        if (m_AllowLowLatency)
             SetLatencyMarker((LatencyMarker)VK_LATENCY_MARKER_PRESENT_END_NV);
     }
 

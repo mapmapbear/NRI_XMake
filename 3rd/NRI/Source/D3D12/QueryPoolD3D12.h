@@ -2,10 +2,11 @@
 
 #pragma once
 
-// Redefine unused value to a type, we need
-constexpr D3D12_QUERY_TYPE QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE = D3D12_QUERY_TYPE_VIDEO_DECODE_STATISTICS;
-
 namespace nri {
+
+// Redefine unused values to types, we need
+constexpr D3D12_QUERY_TYPE QUERY_TYPE_ACCELERATION_STRUCTURE_SIZE = (D3D12_QUERY_TYPE)100;
+constexpr D3D12_QUERY_TYPE QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE = (D3D12_QUERY_TYPE)101;
 
 struct QueryPoolD3D12 final : public DebugNameBase {
     inline QueryPoolD3D12(DeviceD3D12& device)
@@ -23,12 +24,12 @@ struct QueryPoolD3D12 final : public DebugNameBase {
         return m_QueryType;
     }
 
-    inline ID3D12Resource* GetReadbackBuffer() const {
-        return m_ReadbackBuffer.GetInterface();
-    }
-
     inline DeviceD3D12& GetDevice() const {
         return m_Device;
+    }
+
+    inline ID3D12Resource* GetBufferForAccelerationStructuresSizes() const {
+        return m_BufferForAccelerationStructuresSizes.GetInterface();
     }
 
     Result Create(const QueryPoolDesc& queryPoolDesc);
@@ -50,14 +51,14 @@ struct QueryPoolD3D12 final : public DebugNameBase {
     }
 
 private:
-    Result CreateReadbackBuffer(const QueryPoolDesc& queryPoolDesc);
+    Result CreateBufferForAccelerationStructuresSizes(const QueryPoolDesc& queryPoolDesc);
 
 private:
     DeviceD3D12& m_Device;
-    D3D12_QUERY_TYPE m_QueryType = QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE;
+    D3D12_QUERY_TYPE m_QueryType = (D3D12_QUERY_TYPE)0;
     uint32_t m_QuerySize = 0;
     ComPtr<ID3D12QueryHeap> m_QueryHeap;
-    ComPtr<ID3D12Resource> m_ReadbackBuffer;
+    ComPtr<ID3D12Resource> m_BufferForAccelerationStructuresSizes;
 };
 
 } // namespace nri

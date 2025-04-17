@@ -2,16 +2,18 @@
 
 Result MemoryD3D12::Create(const AllocateMemoryDesc& allocateMemoryDesc) {
     MemoryTypeInfo memoryTypeInfo = Unpack(allocateMemoryDesc.type);
+    D3D12_HEAP_FLAGS heapFlags = (D3D12_HEAP_FLAGS)(memoryTypeInfo.heapFlags & ~HEAP_FLAG_MSAA_ALIGNMENT);
+    bool isMsaaAlignmentNeeded = (memoryTypeInfo.heapFlags & HEAP_FLAG_MSAA_ALIGNMENT) != 0;
 
     D3D12_HEAP_DESC heapDesc = {};
     heapDesc.SizeInBytes = allocateMemoryDesc.size;
     heapDesc.Properties.Type = (D3D12_HEAP_TYPE)memoryTypeInfo.heapType;
     heapDesc.Properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
     heapDesc.Properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-    heapDesc.Properties.CreationNodeMask = NRI_NODE_MASK;
-    heapDesc.Properties.VisibleNodeMask = NRI_NODE_MASK;
-    heapDesc.Alignment = 0;
-    heapDesc.Flags = (allocateMemoryDesc.size ? GetHeapFlags(allocateMemoryDesc.type) : D3D12_HEAP_FLAG_NONE) | D3D12_HEAP_FLAG_CREATE_NOT_ZEROED;
+    heapDesc.Properties.CreationNodeMask = NODE_MASK;
+    heapDesc.Properties.VisibleNodeMask = NODE_MASK;
+    heapDesc.Alignment = isMsaaAlignmentNeeded ? D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT : D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+    heapDesc.Flags = (allocateMemoryDesc.size ? heapFlags : D3D12_HEAP_FLAG_NONE) | D3D12_HEAP_FLAG_CREATE_NOT_ZEROED;
 
     if (!memoryTypeInfo.mustBeDedicated) {
         HRESULT hr = m_Device->CreateHeap(&heapDesc, IID_PPV_ARGS(&m_Heap));

@@ -1,7 +1,5 @@
 // © 2021 NVIDIA Corporation
 
-static constexpr uint64_t s_nullOffsets[D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT] = {0};
-
 uint8_t QueryLatestDeviceContext(ComPtr<ID3D11DeviceContextBest>& in, ComPtr<ID3D11DeviceContextBest>& out) {
     static const IID versions[] = {
         __uuidof(ID3D11DeviceContext4),
@@ -38,7 +36,7 @@ CommandBufferD3D11::~CommandBufferD3D11() {
             if (status != NVAPI_OK)
                 REPORT_WARNING(&m_Device, "NvAPI_D3D11_EndUAVOverlap() failed!");
         } else if (m_Device.HasAmdExt()) {
-            const AmdExt& amdExt = m_Device.GetAmdExt();
+            const AmdExtD3D11& amdExt = m_Device.GetAmdExt();
             AGSReturnCode res = amdExt.EndUAVOverlap(amdExt.context, m_DeferredContext);
             if (res != AGS_SUCCESS)
                 REPORT_WARNING(&m_Device, "agsDriverExtensionsDX11_EndUAVOverlap() failed!");
@@ -71,7 +69,7 @@ Result CommandBufferD3D11::Create(ID3D11DeviceContext* precreatedContext) {
             NvAPI_Status res = NvAPI_D3D11_BeginUAVOverlap(m_DeferredContext);
             RETURN_ON_FAILURE(&m_Device, res == NVAPI_OK, Result::FAILURE, "NvAPI_D3D11_BeginUAVOverlap()  failed!");
         } else if (m_Device.HasAmdExt()) {
-            const AmdExt& amdExt = m_Device.GetAmdExt();
+            const AmdExtD3D11& amdExt = m_Device.GetAmdExt();
             AGSReturnCode res = amdExt.BeginUAVOverlap(amdExt.context, m_DeferredContext);
             RETURN_ON_FAILURE(&m_Device, res == AGS_SUCCESS, Result::FAILURE, "agsDriverExtensionsDX11_BeginUAVOverlap()  failed!");
         }
@@ -149,7 +147,7 @@ NRI_INLINE void CommandBufferD3D11::SetDepthBounds(float boundsMin, float bounds
             NvAPI_Status status = NvAPI_D3D11_SetDepthBoundsTest(m_DeferredContext, isEnabled, boundsMin, boundsMax);
             RETURN_ON_FAILURE(&m_Device, status == NVAPI_OK, ReturnVoid(), "NvAPI_D3D11_SetDepthBoundsTest()  failed!");
         } else if (m_Device.HasAmdExt()) {
-            const AmdExt& amdExt = m_Device.GetAmdExt();
+            const AmdExtD3D11& amdExt = m_Device.GetAmdExt();
             AGSReturnCode res = amdExt.SetDepthBounds(amdExt.context, m_DeferredContext, isEnabled, boundsMin, boundsMax);
             RETURN_ON_FAILURE(&m_Device, res == AGS_SUCCESS, ReturnVoid(), "agsDriverExtensionsDX11_SetDepthBounds()  failed!");
         }
@@ -231,20 +229,13 @@ NRI_INLINE void CommandBufferD3D11::ClearAttachments(const ClearDesc* clearDescs
     }
 }
 
-NRI_INLINE void CommandBufferD3D11::ClearStorageBuffer(const ClearStorageBufferDesc& clearDesc) {
-    const DescriptorD3D11& descriptor = *(const DescriptorD3D11*)clearDesc.storageBuffer;
+NRI_INLINE void CommandBufferD3D11::ClearStorage(const ClearStorageDesc& clearDesc) {
+    DescriptorD3D11& storage = *(DescriptorD3D11*)clearDesc.storage;
 
-    Color32ui clearValue = {clearDesc.value, clearDesc.value, clearDesc.value, clearDesc.value};
-    m_DeferredContext->ClearUnorderedAccessViewUint(descriptor, &clearValue.x);
-}
-
-NRI_INLINE void CommandBufferD3D11::ClearStorageTexture(const ClearStorageTextureDesc& clearDesc) {
-    const DescriptorD3D11& descriptor = *(const DescriptorD3D11*)clearDesc.storageTexture;
-
-    if (descriptor.IsIntegerFormat())
-        m_DeferredContext->ClearUnorderedAccessViewUint(descriptor, &clearDesc.value.color.ui.x);
+    if (storage.IsIntegerFormat() || storage.IsBuffer())
+        m_DeferredContext->ClearUnorderedAccessViewUint(storage, &clearDesc.value.ui.x);
     else
-        m_DeferredContext->ClearUnorderedAccessViewFloat(descriptor, &clearDesc.value.color.f.x);
+        m_DeferredContext->ClearUnorderedAccessViewFloat(storage, &clearDesc.value.f.x);
 }
 
 NRI_INLINE void CommandBufferD3D11::BeginRendering(const AttachmentsDesc& attachmentsDesc) {
@@ -269,7 +260,7 @@ NRI_INLINE void CommandBufferD3D11::BeginRendering(const AttachmentsDesc& attach
 
 #if NRI_ENABLE_D3D_EXTENSIONS
     // Shading rate
-    if (m_Device.HasNvExt() && m_Device.GetDesc().shadingRateTier >= 2) {
+    if (m_Device.HasNvExt() && m_Device.GetDesc().tiers.shadingRate >= 2) {
         ID3D11NvShadingRateResourceView* shadingRateImage = nullptr;
         if (attachmentsDesc.shadingRate) {
             const DescriptorD3D11& descriptor = *(DescriptorD3D11*)attachmentsDesc.shadingRate;
@@ -307,38 +298,42 @@ NRI_INLINE void CommandBufferD3D11::BeginRendering(const AttachmentsDesc& attach
     }
 
     // Multiview
-    if (m_Device.HasAmdExt() && m_Device.GetDesc().viewMaxNum > 1) {
-        const AmdExt& amdExt = m_Device.GetAmdExt();
+    if (m_Device.HasAmdExt() && m_Device.GetDesc().other.viewMaxNum > 1) {
+        const AmdExtD3D11& amdExt = m_Device.GetAmdExt();
         AGSReturnCode res = amdExt.SetViewBroadcastMasks(amdExt.context, attachmentsDesc.viewMask, attachmentsDesc.viewMask ? 0x1 : 0x0, 0);
         RETURN_ON_FAILURE(&m_Device, res == AGS_SUCCESS, ReturnVoid(), "agsDriverExtensionsDX11_SetViewBroadcastMasks()  failed!");
     }
 #endif
 }
 
-NRI_INLINE void CommandBufferD3D11::SetVertexBuffers(uint32_t baseSlot, uint32_t bufferNum, const Buffer* const* buffers, const uint64_t* offsets) {
-    if (!offsets)
-        offsets = s_nullOffsets;
-
-    Scratch<uint8_t> scratch = AllocateScratch(m_Device, uint8_t, bufferNum * (sizeof(ID3D11Buffer*) + sizeof(uint32_t) * 2));
+NRI_INLINE void CommandBufferD3D11::SetVertexBuffers(uint32_t baseSlot, const VertexBufferDesc* vertexBufferDescs, uint32_t vertexBufferNum) {
+    Scratch<uint8_t> scratch = AllocateScratch(m_Device, uint8_t, vertexBufferNum * (sizeof(ID3D11Buffer*) + sizeof(uint32_t) * 2));
     uint8_t* ptr = scratch;
 
-    ID3D11Buffer** buf = (ID3D11Buffer**)ptr;
-    ptr += bufferNum * sizeof(ID3D11Buffer*);
-
-    uint32_t* fixedOffsets = (uint32_t*)ptr;
-    ptr += bufferNum * sizeof(uint32_t);
+    ID3D11Buffer** buffers = (ID3D11Buffer**)ptr;
+    ptr += vertexBufferNum * sizeof(ID3D11Buffer*);
 
     uint32_t* strides = (uint32_t*)ptr;
+    ptr += vertexBufferNum * sizeof(uint32_t);
 
-    for (uint32_t i = 0; i < bufferNum; i++) {
-        const BufferD3D11& bufferD3D11 = *(BufferD3D11*)buffers[i];
+    uint32_t* offsets = (uint32_t*)ptr;
 
-        buf[i] = bufferD3D11;
-        strides[i] = m_Pipeline->GetVertexStreamStride(baseSlot + i);
-        fixedOffsets[i] = (uint32_t)offsets[i];
+    for (uint32_t i = 0; i < vertexBufferNum; i++) {
+        const VertexBufferDesc& vertexBufferDesc = vertexBufferDescs[i];
+
+        const BufferD3D11* bufferD3D11 = (BufferD3D11*)vertexBufferDesc.buffer;
+        if (bufferD3D11) {
+            buffers[i] = *bufferD3D11;
+            offsets[i] = (uint32_t)vertexBufferDesc.offset;
+            strides[i] = vertexBufferDesc.stride;
+        } else {
+            buffers[i] = 0;
+            offsets[i] = 0;
+            strides[i] = 0;
+        }
     }
 
-    m_DeferredContext->IASetVertexBuffers(baseSlot, bufferNum, buf, strides, fixedOffsets);
+    m_DeferredContext->IASetVertexBuffers(baseSlot, vertexBufferNum, buffers, strides, offsets);
 }
 
 NRI_INLINE void CommandBufferD3D11::SetIndexBuffer(const Buffer& buffer, uint64_t offset, IndexType indexType) {
@@ -402,14 +397,14 @@ NRI_INLINE void CommandBufferD3D11::DrawIndirect(const Buffer& buffer, uint64_t 
 #if NRI_ENABLE_D3D_EXTENSIONS
     if (countBuffer && m_Device.HasAmdExt()) {
         const BufferD3D11* countBufferD3D11 = (BufferD3D11*)countBuffer;
-        const AmdExt& amdExt = m_Device.GetAmdExt();
+        const AmdExtD3D11& amdExt = m_Device.GetAmdExt();
         AGSReturnCode res = amdExt.DrawIndirectCount(amdExt.context, m_DeferredContext, *countBufferD3D11, (uint32_t)countBufferOffset, bufferD3D11, (uint32_t)offset, stride);
         RETURN_ON_FAILURE(&m_Device, res == AGS_SUCCESS, ReturnVoid(), "agsDriverExtensionsDX11_MultiDrawInstancedIndirectCountIndirect()  failed!");
     } else if (m_Device.HasNvExt() && drawNum > 1) {
         NvAPI_Status status = NvAPI_D3D11_MultiDrawInstancedIndirect(m_DeferredContext, drawNum, bufferD3D11, (uint32_t)offset, stride);
         RETURN_ON_FAILURE(&m_Device, status == NVAPI_OK, ReturnVoid(), "NvAPI_D3D11_MultiDrawInstancedIndirect()  failed!");
     } else if (m_Device.HasAmdExt() && drawNum > 1) {
-        const AmdExt& amdExt = m_Device.GetAmdExt();
+        const AmdExtD3D11& amdExt = m_Device.GetAmdExt();
         AGSReturnCode res = amdExt.DrawIndirect(amdExt.context, m_DeferredContext, drawNum, bufferD3D11, (uint32_t)offset, stride);
         RETURN_ON_FAILURE(&m_Device, res == AGS_SUCCESS, ReturnVoid(), "agsDriverExtensionsDX11_MultiDrawInstancedIndirect()  failed!");
     } else
@@ -431,14 +426,14 @@ NRI_INLINE void CommandBufferD3D11::DrawIndexedIndirect(const Buffer& buffer, ui
 #if NRI_ENABLE_D3D_EXTENSIONS
     if (countBuffer && m_Device.HasAmdExt()) {
         const BufferD3D11* countBufferD3D11 = (BufferD3D11*)countBuffer;
-        const AmdExt& amdExt = m_Device.GetAmdExt();
+        const AmdExtD3D11& amdExt = m_Device.GetAmdExt();
         AGSReturnCode res = amdExt.DrawIndexedIndirectCount(amdExt.context, m_DeferredContext, *countBufferD3D11, (uint32_t)countBufferOffset, bufferD3D11, (uint32_t)offset, stride);
         RETURN_ON_FAILURE(&m_Device, res == AGS_SUCCESS, ReturnVoid(), "agsDriverExtensionsDX11_MultiDrawIndexedInstancedIndirectCountIndirect()  failed!");
     } else if (m_Device.HasNvExt() && drawNum > 1) {
         NvAPI_Status status = NvAPI_D3D11_MultiDrawIndexedInstancedIndirect(m_DeferredContext, drawNum, bufferD3D11, (uint32_t)offset, stride);
         RETURN_ON_FAILURE(&m_Device, status == NVAPI_OK, ReturnVoid(), "NvAPI_D3D11_MultiDrawIndexedInstancedIndirect()  failed!");
     } else if (m_Device.HasAmdExt() && drawNum > 1) {
-        const AmdExt& amdExt = m_Device.GetAmdExt();
+        const AmdExtD3D11& amdExt = m_Device.GetAmdExt();
         AGSReturnCode res = amdExt.DrawIndexedIndirect(amdExt.context, m_DeferredContext, drawNum, bufferD3D11, (uint32_t)offset, stride);
         RETURN_ON_FAILURE(&m_Device, res == AGS_SUCCESS, ReturnVoid(), "agsDriverExtensionsDX11_MultiDrawIndexedInstancedIndirect()  failed!");
     } else
@@ -509,34 +504,6 @@ NRI_INLINE void CommandBufferD3D11::CopyTexture(Texture& dstTexture, const Textu
     }
 }
 
-NRI_INLINE void CommandBufferD3D11::ResolveTexture(Texture& dstTexture, const TextureRegionDesc* dstRegionDesc, const Texture& srcTexture, const TextureRegionDesc* srcRegionDesc) {
-    const TextureD3D11& dst = (TextureD3D11&)dstTexture;
-    const TextureD3D11& src = (TextureD3D11&)srcTexture;
-    const TextureDesc& dstDesc = dst.GetDesc();
-    const DxgiFormat& dstFormat = GetDxgiFormat(dstDesc.format);
-
-    bool isWholeResource = (!dstRegionDesc || dstRegionDesc->mipOffset == NULL_TEXTURE_REGION_DESC) && (!srcRegionDesc || srcRegionDesc->mipOffset == NULL_TEXTURE_REGION_DESC);
-    if (isWholeResource) {
-        for (Dim_t layer = 0; layer < dstDesc.layerNum; layer++) {
-            for (Mip_t mip = 0; mip < dstDesc.mipNum; mip++) {
-                uint32_t subresource = dst.GetSubresourceIndex(layer, mip);
-                m_DeferredContext->ResolveSubresource(dst, subresource, src, subresource, dstFormat.typed);
-            }
-        }
-    } else {
-        TextureRegionDesc wholeResource = {};
-        if (!srcRegionDesc || srcRegionDesc->mipOffset == NULL_TEXTURE_REGION_DESC)
-            srcRegionDesc = &wholeResource;
-        if (!dstRegionDesc || dstRegionDesc->mipOffset == NULL_TEXTURE_REGION_DESC)
-            dstRegionDesc = &wholeResource;
-
-        uint32_t dstSubresource = dst.GetSubresourceIndex(dstRegionDesc->layerOffset, dstRegionDesc->mipOffset);
-        uint32_t srcSubresource = src.GetSubresourceIndex(srcRegionDesc->layerOffset, srcRegionDesc->mipOffset);
-
-        m_DeferredContext->ResolveSubresource(dst, dstSubresource, src, srcSubresource, dstFormat.typed);
-    }
-}
-
 NRI_INLINE void CommandBufferD3D11::UploadBufferToTexture(Texture& dstTexture, const TextureRegionDesc& dstRegionDesc, const Buffer& srcBuffer, const TextureDataLayoutDesc& srcDataLayoutDesc) {
     BufferD3D11& src = (BufferD3D11&)srcBuffer;
     const TextureD3D11& dst = (TextureD3D11&)dstTexture;
@@ -575,6 +542,60 @@ NRI_INLINE void CommandBufferD3D11::ReadbackTextureToBuffer(Buffer& dstBuffer, c
     dstRegionDesc.depth = srcRegionDesc.depth == WHOLE_SIZE ? src.GetSize(2, srcRegionDesc.mipOffset) : srcRegionDesc.depth;
 
     CopyTexture((Texture&)dstTemp, &dstRegionDesc, srcTexture, &srcRegionDesc);
+}
+
+NRI_INLINE void CommandBufferD3D11::ZeroBuffer(Buffer& buffer, uint64_t offset, uint64_t size) {
+    const BufferD3D11& dst = (BufferD3D11&)buffer;
+    ID3D11Buffer* zeroBuffer = m_Device.GetZeroBuffer();
+
+    D3D11_BUFFER_DESC zeroBufferDesc = {};
+    zeroBuffer->GetDesc(&zeroBufferDesc);
+
+    if (size == WHOLE_SIZE)
+        size = dst.GetDesc().size;
+
+    D3D11_BOX box = {};
+    box.left = 0;
+    box.right = (uint32_t)size;
+    box.bottom = 1;
+    box.back = 1;
+
+    while (box.right) {
+        uint32_t blockSize = box.right < zeroBufferDesc.ByteWidth ? box.right : zeroBufferDesc.ByteWidth;
+
+        m_DeferredContext->CopySubresourceRegion(dst, 0, (uint32_t)offset, 0, 0, m_Device.GetZeroBuffer(), 0, &box);
+
+        offset += blockSize;
+        box.right -= blockSize;
+    }
+}
+
+NRI_INLINE void CommandBufferD3D11::ResolveTexture(Texture& dstTexture, const TextureRegionDesc* dstRegionDesc, const Texture& srcTexture, const TextureRegionDesc* srcRegionDesc) {
+    const TextureD3D11& dst = (TextureD3D11&)dstTexture;
+    const TextureD3D11& src = (TextureD3D11&)srcTexture;
+    const TextureDesc& dstDesc = dst.GetDesc();
+    const DxgiFormat& dstFormat = GetDxgiFormat(dstDesc.format);
+
+    bool isWholeResource = (!dstRegionDesc || dstRegionDesc->mipOffset == NULL_TEXTURE_REGION_DESC) && (!srcRegionDesc || srcRegionDesc->mipOffset == NULL_TEXTURE_REGION_DESC);
+    if (isWholeResource) {
+        for (Dim_t layer = 0; layer < dstDesc.layerNum; layer++) {
+            for (Mip_t mip = 0; mip < dstDesc.mipNum; mip++) {
+                uint32_t subresource = dst.GetSubresourceIndex(layer, mip);
+                m_DeferredContext->ResolveSubresource(dst, subresource, src, subresource, dstFormat.typed);
+            }
+        }
+    } else {
+        TextureRegionDesc wholeResource = {};
+        if (!srcRegionDesc || srcRegionDesc->mipOffset == NULL_TEXTURE_REGION_DESC)
+            srcRegionDesc = &wholeResource;
+        if (!dstRegionDesc || dstRegionDesc->mipOffset == NULL_TEXTURE_REGION_DESC)
+            dstRegionDesc = &wholeResource;
+
+        uint32_t dstSubresource = dst.GetSubresourceIndex(dstRegionDesc->layerOffset, dstRegionDesc->mipOffset);
+        uint32_t srcSubresource = src.GetSubresourceIndex(srcRegionDesc->layerOffset, srcRegionDesc->mipOffset);
+
+        m_DeferredContext->ResolveSubresource(dst, dstSubresource, src, srcSubresource, dstFormat.typed);
+    }
 }
 
 NRI_INLINE void CommandBufferD3D11::Dispatch(const DispatchDesc& dispatchDesc) {
@@ -638,7 +659,7 @@ NRI_INLINE void CommandBufferD3D11::Barrier(const BarrierGroupDesc& barrierGroup
             RETURN_ON_FAILURE(&m_Device, res == NVAPI_OK, ReturnVoid(), "NvAPI_D3D11_BeginUAVOverlap()  failed!");
         } else if (m_Device.HasAmdExt()) {
             // TODO: verify that this code actually works on AMD!
-            const AmdExt& amdExt = m_Device.GetAmdExt();
+            const AmdExtD3D11& amdExt = m_Device.GetAmdExt();
             AGSReturnCode res1 = amdExt.EndUAVOverlap(amdExt.context, m_DeferredContext);
             RETURN_ON_FAILURE(&m_Device, res1 == AGS_SUCCESS, ReturnVoid(), "agsDriverExtensionsDX11_EndUAVOverlap()  failed!");
             AGSReturnCode res2 = amdExt.BeginUAVOverlap(amdExt.context, m_DeferredContext);

@@ -21,173 +21,147 @@ struct DeviceNONE final : public DeviceBase {
         m_Desc.graphicsAPI = GraphicsAPI::NONE;
         m_Desc.nriVersionMajor = NRI_VERSION_MAJOR;
         m_Desc.nriVersionMinor = NRI_VERSION_MINOR;
-
-        m_Desc.viewportMaxNum = 16;
-        m_Desc.viewportBoundsRange[0] = -32768;
-        m_Desc.viewportBoundsRange[1] = 32767;
-
-        m_Desc.attachmentMaxDim = 16384;
-        m_Desc.attachmentLayerMaxNum = 2048;
-        m_Desc.colorAttachmentMaxNum = 8;
-
-        m_Desc.colorSampleMaxNum = 32;
-        m_Desc.depthSampleMaxNum = 32;
-        m_Desc.stencilSampleMaxNum = 32;
-        m_Desc.zeroAttachmentsSampleMaxNum = 32;
-        m_Desc.textureColorSampleMaxNum = 32;
-        m_Desc.textureIntegerSampleMaxNum = 32;
-        m_Desc.textureDepthSampleMaxNum = 32;
-        m_Desc.textureStencilSampleMaxNum = 32;
-        m_Desc.storageTextureSampleMaxNum = 32;
-
-        m_Desc.texture1DMaxDim = 16384;
-        m_Desc.texture2DMaxDim = 16384;
-        m_Desc.texture3DMaxDim = 16384;
-        m_Desc.textureArrayLayerMaxNum = 16384;
-        m_Desc.typedBufferMaxDim = uint32_t(-1);
-
-        m_Desc.deviceUploadHeapSize = 256 * 1024 * 1024;
-        m_Desc.memoryAllocationMaxNum = uint32_t(-1);
-        m_Desc.samplerAllocationMaxNum = 4096;
-        m_Desc.constantBufferMaxRange = 64 * 1024;
-        m_Desc.storageBufferMaxRange = uint32_t(-1);
-        m_Desc.bufferTextureGranularity = 1;
-        m_Desc.bufferMaxSize = uint32_t(-1);
-
-        m_Desc.uploadBufferTextureRowAlignment = 1;
-        m_Desc.uploadBufferTextureSliceAlignment = 1;
-        m_Desc.bufferShaderResourceOffsetAlignment = 1;
-        m_Desc.constantBufferOffsetAlignment = 1;
-        m_Desc.shaderBindingTableAlignment = 1;
-        m_Desc.scratchBufferOffsetAlignment = 1;
-
-        m_Desc.pipelineLayoutDescriptorSetMaxNum = 64;
-        m_Desc.pipelineLayoutRootConstantMaxSize = 256;
-        m_Desc.pipelineLayoutRootDescriptorMaxNum = 64;
-
-        m_Desc.perStageDescriptorSamplerMaxNum = 1000000;
-        m_Desc.perStageDescriptorConstantBufferMaxNum = 1000000;
-        m_Desc.perStageDescriptorStorageBufferMaxNum = 1000000;
-        m_Desc.perStageDescriptorTextureMaxNum = 1000000;
-        m_Desc.perStageDescriptorStorageTextureMaxNum = 1000000;
-        m_Desc.perStageResourceMaxNum = 1000000;
-
-        m_Desc.descriptorSetSamplerMaxNum = m_Desc.perStageDescriptorSamplerMaxNum;
-        m_Desc.descriptorSetConstantBufferMaxNum = m_Desc.perStageDescriptorConstantBufferMaxNum;
-        m_Desc.descriptorSetStorageBufferMaxNum = m_Desc.perStageDescriptorStorageBufferMaxNum;
-        m_Desc.descriptorSetTextureMaxNum = m_Desc.perStageDescriptorTextureMaxNum;
-        m_Desc.descriptorSetStorageTextureMaxNum = m_Desc.perStageDescriptorStorageTextureMaxNum;
-
-        m_Desc.vertexShaderAttributeMaxNum = 32;
-        m_Desc.vertexShaderStreamMaxNum = 32;
-        m_Desc.vertexShaderOutputComponentMaxNum = 128;
-
-        m_Desc.tessControlShaderGenerationMaxLevel = 64.0f;
-        m_Desc.tessControlShaderPatchPointMaxNum = 32;
-        m_Desc.tessControlShaderPerVertexInputComponentMaxNum = 128;
-        m_Desc.tessControlShaderPerVertexOutputComponentMaxNum = 128;
-        m_Desc.tessControlShaderPerPatchOutputComponentMaxNum = 128;
-        m_Desc.tessControlShaderTotalOutputComponentMaxNum = m_Desc.tessControlShaderPatchPointMaxNum * m_Desc.tessControlShaderPerVertexOutputComponentMaxNum + m_Desc.tessControlShaderPerPatchOutputComponentMaxNum;
-
-        m_Desc.tessEvaluationShaderInputComponentMaxNum = 128;
-        m_Desc.tessEvaluationShaderOutputComponentMaxNum = 128;
-
-        m_Desc.geometryShaderInvocationMaxNum = 32;
-        m_Desc.geometryShaderInputComponentMaxNum = 128;
-        m_Desc.geometryShaderOutputComponentMaxNum = 128;
-        m_Desc.geometryShaderOutputVertexMaxNum = 1024;
-        m_Desc.geometryShaderTotalOutputComponentMaxNum = 1024;
-
-        m_Desc.fragmentShaderInputComponentMaxNum = 128;
-        m_Desc.fragmentShaderOutputAttachmentMaxNum = 8;
-        m_Desc.fragmentShaderDualSourceAttachmentMaxNum = 1;
-
-        m_Desc.computeShaderSharedMemoryMaxSize = 64 * 1024;
-        m_Desc.computeShaderWorkGroupMaxNum[0] = 64 * 1024;
-        m_Desc.computeShaderWorkGroupMaxNum[1] = 64 * 1024;
-        m_Desc.computeShaderWorkGroupMaxNum[2] = 64 * 1024;
-        m_Desc.computeShaderWorkGroupInvocationMaxNum = 64 * 1024;
-        m_Desc.computeShaderWorkGroupMaxDim[0] = 64 * 1024;
-        m_Desc.computeShaderWorkGroupMaxDim[1] = 64 * 1024;
-        m_Desc.computeShaderWorkGroupMaxDim[2] = 64 * 1024;
-
-        m_Desc.rayTracingShaderGroupIdentifierSize = 32;
-        m_Desc.rayTracingShaderTableMaxStride = (uint32_t)(-1);
-        m_Desc.rayTracingShaderRecursionMaxDepth = 31;
-        m_Desc.rayTracingGeometryObjectMaxNum = (uint32_t)(-1);
-
-        m_Desc.meshControlSharedMemoryMaxSize = 64 * 1024;
-        m_Desc.meshControlWorkGroupInvocationMaxNum = 128;
-        m_Desc.meshControlPayloadMaxSize = 64 * 1024;
-        m_Desc.meshEvaluationOutputVerticesMaxNum = 256;
-        m_Desc.meshEvaluationOutputPrimitiveMaxNum = 256;
-        m_Desc.meshEvaluationOutputComponentMaxNum = 128;
-        m_Desc.meshEvaluationSharedMemoryMaxSize = 64 * 1024;
-        m_Desc.meshEvaluationWorkGroupInvocationMaxNum = 128;
-
-        m_Desc.viewportPrecisionBits = 8;
-        m_Desc.subPixelPrecisionBits = 8;
-        m_Desc.subTexelPrecisionBits = 8;
-        m_Desc.mipmapPrecisionBits = 8;
-
-        m_Desc.drawIndirectMaxNum = uint32_t(-1);
-        m_Desc.samplerLodBiasMin = -16.0f;
-        m_Desc.samplerLodBiasMax = 16.0f;
-        m_Desc.samplerAnisotropyMax = 16;
-        m_Desc.texelOffsetMin = -8;
-        m_Desc.texelOffsetMax = 7;
-        m_Desc.texelGatherOffsetMin = -8;
-        m_Desc.texelGatherOffsetMax = 7;
-        m_Desc.clipDistanceMaxNum = 8;
-        m_Desc.cullDistanceMaxNum = 8;
-        m_Desc.combinedClipAndCullDistanceMaxNum = 8;
-        m_Desc.viewMaxNum = 4;
-        m_Desc.shadingRateAttachmentTileSize = 16;
         m_Desc.shaderModel = 69;
 
-        m_Desc.conservativeRasterTier = 3;
-        m_Desc.sampleLocationsTier = 2;
-        m_Desc.shadingRateTier = 2;
-        m_Desc.bindlessTier = 2;
-        m_Desc.bindlessTier = 2;
+        m_Desc.viewport.maxNum = 16;
+        m_Desc.viewport.boundsMin = -32768;
+        m_Desc.viewport.boundsMax = 32767;
 
-        m_Desc.isGetMemoryDesc2Supported = true;
-        m_Desc.isTextureFilterMinMaxSupported = true;
-        m_Desc.isLogicFuncSupported = true;
-        m_Desc.isDepthBoundsTestSupported = true;
-        m_Desc.isDrawIndirectCountSupported = true;
-        m_Desc.isIndependentFrontAndBackStencilReferenceAndMasksSupported = true;
-        m_Desc.isLineSmoothingSupported = true;
-        m_Desc.isCopyQueueTimestampSupported = true;
-        m_Desc.isMeshShaderPipelineStatsSupported = true;
-        m_Desc.isEnchancedBarrierSupported = true;
-        m_Desc.isMemoryTier2Supported = true;
-        m_Desc.isDynamicDepthBiasSupported = true;
-        m_Desc.isAdditionalShadingRatesSupported = true;
-        m_Desc.isViewportOriginBottomLeftSupported = true;
-        m_Desc.isRegionResolveSupported = true;
-        m_Desc.isFlexibleMultiviewSupported = true;
-        m_Desc.isLayerBasedMultiviewSupported = true;
-        m_Desc.isViewportBasedMultiviewSupported = true;
+        m_Desc.multisampling.zeroAttachmentsSampleMaxNum = 32;
+        m_Desc.multisampling.attachmentColorSampleMaxNum = 32;
+        m_Desc.multisampling.attachmentDepthSampleMaxNum = 32;
+        m_Desc.multisampling.attachmentStencilSampleMaxNum = 32;
+        m_Desc.multisampling.textureColorSampleMaxNum = 32;
+        m_Desc.multisampling.textureDepthSampleMaxNum = 32;
+        m_Desc.multisampling.textureStencilSampleMaxNum = 32;
+        m_Desc.multisampling.textureIntegerSampleMaxNum = 32;
+        m_Desc.multisampling.storageTextureSampleMaxNum = 32;
 
-        m_Desc.isShaderNativeI16Supported = true;
-        m_Desc.isShaderNativeF16Supported = true;
-        m_Desc.isShaderNativeI64Supported = true;
-        m_Desc.isShaderNativeF64Supported = true;
-        m_Desc.isShaderAtomicsI16Supported = true;
-        m_Desc.isShaderAtomicsF16Supported = true;
-        m_Desc.isShaderAtomicsF32Supported = true;
-        m_Desc.isShaderAtomicsI64Supported = true;
-        m_Desc.isShaderAtomicsF64Supported = true;
-        m_Desc.isRasterizedOrderedViewSupported = true;
-        m_Desc.isBarycentricSupported = true;
-        m_Desc.isShaderViewportIndexSupported = true;
-        m_Desc.isShaderLayerSupported = true;
+        m_Desc.dimensions.attachmentMaxDim = 16384;
+        m_Desc.dimensions.attachmentLayerMaxNum = 2048;
+        m_Desc.dimensions.texture1DMaxDim = 16384;
+        m_Desc.dimensions.texture2DMaxDim = 16384;
+        m_Desc.dimensions.texture3DMaxDim = 16384;
+        m_Desc.dimensions.textureLayerMaxNum = 16384;
+        m_Desc.dimensions.typedBufferMaxDim = uint32_t(-1);
 
-        m_Desc.isSwapChainSupported = true;
-        m_Desc.isRayTracingSupported = true;
-        m_Desc.isMeshShaderSupported = true;
-        m_Desc.isLowLatencySupported = true;
+        m_Desc.precision.viewportBits = 8;
+        m_Desc.precision.subPixelBits = 8;
+        m_Desc.precision.subTexelBits = 8;
+        m_Desc.precision.mipmapBits = 8;
+
+        m_Desc.memory.deviceUploadHeapSize = 256 * 1024 * 1024;
+        m_Desc.memory.allocationMaxNum = uint32_t(-1);
+        m_Desc.memory.samplerAllocationMaxNum = 4096;
+        m_Desc.memory.constantBufferMaxRange = 64 * 1024;
+        m_Desc.memory.storageBufferMaxRange = uint32_t(-1);
+        m_Desc.memory.bufferTextureGranularity = 1;
+        m_Desc.memory.bufferMaxSize = uint32_t(-1);
+
+        m_Desc.memoryAlignment.uploadBufferTextureRow = 1;
+        m_Desc.memoryAlignment.uploadBufferTextureSlice = 1;
+        m_Desc.memoryAlignment.bufferShaderResourceOffset = 1;
+        m_Desc.memoryAlignment.constantBufferOffset = 1;
+        m_Desc.memoryAlignment.scratchBufferOffset = 1;
+        m_Desc.memoryAlignment.shaderBindingTable = 1;
+        m_Desc.memoryAlignment.accelerationStructureOffset = 1;
+        m_Desc.memoryAlignment.micromapOffset = 1;
+
+        m_Desc.pipelineLayout.descriptorSetMaxNum = 64;
+        m_Desc.pipelineLayout.rootConstantMaxSize = 256;
+        m_Desc.pipelineLayout.rootDescriptorMaxNum = 64;
+
+        m_Desc.descriptorSet.samplerMaxNum = 1000000;
+        m_Desc.descriptorSet.constantBufferMaxNum = 1000000;
+        m_Desc.descriptorSet.storageBufferMaxNum = 1000000;
+        m_Desc.descriptorSet.textureMaxNum = 1000000;
+        m_Desc.descriptorSet.storageTextureMaxNum = 1000000;
+
+        m_Desc.descriptorSet.updateAfterSet.samplerMaxNum = m_Desc.descriptorSet.samplerMaxNum;
+        m_Desc.descriptorSet.updateAfterSet.constantBufferMaxNum = m_Desc.descriptorSet.constantBufferMaxNum;
+        m_Desc.descriptorSet.updateAfterSet.storageBufferMaxNum = m_Desc.descriptorSet.storageBufferMaxNum;
+        m_Desc.descriptorSet.updateAfterSet.textureMaxNum = m_Desc.descriptorSet.textureMaxNum;
+        m_Desc.descriptorSet.updateAfterSet.storageTextureMaxNum = m_Desc.descriptorSet.storageTextureMaxNum;
+
+        m_Desc.shaderStage.descriptorSamplerMaxNum = 1000000;
+        m_Desc.shaderStage.descriptorConstantBufferMaxNum = 1000000;
+        m_Desc.shaderStage.descriptorStorageBufferMaxNum = 1000000;
+        m_Desc.shaderStage.descriptorTextureMaxNum = 1000000;
+        m_Desc.shaderStage.descriptorStorageTextureMaxNum = 1000000;
+        m_Desc.shaderStage.resourceMaxNum = 1000000;
+
+        m_Desc.shaderStage.updateAfterSet.descriptorSamplerMaxNum = m_Desc.shaderStage.descriptorSamplerMaxNum;
+        m_Desc.shaderStage.updateAfterSet.descriptorConstantBufferMaxNum = m_Desc.shaderStage.descriptorConstantBufferMaxNum;
+        m_Desc.shaderStage.updateAfterSet.descriptorStorageBufferMaxNum = m_Desc.shaderStage.descriptorStorageBufferMaxNum;
+        m_Desc.shaderStage.updateAfterSet.descriptorTextureMaxNum = m_Desc.shaderStage.descriptorTextureMaxNum;
+        m_Desc.shaderStage.updateAfterSet.descriptorStorageTextureMaxNum = m_Desc.shaderStage.descriptorStorageTextureMaxNum;
+        m_Desc.shaderStage.updateAfterSet.resourceMaxNum = m_Desc.shaderStage.resourceMaxNum;
+
+        m_Desc.shaderStage.vertex.attributeMaxNum = 32;
+        m_Desc.shaderStage.vertex.streamMaxNum = 32;
+        m_Desc.shaderStage.vertex.outputComponentMaxNum = 128;
+
+        m_Desc.shaderStage.tesselationControl.generationMaxLevel = 64.0f;
+        m_Desc.shaderStage.tesselationControl.patchPointMaxNum = 32;
+        m_Desc.shaderStage.tesselationControl.perVertexInputComponentMaxNum = 128;
+        m_Desc.shaderStage.tesselationControl.perVertexOutputComponentMaxNum = 128;
+        m_Desc.shaderStage.tesselationControl.perPatchOutputComponentMaxNum = 128;
+        m_Desc.shaderStage.tesselationControl.totalOutputComponentMaxNum = 1000000;
+
+        m_Desc.shaderStage.tesselationEvaluation.inputComponentMaxNum = 128;
+        m_Desc.shaderStage.tesselationEvaluation.outputComponentMaxNum = 128;
+
+        m_Desc.shaderStage.geometry.invocationMaxNum = 32;
+        m_Desc.shaderStage.geometry.inputComponentMaxNum = 128;
+        m_Desc.shaderStage.geometry.outputComponentMaxNum = 128;
+        m_Desc.shaderStage.geometry.outputVertexMaxNum = 1024;
+        m_Desc.shaderStage.geometry.totalOutputComponentMaxNum = 1024;
+
+        m_Desc.shaderStage.fragment.inputComponentMaxNum = 128;
+        m_Desc.shaderStage.fragment.attachmentMaxNum = 8;
+        m_Desc.shaderStage.fragment.dualSourceAttachmentMaxNum = 1;
+
+        m_Desc.shaderStage.compute.sharedMemoryMaxSize = 64 * 1024;
+        m_Desc.shaderStage.compute.workGroupMaxNum[0] = 64 * 1024;
+        m_Desc.shaderStage.compute.workGroupMaxNum[1] = 64 * 1024;
+        m_Desc.shaderStage.compute.workGroupMaxNum[2] = 64 * 1024;
+        m_Desc.shaderStage.compute.workGroupInvocationMaxNum = 64 * 1024;
+        m_Desc.shaderStage.compute.workGroupMaxDim[0] = 64 * 1024;
+        m_Desc.shaderStage.compute.workGroupMaxDim[1] = 64 * 1024;
+        m_Desc.shaderStage.compute.workGroupMaxDim[2] = 64 * 1024;
+
+        m_Desc.shaderStage.rayTracing.shaderGroupIdentifierSize = 32;
+        m_Desc.shaderStage.rayTracing.tableMaxStride = (uint32_t)(-1);
+        m_Desc.shaderStage.rayTracing.recursionMaxDepth = 31;
+
+        m_Desc.shaderStage.meshControl.sharedMemoryMaxSize = 64 * 1024;
+        m_Desc.shaderStage.meshControl.workGroupInvocationMaxNum = 128;
+        m_Desc.shaderStage.meshControl.payloadMaxSize = 64 * 1024;
+
+        m_Desc.shaderStage.meshEvaluation.outputVerticesMaxNum = 256;
+        m_Desc.shaderStage.meshEvaluation.outputPrimitiveMaxNum = 256;
+        m_Desc.shaderStage.meshEvaluation.outputComponentMaxNum = 128;
+        m_Desc.shaderStage.meshEvaluation.sharedMemoryMaxSize = 64 * 1024;
+        m_Desc.shaderStage.meshEvaluation.workGroupInvocationMaxNum = 128;
+
+        m_Desc.other.timestampFrequencyHz = 1;
+        m_Desc.other.micromapSubdivisionMaxLevel = 12;
+        m_Desc.other.drawIndirectMaxNum = uint32_t(-1);
+        m_Desc.other.samplerLodBiasMax = 16.0f;
+        m_Desc.other.samplerAnisotropyMax = 16;
+        m_Desc.other.texelOffsetMin = -8;
+        m_Desc.other.texelOffsetMax = 7;
+        m_Desc.other.texelGatherOffsetMin = -8;
+        m_Desc.other.texelGatherOffsetMax = 7;
+        m_Desc.other.clipDistanceMaxNum = 8;
+        m_Desc.other.cullDistanceMaxNum = 8;
+        m_Desc.other.combinedClipAndCullDistanceMaxNum = 8;
+        m_Desc.other.viewMaxNum = 4;
+        m_Desc.other.shadingRateAttachmentTileSize = 16;
+
+        memset(&m_Desc.tiers, 0xFF, sizeof(m_Desc.tiers));
+        memset(&m_Desc.features, 0xFF, sizeof(m_Desc.features));
+        memset(&m_Desc.shaderFeatures, 0xFF, sizeof(m_Desc.shaderFeatures));
     }
 
     inline ~DeviceNONE() {
@@ -448,7 +422,7 @@ static void NRI_CALL CmdBarrier(CommandBuffer&, const BarrierGroupDesc&) {
 static void NRI_CALL CmdSetIndexBuffer(CommandBuffer&, const Buffer&, uint64_t, IndexType) {
 }
 
-static void NRI_CALL CmdSetVertexBuffers(CommandBuffer&, uint32_t, uint32_t, const Buffer* const*, const uint64_t*) {
+static void NRI_CALL CmdSetVertexBuffers(CommandBuffer&, uint32_t, const VertexBufferDesc*, uint32_t) {
 }
 
 static void NRI_CALL CmdSetViewports(CommandBuffer&, const Viewport*, uint32_t) {
@@ -508,19 +482,19 @@ static void NRI_CALL CmdCopyBuffer(CommandBuffer&, Buffer&, uint64_t, const Buff
 static void NRI_CALL CmdCopyTexture(CommandBuffer&, Texture&, const TextureRegionDesc*, const Texture&, const TextureRegionDesc*) {
 }
 
-static void NRI_CALL CmdResolveTexture(CommandBuffer&, Texture&, const TextureRegionDesc*, const Texture&, const TextureRegionDesc*) {
-}
-
 static void NRI_CALL CmdUploadBufferToTexture(CommandBuffer&, Texture&, const TextureRegionDesc&, const Buffer&, const TextureDataLayoutDesc&) {
 }
 
 static void NRI_CALL CmdReadbackTextureToBuffer(CommandBuffer&, Buffer&, const TextureDataLayoutDesc&, const Texture&, const TextureRegionDesc&) {
 }
 
-static void NRI_CALL CmdClearStorageBuffer(CommandBuffer&, const ClearStorageBufferDesc&) {
+static void NRI_CALL CmdZeroBuffer(CommandBuffer&, Buffer&, uint64_t, uint64_t) {
 }
 
-static void NRI_CALL CmdClearStorageTexture(CommandBuffer&, const ClearStorageTextureDesc&) {
+static void NRI_CALL CmdResolveTexture(CommandBuffer&, Texture&, const TextureRegionDesc*, const Texture&, const TextureRegionDesc*) {
+}
+
+static void NRI_CALL CmdClearStorage(CommandBuffer&, const ClearStorageDesc&) {
 }
 
 static void NRI_CALL CmdResetQueries(CommandBuffer&, QueryPool&, uint32_t, uint32_t) {
@@ -694,9 +668,9 @@ Result DeviceNONE::FillFunctionTable(CoreInterface& table) const {
     table.CmdCopyTexture = ::CmdCopyTexture;
     table.CmdUploadBufferToTexture = ::CmdUploadBufferToTexture;
     table.CmdReadbackTextureToBuffer = ::CmdReadbackTextureToBuffer;
-    table.CmdClearStorageBuffer = ::CmdClearStorageBuffer;
-    table.CmdClearStorageTexture = ::CmdClearStorageTexture;
+    table.CmdZeroBuffer = ::CmdZeroBuffer;
     table.CmdResolveTexture = ::CmdResolveTexture;
+    table.CmdClearStorage = ::CmdClearStorage;
     table.CmdResetQueries = ::CmdResetQueries;
     table.CmdBeginQuery = ::CmdBeginQuery;
     table.CmdEndQuery = ::CmdEndQuery;
@@ -773,19 +747,19 @@ Result DeviceNONE::FillFunctionTable(HelperInterface& table) const {
 //============================================================================================================================================================================================
 #pragma region[  LowLatency  ]
 
-static Result SetLatencySleepMode(SwapChain&, const LatencySleepMode&) {
+static Result NRI_CALL SetLatencySleepMode(SwapChain&, const LatencySleepMode&) {
     return Result::SUCCESS;
 }
 
-static Result SetLatencyMarker(SwapChain&, LatencyMarker) {
+static Result NRI_CALL SetLatencyMarker(SwapChain&, LatencyMarker) {
     return Result::SUCCESS;
 }
 
-static Result LatencySleep(SwapChain&) {
+static Result NRI_CALL LatencySleep(SwapChain&) {
     return Result::SUCCESS;
 }
 
-static Result GetLatencyReport(const SwapChain&, LatencyReport&) {
+static Result NRI_CALL GetLatencyReport(const SwapChain&, LatencyReport&) {
     return Result::SUCCESS;
 }
 
@@ -825,24 +799,6 @@ Result DeviceNONE::FillFunctionTable(MeshShaderInterface& table) const {
 //============================================================================================================================================================================================
 #pragma region[  RayTracing  ]
 
-static void NRI_CALL GetAccelerationStructureMemoryDesc(const AccelerationStructure&, MemoryLocation, MemoryDesc&) {
-}
-
-static void NRI_CALL GetAccelerationStructureMemoryDesc2(const Device&, const AccelerationStructureDesc&, MemoryLocation, MemoryDesc&) {
-}
-
-static uint64_t NRI_CALL GetAccelerationStructureUpdateScratchBufferSize(const AccelerationStructure&) {
-    return 0;
-}
-
-static uint64_t NRI_CALL GetAccelerationStructureBuildScratchBufferSize(const AccelerationStructure&) {
-    return 0;
-}
-
-static uint64_t NRI_CALL GetAccelerationStructureHandle(const AccelerationStructure&) {
-    return 0;
-}
-
 static Result NRI_CALL CreateRayTracingPipeline(Device&, const RayTracingPipelineDesc&, Pipeline*& pipeline) {
     pipeline = DummyObject<Pipeline>();
 
@@ -861,10 +817,59 @@ static Result NRI_CALL CreateAccelerationStructureDescriptor(const AccelerationS
     return Result::SUCCESS;
 }
 
+static Result NRI_CALL CreateMicromap(Device&, const MicromapDesc&, Micromap*& micromap) {
+    micromap = DummyObject<Micromap>();
+
+    return Result::SUCCESS;
+}
+
+static uint64_t NRI_CALL GetAccelerationStructureUpdateScratchBufferSize(const AccelerationStructure&) {
+    return 0;
+}
+
+static uint64_t NRI_CALL GetAccelerationStructureBuildScratchBufferSize(const AccelerationStructure&) {
+    return 0;
+}
+
+static uint64_t NRI_CALL GetAccelerationStructureHandle(const AccelerationStructure&) {
+    return 0;
+}
+
+static Buffer* NRI_CALL GetAccelerationStructureBuffer(const AccelerationStructure&) {
+    return DummyObject<Buffer>();
+}
+
+static uint64_t NRI_CALL GetMicromapBuildScratchBufferSize(const Micromap&) {
+    return 0;
+}
+
+static Buffer* NRI_CALL GetMicromapBuffer(const Micromap&) {
+    return DummyObject<Buffer>();
+}
+
 static void NRI_CALL DestroyAccelerationStructure(AccelerationStructure&) {
 }
 
+static void NRI_CALL DestroyMicromap(Micromap&) {
+}
+
+static void NRI_CALL GetAccelerationStructureMemoryDesc(const AccelerationStructure&, MemoryLocation, MemoryDesc&) {
+}
+
+static void NRI_CALL GetAccelerationStructureMemoryDesc2(const Device&, const AccelerationStructureDesc&, MemoryLocation, MemoryDesc&) {
+}
+
 static Result NRI_CALL BindAccelerationStructureMemory(Device&, const AccelerationStructureMemoryBindingDesc*, uint32_t) {
+    return Result::SUCCESS;
+}
+
+static void NRI_CALL GetMicromapMemoryDesc(const Micromap&, MemoryLocation, MemoryDesc&) {
+}
+
+static void NRI_CALL GetMicromapMemoryDesc2(const Device&, const MicromapDesc&, MemoryLocation, MemoryDesc&) {
+}
+
+static Result NRI_CALL BindMicromapMemory(Device&, const MicromapMemoryBindingDesc*, uint32_t) {
     return Result::SUCCESS;
 }
 
@@ -872,16 +877,13 @@ static Result NRI_CALL WriteShaderGroupIdentifiers(const Pipeline&, uint32_t, ui
     return Result::SUCCESS;
 }
 
-static void NRI_CALL CmdBuildTopLevelAccelerationStructure(CommandBuffer&, uint32_t, const Buffer&, uint64_t, AccelerationStructureBuildBits, AccelerationStructure&, Buffer&, uint64_t) {
+static void NRI_CALL CmdBuildTopLevelAccelerationStructures(CommandBuffer&, const BuildTopLevelAccelerationStructureDesc*, uint32_t) {
 }
 
-static void NRI_CALL CmdBuildBottomLevelAccelerationStructure(CommandBuffer&, uint32_t, const GeometryObject*, AccelerationStructureBuildBits, AccelerationStructure&, Buffer&, uint64_t) {
+static void NRI_CALL CmdBuildBottomLevelAccelerationStructures(CommandBuffer&, const BuildBottomLevelAccelerationStructureDesc*, uint32_t) {
 }
 
-static void NRI_CALL CmdUpdateTopLevelAccelerationStructure(CommandBuffer&, uint32_t, const Buffer&, uint64_t, AccelerationStructureBuildBits, AccelerationStructure&, const AccelerationStructure&, Buffer&, uint64_t) {
-}
-
-static void NRI_CALL CmdUpdateBottomLevelAccelerationStructure(CommandBuffer&, uint32_t, const GeometryObject*, AccelerationStructureBuildBits, AccelerationStructure&, const AccelerationStructure&, Buffer&, uint64_t) {
+static void NRI_CALL CmdBuildMicromaps(CommandBuffer&, const BuildMicromapDesc*, uint32_t) {
 }
 
 static void NRI_CALL CmdDispatchRays(CommandBuffer&, const DispatchRaysDesc&) {
@@ -890,37 +892,57 @@ static void NRI_CALL CmdDispatchRays(CommandBuffer&, const DispatchRaysDesc&) {
 static void NRI_CALL CmdDispatchRaysIndirect(CommandBuffer&, const Buffer&, uint64_t) {
 }
 
+static void NRI_CALL CmdWriteAccelerationStructuresSizes(CommandBuffer&, const AccelerationStructure* const*, uint32_t, QueryPool&, uint32_t) {
+}
+
+static void NRI_CALL CmdWriteMicromapsSizes(CommandBuffer&, const Micromap* const*, uint32_t, QueryPool&, uint32_t) {
+}
+
 static void NRI_CALL CmdCopyAccelerationStructure(CommandBuffer&, AccelerationStructure&, const AccelerationStructure&, CopyMode) {
 }
 
-static void NRI_CALL CmdWriteAccelerationStructureSize(CommandBuffer&, const AccelerationStructure* const*, uint32_t, QueryPool&, uint32_t) {
+static void NRI_CALL CmdCopyMicromap(CommandBuffer&, Micromap&, const Micromap&, CopyMode) {
 }
 
 static uint64_t NRI_CALL GetAccelerationStructureNativeObject(const AccelerationStructure&) {
     return 0;
 }
 
+static uint64_t NRI_CALL GetMicromapNativeObject(const Micromap&) {
+    return 0;
+}
+
 Result DeviceNONE::FillFunctionTable(RayTracingInterface& table) const {
-    table.GetAccelerationStructureMemoryDesc = ::GetAccelerationStructureMemoryDesc;
-    table.GetAccelerationStructureMemoryDesc2 = ::GetAccelerationStructureMemoryDesc2;
-    table.GetAccelerationStructureUpdateScratchBufferSize = ::GetAccelerationStructureUpdateScratchBufferSize;
-    table.GetAccelerationStructureBuildScratchBufferSize = ::GetAccelerationStructureBuildScratchBufferSize;
-    table.GetAccelerationStructureHandle = ::GetAccelerationStructureHandle;
     table.CreateRayTracingPipeline = ::CreateRayTracingPipeline;
     table.CreateAccelerationStructure = ::CreateAccelerationStructure;
     table.CreateAccelerationStructureDescriptor = ::CreateAccelerationStructureDescriptor;
+    table.CreateMicromap = ::CreateMicromap;
+    table.GetAccelerationStructureUpdateScratchBufferSize = ::GetAccelerationStructureUpdateScratchBufferSize;
+    table.GetAccelerationStructureBuildScratchBufferSize = ::GetAccelerationStructureBuildScratchBufferSize;
+    table.GetAccelerationStructureHandle = ::GetAccelerationStructureHandle;
+    table.GetAccelerationStructureBuffer = ::GetAccelerationStructureBuffer;
+    table.GetMicromapBuildScratchBufferSize = ::GetMicromapBuildScratchBufferSize;
+    table.GetMicromapBuffer = ::GetMicromapBuffer;
     table.DestroyAccelerationStructure = ::DestroyAccelerationStructure;
+    table.DestroyMicromap = ::DestroyMicromap;
+    table.GetAccelerationStructureMemoryDesc = ::GetAccelerationStructureMemoryDesc;
+    table.GetAccelerationStructureMemoryDesc2 = ::GetAccelerationStructureMemoryDesc2;
     table.BindAccelerationStructureMemory = ::BindAccelerationStructureMemory;
+    table.GetMicromapMemoryDesc = ::GetMicromapMemoryDesc;
+    table.GetMicromapMemoryDesc2 = ::GetMicromapMemoryDesc2;
+    table.BindMicromapMemory = ::BindMicromapMemory;
     table.WriteShaderGroupIdentifiers = ::WriteShaderGroupIdentifiers;
-    table.CmdBuildTopLevelAccelerationStructure = ::CmdBuildTopLevelAccelerationStructure;
-    table.CmdBuildBottomLevelAccelerationStructure = ::CmdBuildBottomLevelAccelerationStructure;
-    table.CmdUpdateTopLevelAccelerationStructure = ::CmdUpdateTopLevelAccelerationStructure;
-    table.CmdUpdateBottomLevelAccelerationStructure = ::CmdUpdateBottomLevelAccelerationStructure;
+    table.CmdBuildTopLevelAccelerationStructures = ::CmdBuildTopLevelAccelerationStructures;
+    table.CmdBuildBottomLevelAccelerationStructures = ::CmdBuildBottomLevelAccelerationStructures;
+    table.CmdBuildMicromaps = ::CmdBuildMicromaps;
     table.CmdDispatchRays = ::CmdDispatchRays;
     table.CmdDispatchRaysIndirect = ::CmdDispatchRaysIndirect;
+    table.CmdWriteAccelerationStructuresSizes = ::CmdWriteAccelerationStructuresSizes;
+    table.CmdWriteMicromapsSizes = ::CmdWriteMicromapsSizes;
     table.CmdCopyAccelerationStructure = ::CmdCopyAccelerationStructure;
-    table.CmdWriteAccelerationStructureSize = ::CmdWriteAccelerationStructureSize;
+    table.CmdCopyMicromap = ::CmdCopyMicromap;
     table.GetAccelerationStructureNativeObject = ::GetAccelerationStructureNativeObject;
+    table.GetMicromapNativeObject = ::GetMicromapNativeObject;
 
     return Result::SUCCESS;
 }
@@ -930,28 +952,35 @@ Result DeviceNONE::FillFunctionTable(RayTracingInterface& table) const {
 //============================================================================================================================================================================================
 #pragma region[  ResourceAllocator  ]
 
-static Result AllocateBuffer(Device&, const AllocateBufferDesc&, Buffer*& buffer) {
+static Result NRI_CALL AllocateBuffer(Device&, const AllocateBufferDesc&, Buffer*& buffer) {
     buffer = DummyObject<Buffer>();
 
     return Result::SUCCESS;
 }
 
-static Result AllocateTexture(Device&, const AllocateTextureDesc&, Texture*& texture) {
+static Result NRI_CALL AllocateTexture(Device&, const AllocateTextureDesc&, Texture*& texture) {
     texture = DummyObject<Texture>();
 
     return Result::SUCCESS;
 }
 
-static Result AllocateAccelerationStructure(Device&, const AllocateAccelerationStructureDesc&, AccelerationStructure*& accelerationStructure) {
+static Result NRI_CALL AllocateAccelerationStructure(Device&, const AllocateAccelerationStructureDesc&, AccelerationStructure*& accelerationStructure) {
     accelerationStructure = DummyObject<AccelerationStructure>();
 
     return Result::SUCCESS;
+}
+
+static Result NRI_CALL AllocateMicromap(Device&, const AllocateMicromapDesc&, Micromap*& micromap) {
+    micromap = DummyObject<Micromap>();
+
+    return Result::FAILURE;
 }
 
 Result DeviceNONE::FillFunctionTable(ResourceAllocatorInterface& table) const {
     table.AllocateBuffer = ::AllocateBuffer;
     table.AllocateTexture = ::AllocateTexture;
     table.AllocateAccelerationStructure = ::AllocateAccelerationStructure;
+    table.AllocateMicromap = ::AllocateMicromap;
 
     return Result::SUCCESS;
 }
@@ -961,32 +990,32 @@ Result DeviceNONE::FillFunctionTable(ResourceAllocatorInterface& table) const {
 //============================================================================================================================================================================================
 #pragma region[  Streamer  ]
 
-static Result CreateStreamer(Device&, const StreamerDesc&, Streamer*& streamer) {
+static Result NRI_CALL CreateStreamer(Device&, const StreamerDesc&, Streamer*& streamer) {
     streamer = DummyObject<Streamer>();
 
     return Result::SUCCESS;
 }
 
-static void DestroyStreamer(Streamer&) {
+static void NRI_CALL DestroyStreamer(Streamer&) {
 }
 
-static Buffer* GetStreamerConstantBuffer(Streamer&) {
+static Buffer* NRI_CALL GetStreamerConstantBuffer(Streamer&) {
     return nullptr;
 }
 
-static uint32_t UpdateStreamerConstantBuffer(Streamer&, const void*, uint32_t) {
+static uint32_t NRI_CALL UpdateStreamerConstantBuffer(Streamer&, const void*, uint32_t) {
     return 0;
 }
 
-static uint64_t AddStreamerBufferUpdateRequest(Streamer&, const BufferUpdateRequestDesc&) {
+static uint64_t NRI_CALL AddStreamerBufferUpdateRequest(Streamer&, const BufferUpdateRequestDesc&) {
     return 0;
 }
 
-static uint64_t AddStreamerTextureUpdateRequest(Streamer&, const TextureUpdateRequestDesc&) {
+static uint64_t NRI_CALL AddStreamerTextureUpdateRequest(Streamer&, const TextureUpdateRequestDesc&) {
     return 0;
 }
 
-static Result CopyStreamerUpdateRequests(Streamer&) {
+static Result NRI_CALL CopyStreamerUpdateRequests(Streamer&) {
     return Result::SUCCESS;
 }
 
@@ -994,7 +1023,7 @@ static Buffer* GetStreamerDynamicBuffer(Streamer&) {
     return nullptr;
 }
 
-static void CmdUploadStreamerUpdateRequests(CommandBuffer&, Streamer&) {
+static void NRI_CALL CmdUploadStreamerUpdateRequests(CommandBuffer&, Streamer&) {
 }
 
 Result DeviceNONE::FillFunctionTable(StreamerInterface& table) const {
@@ -1067,24 +1096,24 @@ Result DeviceNONE::FillFunctionTable(SwapChainInterface& table) const {
 //============================================================================================================================================================================================
 #pragma region[  Upscaler  ]
 
-static Result CreateUpscaler(Device&, const UpscalerDesc&, Upscaler*& upscaler) {
+static Result NRI_CALL CreateUpscaler(Device&, const UpscalerDesc&, Upscaler*& upscaler) {
     upscaler = DummyObject<Upscaler>();
 
     return Result::SUCCESS;
 }
 
-static void DestroyUpscaler(Upscaler&) {
+static void NRI_CALL DestroyUpscaler(Upscaler&) {
 }
 
-static bool IsUpscalerSupported(const Device&, UpscalerType) {
+static bool NRI_CALL IsUpscalerSupported(const Device&, UpscalerType) {
     return true;
 }
 
-static void GetUpscalerProps(const Upscaler&, UpscalerProps& upscalerProps) {
+static void NRI_CALL GetUpscalerProps(const Upscaler&, UpscalerProps& upscalerProps) {
     upscalerProps = {1.0f, 0.0f, {1, 1}, {1, 1}, {1, 1}, 1};
 }
 
-static void CmdDispatchUpscale(CommandBuffer&, Upscaler&, const DispatchUpscaleDesc&) {
+static void NRI_CALL CmdDispatchUpscale(CommandBuffer&, Upscaler&, const DispatchUpscaleDesc&) {
 }
 
 Result DeviceNONE::FillFunctionTable(UpscalerInterface& table) const {

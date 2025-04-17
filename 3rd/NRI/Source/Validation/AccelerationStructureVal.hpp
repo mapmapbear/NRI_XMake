@@ -2,9 +2,9 @@
 
 AccelerationStructureVal::~AccelerationStructureVal() {
     if (m_Memory)
-        m_Memory->UnbindAccelerationStructure(*this);
+        m_Memory->Unbind(*this);
 
-    GetRayTracingInterface().DestroyAccelerationStructure(*GetImpl());
+    Destroy(m_Buffer);
 }
 
 NRI_INLINE uint64_t AccelerationStructureVal::GetUpdateScratchBufferSize() const {
@@ -27,16 +27,22 @@ NRI_INLINE uint64_t AccelerationStructureVal::GetNativeObject() const {
     return GetRayTracingInterface().GetAccelerationStructureNativeObject(*GetImpl());
 }
 
-NRI_INLINE Buffer* AccelerationStructureVal::GetBuffer() const {
+NRI_INLINE Buffer* AccelerationStructureVal::GetBuffer() {
     RETURN_ON_FAILURE(&m_Device, IsBoundToMemory(), 0, "AccelerationStructure is not bound to memory");
 
-    return GetRayTracingInterface().GetAccelerationStructureBuffer(*GetImpl());
+    if (!m_Buffer) {
+        Buffer* buffer = GetRayTracingInterface().GetAccelerationStructureBuffer(*GetImpl());
+        m_Buffer = Allocate<BufferVal>(m_Device.GetAllocationCallbacks(), m_Device, buffer, false);
+    }
+
+    return (Buffer*)m_Buffer;
 }
 
 NRI_INLINE Result AccelerationStructureVal::CreateDescriptor(Descriptor*& descriptor) {
     Descriptor* descriptorImpl = nullptr;
     const Result result = GetRayTracingInterface().CreateAccelerationStructureDescriptor(*GetImpl(), descriptorImpl);
 
+    descriptor = nullptr;
     if (result == Result::SUCCESS)
         descriptor = (Descriptor*)Allocate<DescriptorVal>(m_Device.GetAllocationCallbacks(), m_Device, descriptorImpl, ResourceType::ACCELERATION_STRUCTURE);
 

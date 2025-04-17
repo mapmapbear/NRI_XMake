@@ -199,11 +199,17 @@ Result DescriptorD3D12::Create(const Texture2DViewDesc& textureViewDesc) {
         case Texture2DViewType::COLOR_ATTACHMENT: {
             D3D12_RENDER_TARGET_VIEW_DESC desc = {};
             desc.Format = format;
-            desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
-            desc.Texture2DArray.MipSlice = textureViewDesc.mipOffset;
-            desc.Texture2DArray.FirstArraySlice = textureViewDesc.layerOffset;
-            desc.Texture2DArray.ArraySize = remainingLayers;
-            desc.Texture2DArray.PlaneSlice = GetPlaneIndex(textureViewDesc.format);
+            if (textureDesc.sampleNum > 1) {
+                desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY;
+                desc.Texture2DMSArray.FirstArraySlice = textureViewDesc.layerOffset;
+                desc.Texture2DMSArray.ArraySize = remainingLayers;
+            } else {
+                desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+                desc.Texture2DArray.MipSlice = textureViewDesc.mipOffset;
+                desc.Texture2DArray.FirstArraySlice = textureViewDesc.layerOffset;
+                desc.Texture2DArray.ArraySize = remainingLayers;
+                desc.Texture2DArray.PlaneSlice = GetPlaneIndex(textureViewDesc.format);
+            }
 
             return CreateRenderTargetView(texture, desc);
         }
@@ -213,10 +219,16 @@ Result DescriptorD3D12::Create(const Texture2DViewDesc& textureViewDesc) {
         case Texture2DViewType::DEPTH_STENCIL_READONLY: {
             D3D12_DEPTH_STENCIL_VIEW_DESC desc = {};
             desc.Format = format;
-            desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
-            desc.Texture2DArray.MipSlice = textureViewDesc.mipOffset;
-            desc.Texture2DArray.FirstArraySlice = textureViewDesc.layerOffset;
-            desc.Texture2DArray.ArraySize = remainingLayers;
+            if (textureDesc.sampleNum > 1) {
+                desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
+                desc.Texture2DMSArray.FirstArraySlice = textureViewDesc.layerOffset;
+                desc.Texture2DMSArray.ArraySize = remainingLayers;
+            } else {
+                desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+                desc.Texture2DArray.MipSlice = textureViewDesc.mipOffset;
+                desc.Texture2DArray.FirstArraySlice = textureViewDesc.layerOffset;
+                desc.Texture2DArray.ArraySize = remainingLayers;
+            }
 
             if (textureViewDesc.viewType == Texture2DViewType::DEPTH_READONLY_STENCIL_ATTACHMENT)
                 desc.Flags = D3D12_DSV_FLAG_READ_ONLY_DEPTH;
@@ -284,9 +296,15 @@ Result DescriptorD3D12::Create(const BufferViewDesc& bufferViewDesc) {
     const BufferDesc& bufferDesc = buffer.GetDesc();
     uint64_t size = bufferViewDesc.size == WHOLE_SIZE ? bufferDesc.size : bufferViewDesc.size;
 
-    DXGI_FORMAT format = GetDxgiFormat(bufferViewDesc.format).typed;
-    const FormatProps& formatProps = GetFormatProps(bufferViewDesc.format);
-    uint32_t elementSize = bufferDesc.structureStride ? bufferDesc.structureStride : formatProps.stride;
+    uint32_t structureStride = 0;
+    if (bufferViewDesc.format == Format::UNKNOWN)
+        structureStride = bufferViewDesc.structureStride ? bufferViewDesc.structureStride : bufferDesc.structureStride;
+    bool isRaw = structureStride == 4;
+
+    Format patchedFormat = isRaw ? Format::R32_UINT : bufferViewDesc.format;
+    const DxgiFormat& format = GetDxgiFormat(patchedFormat);
+    const FormatProps& formatProps = GetFormatProps(patchedFormat);
+    uint32_t elementSize = structureStride ? structureStride : formatProps.stride;
     uint64_t elementOffset = (uint32_t)(bufferViewDesc.offset / elementSize);
     uint32_t elementNum = (uint32_t)(size / elementSize);
 
@@ -303,25 +321,25 @@ Result DescriptorD3D12::Create(const BufferViewDesc& bufferViewDesc) {
         }
         case BufferViewType::SHADER_RESOURCE: {
             D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
-            desc.Format = format;
+            desc.Format = isRaw ? format.typeless : format.typed;
             desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
             desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
             desc.Buffer.FirstElement = elementOffset;
             desc.Buffer.NumElements = elementNum;
-            desc.Buffer.StructureByteStride = bufferDesc.structureStride;
-            desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE; // TODO: D3D12_BUFFER_SRV_FLAG_RAW?
+            desc.Buffer.StructureByteStride = isRaw ? 0 : structureStride;
+            desc.Buffer.Flags = isRaw ? D3D12_BUFFER_SRV_FLAG_RAW : D3D12_BUFFER_SRV_FLAG_NONE;
 
             return CreateShaderResourceView(buffer, desc);
         }
         case BufferViewType::SHADER_RESOURCE_STORAGE: {
             D3D12_UNORDERED_ACCESS_VIEW_DESC desc = {};
-            desc.Format = format;
+            desc.Format = isRaw ? format.typeless : format.typed;
             desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
             desc.Buffer.FirstElement = elementOffset;
             desc.Buffer.NumElements = elementNum;
-            desc.Buffer.StructureByteStride = bufferDesc.structureStride;
-            desc.Buffer.CounterOffsetInBytes = 0;
-            desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE; // TODO: D3D12_BUFFER_UAV_FLAG_RAW?
+            desc.Buffer.StructureByteStride = isRaw ? 0 : structureStride;
+            desc.Buffer.CounterOffsetInBytes = 0; // TODO: needed?
+            desc.Buffer.Flags = isRaw ? D3D12_BUFFER_UAV_FLAG_RAW : D3D12_BUFFER_UAV_FLAG_NONE;
 
             return CreateUnorderedAccessView(buffer, desc, bufferViewDesc.format);
         }
@@ -340,9 +358,7 @@ Result DescriptorD3D12::Create(const AccelerationStructure& accelerationStructur
 }
 
 Result DescriptorD3D12::Create(const SamplerDesc& samplerDesc) {
-    m_HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-
-    Result result = m_Device.GetDescriptorHandle(m_HeapType, m_Handle);
+    Result result = m_Device.GetDescriptorHandle(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, m_Handle);
     if (result != Result::SUCCESS)
         return result;
 
@@ -407,9 +423,7 @@ Result DescriptorD3D12::Create(const SamplerDesc& samplerDesc) {
 }
 
 Result DescriptorD3D12::CreateConstantBufferView(const D3D12_CONSTANT_BUFFER_VIEW_DESC& desc) {
-    m_HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-
-    Result result = m_Device.GetDescriptorHandle(m_HeapType, m_Handle);
+    Result result = m_Device.GetDescriptorHandle(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Handle);
     if (result == Result::SUCCESS) {
         m_DescriptorPointerCPU = m_Device.GetDescriptorPointerCPU(m_Handle);
         m_Device->CreateConstantBufferView(&desc, {m_DescriptorPointerCPU});
@@ -419,9 +433,7 @@ Result DescriptorD3D12::CreateConstantBufferView(const D3D12_CONSTANT_BUFFER_VIE
 }
 
 Result DescriptorD3D12::CreateShaderResourceView(ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC& desc) {
-    m_HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-
-    Result result = m_Device.GetDescriptorHandle(m_HeapType, m_Handle);
+    Result result = m_Device.GetDescriptorHandle(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Handle);
     if (result == Result::SUCCESS) {
         m_DescriptorPointerCPU = m_Device.GetDescriptorPointerCPU(m_Handle);
         m_Device->CreateShaderResourceView(resource, &desc, {m_DescriptorPointerCPU});
@@ -432,9 +444,7 @@ Result DescriptorD3D12::CreateShaderResourceView(ID3D12Resource* resource, const
 }
 
 Result DescriptorD3D12::CreateUnorderedAccessView(ID3D12Resource* resource, const D3D12_UNORDERED_ACCESS_VIEW_DESC& desc, Format format) {
-    m_HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-
-    Result result = m_Device.GetDescriptorHandle(m_HeapType, m_Handle);
+    Result result = m_Device.GetDescriptorHandle(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Handle);
     if (result == Result::SUCCESS) {
         m_DescriptorPointerCPU = m_Device.GetDescriptorPointerCPU(m_Handle);
         m_Device->CreateUnorderedAccessView(resource, nullptr, &desc, {m_DescriptorPointerCPU});
@@ -446,9 +456,7 @@ Result DescriptorD3D12::CreateUnorderedAccessView(ID3D12Resource* resource, cons
 }
 
 Result DescriptorD3D12::CreateRenderTargetView(ID3D12Resource* resource, const D3D12_RENDER_TARGET_VIEW_DESC& desc) {
-    m_HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-
-    Result result = m_Device.GetDescriptorHandle(m_HeapType, m_Handle);
+    Result result = m_Device.GetDescriptorHandle(D3D12_DESCRIPTOR_HEAP_TYPE_RTV, m_Handle);
     if (result == Result::SUCCESS) {
         m_DescriptorPointerCPU = m_Device.GetDescriptorPointerCPU(m_Handle);
         m_Device->CreateRenderTargetView(resource, &desc, {m_DescriptorPointerCPU});
@@ -459,9 +467,7 @@ Result DescriptorD3D12::CreateRenderTargetView(ID3D12Resource* resource, const D
 }
 
 Result DescriptorD3D12::CreateDepthStencilView(ID3D12Resource* resource, const D3D12_DEPTH_STENCIL_VIEW_DESC& desc) {
-    m_HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-
-    Result result = m_Device.GetDescriptorHandle(m_HeapType, m_Handle);
+    Result result = m_Device.GetDescriptorHandle(D3D12_DESCRIPTOR_HEAP_TYPE_DSV, m_Handle);
     if (result == Result::SUCCESS) {
         m_DescriptorPointerCPU = m_Device.GetDescriptorPointerCPU(m_Handle);
         m_Device->CreateDepthStencilView(resource, &desc, {m_DescriptorPointerCPU});

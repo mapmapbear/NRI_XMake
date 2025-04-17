@@ -34,23 +34,32 @@ constexpr uint64_t Hash(const char* name) {
     return *name != 0 ? *name ^ (33 * Hash(name + 1)) : 5381;
 }
 
-#if (NRI_ENABLE_D3D11_SUPPORT || NRI_ENABLE_D3D12_SUPPORT)
+#if (NRI_ENABLE_D3D11_SUPPORT || NRI_ENABLE_D3D12_SUPPORT || NRI_ENABLE_VK_SUPPORT)
 
-static int SortAdaptersByDedicatedVideoMemorySizeD3D(const void* a, const void* b) {
-    DXGI_ADAPTER_DESC ad = {};
-    (*(IDXGIAdapter1**)a)->GetDesc(&ad);
+static int SortAdapters(const void* pa, const void* pb) {
+    constexpr uint64_t SHIFT = 60ull;
+    static_assert((uint64_t)Architecture::MAX_NUM <= 1ull << (64ull - SHIFT), "Adjust SHIFT");
 
-    DXGI_ADAPTER_DESC bd = {};
-    (*(IDXGIAdapter1**)b)->GetDesc(&bd);
+    const AdapterDesc* a = (AdapterDesc*)pa;
+    uint64_t sa = a->videoMemorySize + a->sharedSystemMemorySize;
+    sa |= (uint64_t)(a->architecture) << SHIFT;
 
-    if (ad.DedicatedVideoMemory > bd.DedicatedVideoMemory)
+    const AdapterDesc* b = (AdapterDesc*)pb;
+    uint64_t sb = b->videoMemorySize + b->sharedSystemMemorySize;
+    sb |= (uint64_t)(b->architecture) << SHIFT;
+
+    if (sa > sb)
         return -1;
 
-    if (ad.DedicatedVideoMemory < bd.DedicatedVideoMemory)
+    if (sa < sb)
         return 1;
 
     return 0;
 }
+
+#endif
+
+#if (NRI_ENABLE_D3D11_SUPPORT || NRI_ENABLE_D3D12_SUPPORT)
 
 static Result EnumerateAdaptersD3D(AdapterDesc* adapterDescs, uint32_t& adapterDescNum, uint64_t precreatedDeviceLuid, DeviceCreationDesc* deviceCreationDesc) {
     ComPtr<IDXGIFactory4> dxgifactory;
@@ -68,7 +77,7 @@ static Result EnumerateAdaptersD3D(AdapterDesc* adapterDescs, uint32_t& adapterD
 
         DXGI_ADAPTER_DESC1 desc = {};
         if (adapter->GetDesc1(&desc) == S_OK) {
-            if (desc.Flags == DXGI_ADAPTER_FLAG_NONE)
+            if (desc.Flags == DXGI_ADAPTER_FLAG_NONE) // TODO: DXGI_ADAPTER_FLAG_REMOTE, DXGI_ADAPTER_FLAG_SOFTWARE?
                 adapters[adaptersNum++] = adapter;
         }
     }
@@ -77,16 +86,12 @@ static Result EnumerateAdaptersD3D(AdapterDesc* adapterDescs, uint32_t& adapterD
         return Result::FAILURE;
 
     if (adapterDescs) {
-        qsort(adapters, adaptersNum, sizeof(adapters[0]), SortAdaptersByDedicatedVideoMemorySizeD3D);
-
-        if (adaptersNum < adapterDescNum)
-            adapterDescNum = adaptersNum;
-
-        for (uint32_t i = 0; i < adapterDescNum; i++) {
+        AdapterDesc* adapterDescsSorted = (AdapterDesc*)alloca(sizeof(AdapterDesc) * adaptersNum);
+        for (uint32_t i = 0; i < adaptersNum; i++) {
             DXGI_ADAPTER_DESC desc = {};
             adapters[i]->GetDesc(&desc);
 
-            AdapterDesc& adapterDesc = adapterDescs[i];
+            AdapterDesc& adapterDesc = adapterDescsSorted[i];
             adapterDesc = {};
             adapterDesc.luid = *(uint64_t*)&desc.AdapterLuid;
             adapterDesc.deviceId = desc.DeviceId;
@@ -123,9 +128,20 @@ static Result EnumerateAdaptersD3D(AdapterDesc* adapterDescs, uint32_t& adapterD
             adapterDesc.queueNum[(uint32_t)QueueType::GRAPHICS] = 4;
             adapterDesc.queueNum[(uint32_t)QueueType::COMPUTE] = 4;
             adapterDesc.queueNum[(uint32_t)QueueType::COPY] = 4;
+        }
+
+        // Sort by video memory size
+        qsort(adapterDescsSorted, adaptersNum, sizeof(adapterDescsSorted[0]), SortAdapters);
+
+        // Copy to output
+        if (adaptersNum < adapterDescNum)
+            adapterDescNum = adaptersNum;
+
+        for (uint32_t i = 0; i < adapterDescNum; i++) {
+            adapterDescs[i] = *adapterDescsSorted++;
 
             // Update "deviceCreationDesc"
-            if (deviceCreationDesc && precreatedDeviceLuid == adapterDesc.luid)
+            if (deviceCreationDesc && precreatedDeviceLuid == adapterDescs[i].luid)
                 deviceCreationDesc->adapterDesc = &adapterDescs[i];
         }
     } else
@@ -140,19 +156,6 @@ static Result EnumerateAdaptersD3D(AdapterDesc* adapterDescs, uint32_t& adapterD
 #endif
 
 #if NRI_ENABLE_VK_SUPPORT
-
-static int SortAdaptersByDedicatedVideoMemorySizeVK(const void* pa, const void* pb) {
-    const AdapterDesc* a = (AdapterDesc*)pa;
-    const AdapterDesc* b = (AdapterDesc*)pb;
-
-    if (a->videoMemorySize > b->videoMemorySize)
-        return -1;
-
-    if (a->videoMemorySize < b->videoMemorySize)
-        return 1;
-
-    return 0;
-}
 
 static Result EnumerateAdaptersVK(AdapterDesc* adapterDescs, uint32_t& adapterDescNum, VkPhysicalDevice precreatedPhysicalDevice, DeviceCreationDesc* deviceCreationDesc) {
     Library* loader = LoadSharedLibrary(VULKAN_LOADER_NAME);
@@ -257,7 +260,7 @@ static Result EnumerateAdaptersVK(AdapterDesc* adapterDescs, uint32_t& adapterDe
                             // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceMemoryProperties.html
                             for (uint32_t j = 0; j < memoryProperties.memoryHeapCount; j++) {
                                 // From spec: In UMA systems ... implementation must advertise the heap as device-local
-                                if ((memoryProperties.memoryHeaps[j].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0 && deviceProps.deviceType != VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) // TODO: or just put INTEGRATED into the end of the list after sorting?
+                                if ((memoryProperties.memoryHeaps[j].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0 && deviceProps.deviceType != VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
                                     adapterDesc.videoMemorySize += memoryProperties.memoryHeaps[j].size;
                                 else
                                     adapterDesc.sharedSystemMemorySize += memoryProperties.memoryHeaps[j].size;
@@ -326,7 +329,7 @@ static Result EnumerateAdaptersVK(AdapterDesc* adapterDescs, uint32_t& adapterDe
                     }
 
                     // Sort by video memory size
-                    qsort(adapterDescsSorted, deviceGroupNum, sizeof(adapterDescsSorted[0]), SortAdaptersByDedicatedVideoMemorySizeVK);
+                    qsort(adapterDescsSorted, deviceGroupNum, sizeof(adapterDescsSorted[0]), SortAdapters);
 
                     // Copy to output
                     if (deviceGroupNum < adapterDescNum)
@@ -516,6 +519,7 @@ NRI_API void NRI_CALL nriAnnotation(const char* name, uint32_t bgra) {
     eventAttrib.message.ascii = name;
 
     nvtxMarkEx(&eventAttrib);
+
 #    else
 
     // TODO: add PIX
@@ -625,6 +629,8 @@ NRI_API Result NRI_CALL nriCreateDeviceFromD3D11Device(const DeviceCreationD3D11
     // Copy what is possible to the main "desc"
     deviceCreationDesc.callbackInterface = deviceCreationD3D11Desc.callbackInterface;
     deviceCreationDesc.allocationCallbacks = deviceCreationD3D11Desc.allocationCallbacks;
+    deviceCreationDesc.d3dShaderExtRegister = deviceCreationD3D11Desc.d3dShaderExtRegister;
+    deviceCreationDesc.d3dZeroBufferSize = deviceCreationD3D11Desc.d3dZeroBufferSize;
     deviceCreationDesc.enableNRIValidation = deviceCreationD3D11Desc.enableNRIValidation;
     deviceCreationDesc.enableD3D11CommandBufferEmulation = deviceCreationD3D11Desc.enableD3D11CommandBufferEmulation;
 
@@ -682,6 +688,8 @@ NRI_API Result NRI_CALL nriCreateDeviceFromD3D12Device(const DeviceCreationD3D12
     // Copy what is possible to the main "desc"
     deviceCreationDesc.callbackInterface = deviceCreationD3D12Desc.callbackInterface;
     deviceCreationDesc.allocationCallbacks = deviceCreationD3D12Desc.allocationCallbacks;
+    deviceCreationDesc.d3dShaderExtRegister = deviceCreationD3D12Desc.d3dShaderExtRegister;
+    deviceCreationDesc.d3dZeroBufferSize = deviceCreationD3D12Desc.d3dZeroBufferSize;
     deviceCreationDesc.enableNRIValidation = deviceCreationD3D12Desc.enableNRIValidation;
 
     CheckAndSetDefaultCallbacks(deviceCreationDesc.callbackInterface);

@@ -19,6 +19,14 @@
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 1
 #define VMA_IMPLEMENTATION
 
+#ifndef NDEBUG
+#    define VMA_LEAK_LOG_FORMAT(format, ...) \
+        do { \
+            printf(format, __VA_ARGS__); \
+            printf("\n"); \
+        } while (false)
+#endif
+
 #include "vk_mem_alloc.h"
 
 #if defined(__GNUC__)
@@ -29,7 +37,6 @@
 #    pragma warning(pop)
 #endif
 
-
 Result DeviceVK::CreateVma() {
     if (m_Vma)
         return Result::SUCCESS;
@@ -39,7 +46,7 @@ Result DeviceVK::CreateVma() {
     vulkanFunctions.vkGetDeviceProcAddr = m_VK.GetDeviceProcAddr;
 
     VmaAllocatorCreateInfo allocatorCreateInfo = {};
-    allocatorCreateInfo.vulkanApiVersion = m_MinorVersion >= 3 ? VK_API_VERSION_1_3 : VK_API_VERSION_1_2;
+    allocatorCreateInfo.vulkanApiVersion = VK_MAKE_API_VERSION(0, 1, m_MinorVersion, 0);
     allocatorCreateInfo.physicalDevice = m_PhysicalDevice;
     allocatorCreateInfo.device = m_Device;
     allocatorCreateInfo.instance = m_Instance;
@@ -93,13 +100,17 @@ Result BufferVK::Create(const AllocateBufferDesc& bufferDesc) {
     const DeviceDesc& deviceDesc = m_Device.GetDesc();
     uint32_t alignment = 1;
     if (bufferDesc.desc.usage & (BufferUsageBits::SHADER_RESOURCE | BufferUsageBits::SHADER_RESOURCE_STORAGE))
-        alignment = std::max(alignment, deviceDesc.bufferShaderResourceOffsetAlignment);
+        alignment = std::max(alignment, deviceDesc.memoryAlignment.bufferShaderResourceOffset);
     if (bufferDesc.desc.usage & BufferUsageBits::CONSTANT_BUFFER)
-        alignment = std::max(alignment, deviceDesc.constantBufferOffsetAlignment);
+        alignment = std::max(alignment, deviceDesc.memoryAlignment.constantBufferOffset);
     if (bufferDesc.desc.usage & BufferUsageBits::SHADER_BINDING_TABLE)
-        alignment = std::max(alignment, deviceDesc.shaderBindingTableAlignment);
+        alignment = std::max(alignment, deviceDesc.memoryAlignment.shaderBindingTable);
     if (bufferDesc.desc.usage & BufferUsageBits::SCRATCH_BUFFER)
-        alignment = std::max(alignment, deviceDesc.scratchBufferOffsetAlignment);
+        alignment = std::max(alignment, deviceDesc.memoryAlignment.scratchBufferOffset);
+    if (bufferDesc.desc.usage & BufferUsageBits::ACCELERATION_STRUCTURE_STORAGE)
+        alignment = std::max(alignment, deviceDesc.memoryAlignment.accelerationStructureOffset);
+    if (bufferDesc.desc.usage & BufferUsageBits::MICROMAP_STORAGE)
+        alignment = std::max(alignment, deviceDesc.memoryAlignment.micromapOffset);
 
     VmaAllocationInfo allocationInfo = {};
     VkResult result = vmaCreateBufferWithAlignment(m_Device.GetVma(), &bufferCreateInfo, &allocationCreateInfo, alignment, &m_Handle, &m_VmaAllocation, &allocationInfo);
@@ -172,16 +183,42 @@ Result AccelerationStructureVK::Create(const AllocateAccelerationStructureDesc& 
     bufferDesc.desc.size = sizesInfo.accelerationStructureSize;
     bufferDesc.desc.usage = BufferUsageBits::ACCELERATION_STRUCTURE_STORAGE;
 
-    Buffer* buffer = nullptr;
-    Result result = m_Device.CreateImplementation<BufferVK>(buffer, bufferDesc);
+    Result result = m_Device.CreateImplementation<BufferVK>(m_Buffer, bufferDesc);
     if (result == Result::SUCCESS) {
-        m_Buffer = (BufferVK*)buffer;
         m_BuildScratchSize = sizesInfo.buildScratchSize;
         m_UpdateScratchSize = sizesInfo.updateScratchSize;
         m_Type = GetAccelerationStructureType(accelerationStructureDesc.desc.type);
-        m_AccelerationStructureSize = sizesInfo.accelerationStructureSize;
+        m_Flags = accelerationStructureDesc.desc.flags;
 
-        FinishCreation();
+        result = FinishCreation();
+    }
+
+    return result;
+}
+
+Result MicromapVK::Create(const AllocateMicromapDesc& micromapDesc) {
+    if (!m_Device.GetDesc().features.micromap)
+        return Result::UNSUPPORTED;
+
+    Result nriResult = m_Device.CreateVma();
+    if (nriResult != Result::SUCCESS)
+        return nriResult;
+
+    VkMicromapBuildSizesInfoEXT sizesInfo = {VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT};
+    m_Device.GetMicromapBuildSizesInfo(micromapDesc.desc, sizesInfo);
+
+    AllocateBufferDesc bufferDesc = {};
+    bufferDesc.memoryLocation = micromapDesc.memoryLocation;
+    bufferDesc.memoryPriority = micromapDesc.memoryPriority;
+    bufferDesc.desc.size = sizesInfo.micromapSize;
+    bufferDesc.desc.usage = BufferUsageBits::ACCELERATION_STRUCTURE_STORAGE;
+
+    Result result = m_Device.CreateImplementation<BufferVK>(m_Buffer, bufferDesc);
+    if (result == Result::SUCCESS) {
+        m_BuildScratchSize = sizesInfo.buildScratchSize;
+        m_Flags = micromapDesc.desc.flags;
+
+        result = FinishCreation();
     }
 
     return result;

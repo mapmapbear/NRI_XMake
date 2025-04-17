@@ -111,17 +111,17 @@ NriEnum(Format, uint8_t,
     R8_UINT,                             // +  +  +  -  -  -  +  +  +  - // SHADING_RATE compatible, see NRI_SHADING_RATE macro
     R8_SINT,                             // +  +  +  -  -  -  +  +  +  -
 
-    RG8_UNORM,                           // +  +  +  -  +  -  +  +  +  -
-    RG8_SNORM,                           // +  +  +  -  +  -  +  +  +  -
+    RG8_UNORM,                           // +  +  +  -  +  -  +  +  +  - // "AccelerationStructure" compatible (requires "tiers.rayTracing >= 2")
+    RG8_SNORM,                           // +  +  +  -  +  -  +  +  +  - // "AccelerationStructure" compatible (requires "tiers.rayTracing >= 2")
     RG8_UINT,                            // +  +  +  -  -  -  +  +  +  -
     RG8_SINT,                            // +  +  +  -  -  -  +  +  +  -
 
     BGRA8_UNORM,                         // +  +  +  -  +  -  +  +  +  -
     BGRA8_SRGB,                          // +  -  +  -  +  -  -  -  -  -
 
-    RGBA8_UNORM,                         // +  +  +  -  +  -  +  +  +  -
+    RGBA8_UNORM,                         // +  +  +  -  +  -  +  +  +  - // "AccelerationStructure" compatible (requires "tiers.rayTracing >= 2")
     RGBA8_SRGB,                          // +  -  +  -  +  -  -  -  -  -
-    RGBA8_SNORM,                         // +  +  +  -  +  -  +  +  +  -
+    RGBA8_SNORM,                         // +  +  +  -  +  -  +  +  +  - // "AccelerationStructure" compatible (requires "tiers.rayTracing >= 2")
     RGBA8_UINT,                          // +  +  +  -  -  -  +  +  +  -
     RGBA8_SINT,                          // +  +  +  -  -  -  +  +  +  -
 
@@ -132,17 +132,17 @@ NriEnum(Format, uint8_t,
     R16_SINT,                            // +  +  +  -  -  -  +  +  +  -
     R16_SFLOAT,                          // +  +  +  -  +  -  +  +  +  -
 
-    RG16_UNORM,                          // +  +  +  -  +  -  +  +  +  -
-    RG16_SNORM,                          // +  +  +  -  +  -  +  +  +  -
+    RG16_UNORM,                          // +  +  +  -  +  -  +  +  +  - // "AccelerationStructure" compatible (requires "tiers.rayTracing >= 2")
+    RG16_SNORM,                          // +  +  +  -  +  -  +  +  +  - // "AccelerationStructure" compatible
     RG16_UINT,                           // +  +  +  -  -  -  +  +  +  -
     RG16_SINT,                           // +  +  +  -  -  -  +  +  +  -
-    RG16_SFLOAT,                         // +  +  +  -  +  -  +  +  +  -
+    RG16_SFLOAT,                         // +  +  +  -  +  -  +  +  +  - // "AccelerationStructure" compatible
 
-    RGBA16_UNORM,                        // +  +  +  -  +  -  +  +  +  -
-    RGBA16_SNORM,                        // +  +  +  -  +  -  +  +  +  -
+    RGBA16_UNORM,                        // +  +  +  -  +  -  +  +  +  - // "AccelerationStructure" compatible (requires "tiers.rayTracing >= 2")
+    RGBA16_SNORM,                        // +  +  +  -  +  -  +  +  +  - // "AccelerationStructure" compatible
     RGBA16_UINT,                         // +  +  +  -  -  -  +  +  +  -
     RGBA16_SINT,                         // +  +  +  -  -  -  +  +  +  -
-    RGBA16_SFLOAT,                       // +  +  +  -  +  -  +  +  +  -
+    RGBA16_SFLOAT,                       // +  +  +  -  +  -  +  +  +  - // "AccelerationStructure" compatible
 
     // Plain: 32 bits per channel
     R32_UINT,                            // +  +  +  -  -  +  +  +  +  +
@@ -151,11 +151,11 @@ NriEnum(Format, uint8_t,
 
     RG32_UINT,                           // +  +  +  -  -  -  +  +  +  -
     RG32_SINT,                           // +  +  +  -  -  -  +  +  +  -
-    RG32_SFLOAT,                         // +  +  +  -  +  -  +  +  +  -
+    RG32_SFLOAT,                         // +  +  +  -  +  -  +  +  +  - // "AccelerationStructure" compatible
 
     RGB32_UINT,                          // +  -  -  -  -  -  +  -  +  -
     RGB32_SINT,                          // +  -  -  -  -  -  +  -  +  -
-    RGB32_SFLOAT,                        // +  -  -  -  -  -  +  -  +  -
+    RGB32_SFLOAT,                        // +  -  -  -  -  -  +  -  +  - // "AccelerationStructure" compatible
 
     RGBA32_UINT,                         // +  +  +  -  -  -  +  +  +  -
     RGBA32_SINT,                         // +  +  +  -  -  -  +  +  +  -
@@ -167,7 +167,7 @@ NriEnum(Format, uint8_t,
     B4_G4_R4_A4_UNORM,                   // +  -  +  -  +  -  -  -  -  -
 
     // Packed: 32 bits per pixel
-    R10_G10_B10_A2_UNORM,                // +  +  +  -  +  -  +  +  +  -
+    R10_G10_B10_A2_UNORM,                // +  +  +  -  +  -  +  +  +  - // "AccelerationStructure" compatible (requires "tiers.rayTracing >= 2")
     R10_G10_B10_A2_UINT,                 // +  +  +  -  -  -  +  +  +  -
     R11_G11_B10_UFLOAT,                  // +  +  +  -  +  -  +  +  +  -
     R9_G9_B9_E5_UFLOAT,                  // +  -  -  -  -  -  -  -  -  -
@@ -203,9 +203,11 @@ NriEnum(Format, uint8_t,
 
 NriBits(PlaneBits, uint8_t,
     ALL                             = 0,
-    COLOR                           = NriBit(0),
-    DEPTH                           = NriBit(1),
-    STENCIL                         = NriBit(2)
+    COLOR                           = NriBit(0), // indicates "color" plane (same as "ALL" for color formats)
+
+    // D3D11: can't be addressed individually in "copy" operations
+    DEPTH                           = NriBit(1), // indicates "depth" plane (same as "ALL" for depth-only formats)
+    STENCIL                         = NriBit(2)  // indicates "stencil" plane in depth-stencil formats
 );
 
 NriBits(FormatSupportBits, uint16_t,
@@ -254,15 +256,16 @@ NriBits(StageBits, uint32_t,
     ANY_HIT_SHADER                  = NriBit(15), //    Any hit shader
     CALLABLE_SHADER                 = NriBit(16), //    Callable shader
 
-    ACCELERATION_STRUCTURE          = NriBit(17), // Invoked by "Cmd*AccelerationStructure*"
+    ACCELERATION_STRUCTURE          = NriBit(17), // Invoked by "Cmd*AccelerationStructure*" commands
+    MICROMAP                        = NriBit(18), // Invoked by "Cmd*Micromap*" commands
 
-    // Copy
-    COPY                            = NriBit(18), // Invoked by "CmdCopy*", "CmdUpload*" and "CmdReadback*"
-    CLEAR_STORAGE                   = NriBit(19), // Invoked by "CmdClearStorage*"
+    // Other
+    COPY                            = NriBit(19), // Invoked by "CmdCopy*", "CmdUpload*" and "CmdReadback*"
     RESOLVE                         = NriBit(20), // Invoked by "CmdResolveTexture"
+    CLEAR_STORAGE                   = NriBit(21), // Invoked by "CmdClearStorage"
 
     // Modifiers
-    INDIRECT                        = NriBit(21), // Invoked by "Indirect" command (used in addition to other bits)
+    INDIRECT                        = NriBit(22), // Invoked by "Indirect" commands (used in addition to other bits)
 
     // Umbrella stages
     TESSELLATION_SHADERS            = NriMember(StageBits, TESS_CONTROL_SHADER) |
@@ -277,19 +280,17 @@ NriBits(StageBits, uint32_t,
                                       NriMember(StageBits, MESH_SHADERS) |
                                       NriMember(StageBits, FRAGMENT_SHADER),
 
-    // Invoked by "CmdDispatchRays"
+    DRAW                            = NriMember(StageBits, INDEX_INPUT) |
+                                      NriMember(StageBits, GRAPHICS_SHADERS) |
+                                      NriMember(StageBits, DEPTH_STENCIL_ATTACHMENT) |
+                                      NriMember(StageBits, COLOR_ATTACHMENT),
+
     RAY_TRACING_SHADERS             = NriMember(StageBits, RAYGEN_SHADER) |
                                       NriMember(StageBits, MISS_SHADER) |
                                       NriMember(StageBits, INTERSECTION_SHADER) |
                                       NriMember(StageBits, CLOSEST_HIT_SHADER) |
                                       NriMember(StageBits, ANY_HIT_SHADER) |
-                                      NriMember(StageBits, CALLABLE_SHADER),
-
-    // Invoked by "CmdDraw*"
-    DRAW                            = NriMember(StageBits, INDEX_INPUT) |
-                                      NriMember(StageBits, GRAPHICS_SHADERS) |
-                                      NriMember(StageBits, DEPTH_STENCIL_ATTACHMENT) |
-                                      NriMember(StageBits, COLOR_ATTACHMENT)
+                                      NriMember(StageBits, CALLABLE_SHADER)
 );
 
 // The viewport origin is top-left (D3D native) by default, but can be changed to bottom-left (VK native)
@@ -300,7 +301,7 @@ NriStruct(Viewport) {
     float height;
     float depthMin;
     float depthMax;
-    bool originBottomLeft; // expects "isViewportOriginBottomLeftSupported"
+    bool originBottomLeft; // expects "features.viewportOriginBottomLeft"
 };
 
 NriStruct(Rect) {
@@ -427,29 +428,34 @@ NriEnum(DescriptorType, uint8_t,
     ACCELERATION_STRUCTURE
 );
 
-NriBits(TextureUsageBits, uint8_t,
+NriBits(TextureUsageBits, uint8_t,                 // Min compatible access:                  Usage:
     NONE                                = 0,
-    SHADER_RESOURCE                     = NriBit(0),
-    SHADER_RESOURCE_STORAGE             = NriBit(1),
-    COLOR_ATTACHMENT                    = NriBit(2),
-    DEPTH_STENCIL_ATTACHMENT            = NriBit(3),
-    SHADING_RATE_ATTACHMENT             = NriBit(4)
+    SHADER_RESOURCE                     = NriBit(0),  // SHADER_RESOURCE                         Read-only shader resource (SRV)
+    SHADER_RESOURCE_STORAGE             = NriBit(1),  // SHADER_RESOURCE_STORAGE                 Read/write shader resource (UAV)
+    COLOR_ATTACHMENT                    = NriBit(2),  // COLOR_ATTACHMENT                        Color attachment (render target)
+    DEPTH_STENCIL_ATTACHMENT            = NriBit(3),  // DEPTH_STENCIL_ATTACHMENT_READ/WRITE     Depth-stencil attachment (depth-stencil target)
+    SHADING_RATE_ATTACHMENT             = NriBit(4)   // SHADING_RATE_ATTACHMENT                 Shading rate attachment (source)
 );
 
-NriBits(BufferUsageBits, uint16_t,
+NriBits(BufferUsageBits, uint16_t,                 // Min compatible access:                  Usage:
     NONE                                = 0,
-    SHADER_RESOURCE                     = NriBit(0),
-    SHADER_RESOURCE_STORAGE             = NriBit(1),
-    VERTEX_BUFFER                       = NriBit(2),
-    INDEX_BUFFER                        = NriBit(3),
-    CONSTANT_BUFFER                     = NriBit(4),
-    ARGUMENT_BUFFER                     = NriBit(5),
+    SHADER_RESOURCE                     = NriBit(0),  // SHADER_RESOURCE                         Read-only shader resource (SRV)
+    SHADER_RESOURCE_STORAGE             = NriBit(1),  // SHADER_RESOURCE_STORAGE                 Read/write shader resource (UAV)
+    VERTEX_BUFFER                       = NriBit(2),  // VERTEX_BUFFER                           Vertex buffer
+    INDEX_BUFFER                        = NriBit(3),  // INDEX_BUFFER                            Index buffer
+    CONSTANT_BUFFER                     = NriBit(4),  // CONSTANT_BUFFER                         Constant buffer
+    ARGUMENT_BUFFER                     = NriBit(5),  // ARGUMENT_BUFFER                         Argument buffer in "Indirect" commands
+    SCRATCH_BUFFER                      = NriBit(6),  // SCRATCH_BUFFER                          Scratch buffer in "CmdBuild*" commands
+    SHADER_BINDING_TABLE                = NriBit(7),  // SHADER_BINDING_TABLE                    Shader binding table (SBT) in "CmdDispatchRays*" commands
+    ACCELERATION_STRUCTURE_BUILD_INPUT  = NriBit(8),  // SHADER_RESOURCE                         Read-only input in "CmdBuildAccelerationStructures" command
+    ACCELERATION_STRUCTURE_STORAGE      = NriBit(9),  // ACCELERATION_STRUCTURE_READ/WRITE       (INTERNAL) acceleration structure storage
+    MICROMAP_BUILD_INPUT                = NriBit(10), // SHADER_RESOURCE                         Read-only input in "CmdBuildMicromaps" command
+    MICROMAP_STORAGE                    = NriBit(11)  // MICROMAP_READ/WRITE                     (INTERNAL) micromap storage
+);
 
-    // Ray tracing
-    SCRATCH_BUFFER                      = NriBit(6),
-    SHADER_BINDING_TABLE                = NriBit(7),
-    ACCELERATION_STRUCTURE_BUILD_INPUT  = NriBit(8), // read-only input for an acceleration structure build or update
-    ACCELERATION_STRUCTURE_STORAGE      = NriBit(9)  // (INTERNAL) acceleration structure storage
+NriBits(DescriptorPoolBits, uint8_t,
+    NONE                                = 0,
+    ALLOW_UPDATE_AFTER_SET              = NriBit(1) // allows "DescriptorSetBits::ALLOW_UPDATE_AFTER_SET"
 );
 
 // Resources
@@ -465,9 +471,13 @@ NriStruct(TextureDesc) {
     NriOptional Nri(Sample_t) sampleNum;
 };
 
+// "structureStride" values:
+// 0  = allows "typed" views
+// 4  = allows "typed", "byte address" (raw) and "structured" views (D3D11: allows to create multiple "structured" views for a single resource, disobeying the spec)
+// >4 = allows "structured" and potentially "typed" views (D3D11: locks this buffer to a single "structured" layout, no "typed" views)
 NriStruct(BufferDesc) {
     uint64_t size;
-    NriOptional uint32_t structureStride; // use 4 to allow "byte address" (raw) views
+    uint32_t structureStride;
     Nri(BufferUsageBits) usage;
 };
 
@@ -506,8 +516,9 @@ NriStruct(BufferViewDesc) {
     const NriPtr(Buffer) buffer;
     Nri(BufferViewType) viewType;
     Nri(Format) format;
-    uint64_t offset;
+    uint64_t offset; // expects "memoryAlignment.bufferShaderResourceOffset" for shader resources
     uint64_t size;
+    NriOptional uint32_t structureStride; // = structure stride from "BufferDesc" if not provided
 };
 
 // Descriptor pool
@@ -523,6 +534,7 @@ NriStruct(DescriptorPoolDesc) {
     uint32_t structuredBufferMaxNum;
     uint32_t storageStructuredBufferMaxNum;
     uint32_t accelerationStructureMaxNum;
+    Nri(DescriptorPoolBits) flags;
 };
 
 #pragma endregion
@@ -568,14 +580,26 @@ Pipeline layout example:
     RootDescriptorDesc              #1
 */
 
-// "DescriptorRange" consists of "Descriptor" entities
-NriBits(DescriptorRangeBits, uint8_t,
-    NONE                    = 0,
-    PARTIALLY_BOUND         = NriBit(0), // descriptors in range may not contain valid descriptors at the time the descriptors are consumed (but referenced descriptors must be valid)
-    ARRAY                   = NriBit(1), // descriptors in range are organized into an array
-    VARIABLE_SIZED_ARRAY    = NriBit(2)  // descriptors in range are organized into a variable-sized array, whose size is specified via "variableDescriptorNum" argument of "AllocateDescriptorSets" function
+NriBits(PipelineLayoutBits, uint8_t,
+    NONE                                    = 0,
+    IGNORE_GLOBAL_SPIRV_OFFSETS             = NriBit(0),
+    ENABLE_D3D12_DRAW_PARAMETERS_EMULATION  = NriBit(1)  // (D3D12 only) enable draw parameters emulation, not needed if all vertex shaders for this layout compiled with SM 6.8 (native support)
 );
 
+NriBits(DescriptorSetBits, uint8_t,
+    NONE                                    = 0,
+    ALLOW_UPDATE_AFTER_SET                  = NriBit(1)  // allows "DescriptorRangeBits::ALLOW_UPDATE_AFTER_SET"
+);
+
+NriBits(DescriptorRangeBits, uint8_t,
+    NONE                                    = 0,
+    PARTIALLY_BOUND                         = NriBit(0), // descriptors in range may not contain valid descriptors at the time the descriptors are consumed (but referenced descriptors must be valid)
+    ARRAY                                   = NriBit(1), // descriptors in range are organized into an array
+    VARIABLE_SIZED_ARRAY                    = NriBit(2), // descriptors in range are organized into a variable-sized array, which size is specified via "variableDescriptorNum" argument of "AllocateDescriptorSets" function
+    ALLOW_UPDATE_AFTER_SET                  = NriBit(3)  // descriptors in range can be updated after "CmdSetDescriptorSet" but before "QueueSubmit", also works as "DATA_VOLATILE"
+);
+
+// "DescriptorRange" consists of "Descriptor" entities
 NriStruct(DescriptorRangeDesc) {
     uint32_t baseRegisterIndex;
     uint32_t descriptorNum; // treated as max size if "VARIABLE_SIZED_ARRAY" flag is set
@@ -596,6 +620,7 @@ NriStruct(DescriptorSetDesc) {
     uint32_t rangeNum;
     const NriPtr(DynamicConstantBufferDesc) dynamicConstantBuffers; // a dynamic constant buffer allows to dynamically specify an offset in the buffer via "CmdSetDescriptorSet" call
     uint32_t dynamicConstantBufferNum;
+    Nri(DescriptorSetBits) flags;
 };
 
 // "PipelineLayout" consists of "DescriptorSet" descriptions and root parameters
@@ -620,8 +645,7 @@ NriStruct(PipelineLayoutDesc) {
     const NriPtr(DescriptorSetDesc) descriptorSets;
     uint32_t descriptorSetNum;
     Nri(StageBits) shaderStages;
-    bool ignoreGlobalSPIRVOffsets;
-    bool enableD3D12DrawParametersEmulation; // enable draw parameters emulation, not needed if all vertex shaders for this layout compiled with SM 6.8 (native support)
+    Nri(PipelineLayoutBits) flags;
 };
 
 // Updating descriptors
@@ -700,7 +724,6 @@ NriStruct(VertexAttributeDesc) {
 };
 
 NriStruct(VertexStreamDesc) {
-    uint16_t stride; // TODO: the code is ready to accept "stride" as a dynamic parameter of "CmdSetVertexBuffers"
     uint16_t bindingSlot;
     Nri(VertexStreamStepRate) stepRate;
 };
@@ -710,6 +733,12 @@ NriStruct(VertexInputDesc) {
     uint8_t attributeNum;
     const NriPtr(VertexStreamDesc) streams;
     uint8_t streamNum;
+};
+
+NriStruct(VertexBufferDesc) {
+    const NriPtr(Buffer) buffer;
+    uint64_t offset;
+    uint32_t stride;
 };
 
 #pragma endregion
@@ -735,18 +764,21 @@ NriEnum(ShadingRate, uint8_t,
     FRAGMENT_SIZE_2X1,
     FRAGMENT_SIZE_2X2,
 
-    // Require "isAdditionalShadingRatesSupported"
+    // Require "features.additionalShadingRates"
     FRAGMENT_SIZE_2X4,
     FRAGMENT_SIZE_4X2,
     FRAGMENT_SIZE_4X4
 );
 
+//     "primitiveCombiner"      "attachmentCombiner"
+// A   Pipeline shading rate    Result of Op1
+// B   Primitive shading rate   Attachment shading rate
 NriEnum(ShadingRateCombiner, uint8_t,
-    REPLACE,
-    KEEP,
-    MIN,
-    MAX,
-    SUM
+    KEEP,       // A
+    REPLACE,    // B
+    MIN,        // min(A, B)
+    MAX,        // max(A, B)
+    SUM         // (A + B) or (A * B)
 );
 
 /*
@@ -773,16 +805,16 @@ NriStruct(RasterizationDesc) {
     Nri(CullMode) cullMode;
     bool frontCounterClockwise;
     bool depthClamp;
-    bool lineSmoothing;         // requires "isLineSmoothingSupported"
-    bool conservativeRaster;    // requires "conservativeRasterTier != 0"
-    bool shadingRate;           // requires "shadingRateTier != 0", expects "CmdSetShadingRate" and optionally "AttachmentsDesc::shadingRate"
+    bool lineSmoothing;         // requires "features.lineSmoothing"
+    bool conservativeRaster;    // requires "tiers.conservativeRaster != 0"
+    bool shadingRate;           // requires "tiers.shadingRate != 0", expects "CmdSetShadingRate" and optionally "AttachmentsDesc::shadingRate"
 };
 
 NriStruct(MultisampleDesc) {
     uint32_t sampleMask;
     Nri(Sample_t) sampleNum;
     bool alphaToCoverage;
-    bool sampleLocations; // requires "sampleLocationsTier != 0", expects "CmdSetSampleLocations"
+    bool sampleLocations; // requires "tiers.sampleLocations != 0", expects "CmdSetSampleLocations"
 };
 
 NriStruct(ShadingRateDesc) {
@@ -798,9 +830,14 @@ NriStruct(ShadingRateDesc) {
 //============================================================================================================================================================================================
 
 NriEnum(Multiview, uint8_t,
-    FLEXIBLE,                   // destination "viewport" and/or "layer" must be set in shaders explicitly, "viewMask" for rendering can be < than the one used for pipeline creation (D3D12 style)
-    LAYER_BASED,                // view instances go to statically assigned corresponding attachment layers, "viewMask" for rendering must match the one used for pipeline creation (VK style)
-    VIEWPORT_BASED              // view instances go to statically assigned corresponding viewports, "viewMask" for pipeline creation is unused (D3D11 style)
+    // Destination "viewport" and/or "layer" must be set in shaders explicitly, "viewMask" for rendering can be < than the one used for pipeline creation (D3D12 style)
+    FLEXIBLE,                   // requires "features.flexibleMultiview"
+
+    // View instances go to statically assigned corresponding attachment layers, "viewMask" for rendering must match the one used for pipeline creation (VK style)
+    LAYER_BASED,                // requires "features.layerBasedMultiview"
+
+    // View instances go to statically assigned corresponding viewports, "viewMask" for pipeline creation is unused (D3D11 style)
+    VIEWPORT_BASED              // requires "features.viewportBasedMultiview"
 );
 
 // S - source color 0
@@ -936,12 +973,12 @@ NriStruct(ColorAttachmentDesc) {
 NriStruct(DepthAttachmentDesc) {
     Nri(CompareFunc) compareFunc;
     bool write;
-    bool boundsTest; // requires "isDepthBoundsTestSupported", expects "CmdSetDepthBounds"
+    bool boundsTest; // requires "features.depthBoundsTest", expects "CmdSetDepthBounds"
 };
 
 NriStruct(StencilAttachmentDesc) {
     Nri(StencilDesc) front;
-    Nri(StencilDesc) back; // requires "isIndependentFrontAndBackStencilReferenceAndMasksSupported" for "back.writeMask"
+    Nri(StencilDesc) back; // requires "features.independentFrontAndBackStencilReferenceAndMasks" for "back.writeMask"
 };
 
 NriStruct(OutputMergerDesc) {
@@ -950,14 +987,14 @@ NriStruct(OutputMergerDesc) {
     Nri(DepthAttachmentDesc) depth;
     Nri(StencilAttachmentDesc) stencil;
     Nri(Format) depthStencilFormat;
-    Nri(LogicFunc) logicFunc; // requires "isLogicFuncSupported"
+    Nri(LogicFunc) logicFunc; // requires "features.logicFunc"
     NriOptional uint32_t viewMask; // if non-0, requires "viewMaxNum > 1"
-    NriOptional Nri(Multiview) multiview; // if viewMask != 0, requires "is(multiview)MultiviewSupported"
+    NriOptional Nri(Multiview) multiview; // if viewMask != 0, requires "features.(xxx)Multiview"
 };
 
 NriStruct(AttachmentsDesc) {
     NriOptional const NriPtr(Descriptor) depthStencil;
-    NriOptional const NriPtr(Descriptor) shadingRate; // requires "shadingRateTier >= 2"
+    NriOptional const NriPtr(Descriptor) shadingRate; // requires "tiers.shadingRate >= 2"
     const NriPtr(Descriptor) const* colors;
     uint32_t colorNum;
     NriOptional uint32_t viewMask;
@@ -994,7 +1031,7 @@ NriStruct(AddressModes) {
 
 NriStruct(Filters) {
     Nri(Filter) min, mag, mip;
-    Nri(FilterExt) ext; // requires "isTextureFilterMinMaxSupported"
+    Nri(FilterExt) ext; // requires "features.textureFilterMinMax"
 };
 
 NriStruct(SamplerDesc) {
@@ -1015,7 +1052,7 @@ NriStruct(SamplerDesc) {
 #pragma region [ Pipeline ]
 //============================================================================================================================================================================================
 
-// It's recommended to use "NRICompatibility.hlsli" in the shader code
+// It's recommended to use "NRI.hlsl" in the shader code
 NriStruct(ShaderDesc) {
     Nri(StageBits) stage;
     const void* bytecode;
@@ -1048,30 +1085,50 @@ NriStruct(ComputePipelineDesc) {
 //============================================================================================================================================================================================
 
 // If AgilitySDK is not available, "UNKNOWN" will be silently mapped to "COMMON", leading to discrepancies with VK
-NriBits(AccessBits, uint16_t,                       // Compatible "StageBits" (including ALL):
+NriBits(AccessBits, uint32_t,                 // Compatible "StageBits" (including ALL):
     UNKNOWN                         = 0,
-    INDEX_BUFFER                    = NriBit(0),    // INDEX_INPUT
-    VERTEX_BUFFER                   = NriBit(1),    // VERTEX_SHADER
-    CONSTANT_BUFFER                 = NriBit(2),    // GRAPHICS_SHADERS, COMPUTE_SHADER, RAY_TRACING_SHADERS
-    SHADER_RESOURCE                 = NriBit(3),    // GRAPHICS_SHADERS, COMPUTE_SHADER, RAY_TRACING_SHADERS
-    SHADER_RESOURCE_STORAGE         = NriBit(4),    // GRAPHICS_SHADERS, COMPUTE_SHADER, RAY_TRACING_SHADERS, CLEAR_STORAGE
-    ARGUMENT_BUFFER                 = NriBit(5),    // INDIRECT
-    COLOR_ATTACHMENT                = NriBit(6),    // COLOR_ATTACHMENT
-    DEPTH_STENCIL_ATTACHMENT_WRITE  = NriBit(7),    // DEPTH_STENCIL_ATTACHMENT
-    DEPTH_STENCIL_ATTACHMENT_READ   = NriBit(8),    // DEPTH_STENCIL_ATTACHMENT
-    COPY_SOURCE                     = NriBit(9),    // COPY
-    COPY_DESTINATION                = NriBit(10),   // COPY
-    RESOLVE_SOURCE                  = NriBit(11),   // RESOLVE
-    RESOLVE_DESTINATION             = NriBit(12),   // RESOLVE
-    ACCELERATION_STRUCTURE_READ     = NriBit(13),   // COMPUTE_SHADER, RAY_TRACING_SHADERS, ACCELERATION_STRUCTURE
-    ACCELERATION_STRUCTURE_WRITE    = NriBit(14),   // COMPUTE_SHADER, RAY_TRACING_SHADERS, ACCELERATION_STRUCTURE
-    SHADING_RATE_ATTACHMENT         = NriBit(15)    // FRAGMENT_SHADER
+
+    // Buffer
+    INDEX_BUFFER                    = NriBit(0),  // INDEX_INPUT
+    VERTEX_BUFFER                   = NriBit(1),  // VERTEX_SHADER
+    CONSTANT_BUFFER                 = NriBit(2),  // GRAPHICS_SHADERS, COMPUTE_SHADER, RAY_TRACING_SHADERS
+    ARGUMENT_BUFFER                 = NriBit(3),  // INDIRECT
+    SCRATCH_BUFFER                  = NriBit(4),  // ACCELERATION_STRUCTURE, MICROMAP
+
+    // Attachment
+    COLOR_ATTACHMENT                = NriBit(5),  // COLOR_ATTACHMENT
+    SHADING_RATE_ATTACHMENT         = NriBit(6),  // FRAGMENT_SHADER
+    DEPTH_STENCIL_ATTACHMENT_READ   = NriBit(7),  // DEPTH_STENCIL_ATTACHMENT
+    DEPTH_STENCIL_ATTACHMENT_WRITE  = NriBit(8),  // DEPTH_STENCIL_ATTACHMENT
+
+    // Acceleration structure
+    ACCELERATION_STRUCTURE_READ     = NriBit(9),  // COMPUTE_SHADER, RAY_TRACING_SHADERS, ACCELERATION_STRUCTURE
+    ACCELERATION_STRUCTURE_WRITE    = NriBit(10), // ACCELERATION_STRUCTURE
+
+    // Micromap
+    MICROMAP_READ                   = NriBit(11), // MICROMAP, ACCELERATION_STRUCTURE
+    MICROMAP_WRITE                  = NriBit(12), // MICROMAP
+
+    // Shader resource
+    SHADER_RESOURCE                 = NriBit(13), // GRAPHICS_SHADERS, COMPUTE_SHADER, RAY_TRACING_SHADERS
+    SHADER_RESOURCE_STORAGE         = NriBit(14), // GRAPHICS_SHADERS, COMPUTE_SHADER, RAY_TRACING_SHADERS, CLEAR_STORAGE
+    SHADER_BINDING_TABLE            = NriBit(15), // RAY_TRACING_SHADERS
+
+    // Copy
+    COPY_SOURCE                     = NriBit(16), // COPY
+    COPY_DESTINATION                = NriBit(17), // COPY
+
+    // Resolve
+    RESOLVE_SOURCE                  = NriBit(18), // RESOLVE
+    RESOLVE_DESTINATION             = NriBit(19)  // RESOLVE
 );
 
-// Not used if "isEnchancedBarrierSupported" is "false", i.e. no AgilitySDK
-NriEnum(Layout, uint8_t,        // Compatible "AccessBits":
+// Not used if "features.enchancedBarrier" is "0"
+NriEnum(Layout, uint8_t,    // Compatible "AccessBits":
     UNKNOWN,
+    PRESENT,                    // UNKNOWN
     COLOR_ATTACHMENT,           // COLOR_ATTACHMENT
+    SHADING_RATE_ATTACHMENT,    // SHADING_RATE_ATTACHMENT
     DEPTH_STENCIL_ATTACHMENT,   // DEPTH_STENCIL_ATTACHMENT_WRITE
     DEPTH_STENCIL_READONLY,     // DEPTH_STENCIL_ATTACHMENT_READ, SHADER_RESOURCE
     SHADER_RESOURCE,            // SHADER_RESOURCE
@@ -1079,9 +1136,7 @@ NriEnum(Layout, uint8_t,        // Compatible "AccessBits":
     COPY_SOURCE,                // COPY_SOURCE
     COPY_DESTINATION,           // COPY_DESTINATION
     RESOLVE_SOURCE,             // RESOLVE_SOURCE
-    RESOLVE_DESTINATION,        // RESOLVE_DESTINATION
-    PRESENT,                    // UNKNOWN
-    SHADING_RATE_ATTACHMENT     // SHADING_RATE_ATTACHMENT
+    RESOLVE_DESTINATION         // RESOLVE_DESTINATION
 );
 
 NriStruct(AccessStage) {
@@ -1142,6 +1197,7 @@ NriStruct(TextureRegionDesc) {
     Nri(Dim_t) depth;
     Nri(Mip_t) mipOffset;
     Nri(Dim_t) layerOffset;
+    Nri(PlaneBits) planes;
 };
 
 NriStruct(TextureDataLayoutDesc) {
@@ -1181,48 +1237,56 @@ NriStruct(AllocateMemoryDesc) {
 };
 
 NriStruct(BufferMemoryBindingDesc) {
-    NriPtr(Memory) memory;
     NriPtr(Buffer) buffer;
+    NriPtr(Memory) memory;
     uint64_t offset;
 };
 
 NriStruct(TextureMemoryBindingDesc) {
-    NriPtr(Memory) memory;
     NriPtr(Texture) texture;
+    NriPtr(Memory) memory;
     uint64_t offset;
 };
 
 // Clear storage
-NriStruct(ClearStorageBufferDesc) {
-    const NriPtr(Descriptor) storageBuffer;
-    uint32_t value;
+NriStruct(ClearStorageDesc) {
+    // For any buffers and textures with integer formats:
+    //  - Clears a storage view with bit-precise values, copying the lower "N" bits from "value.[f/ui/i].channel"
+    //    to the corresponding channel, where "N" is the number of bits in the "channel" of the resource format
+    // For textures with non-integer formats:
+    //  - Clears a storage view with float values with format conversion from "FLOAT" to "UNORM/SNORM" where appropriate
+    // For buffers:
+    //  - To avoid discrepancies in behavior between GAPIs use "R32f/ui/i" formats for views
+    //  - D3D: structured buffers are unsupported!
+    const NriPtr(Descriptor) storage; // a "STORAGE" descriptor
+    Nri(Color) value; // avoid overflow
     uint32_t setIndex;
     uint32_t rangeIndex;
     uint32_t descriptorIndex;
 };
 
-NriStruct(ClearStorageTextureDesc) {
-    const NriPtr(Descriptor) storageTexture;
-    Nri(ClearValue) value;
-    uint32_t setIndex;
-    uint32_t rangeIndex;
-    uint32_t descriptorIndex;
-};
+#pragma endregion
+
+//============================================================================================================================================================================================
+#pragma region [ Command signatures ]
+//============================================================================================================================================================================================
+
+// To fill commands for indirect drawing in a shader use one of "NRI_FILL_X_DESC" macros
 
 // Command signatures (default)
-// To fill commands for indirect drawing in a shader use one of "NRI_FILL_X_DESC" macros
+
 NriStruct(DrawDesc) { // see NRI_FILL_DRAW_COMMAND
     uint32_t vertexNum;
     uint32_t instanceNum;
-    uint32_t baseVertex; // vertex buffer offset = CmdSetVertexBuffers.offset + baseVertex * VertexStreamDesc::stride
+    uint32_t baseVertex;                    // vertex buffer offset = CmdSetVertexBuffers.offset + baseVertex * VertexStreamDesc::stride
     uint32_t baseInstance;
 };
 
-NriStruct(DrawIndexedDesc) { // see NRI_FILL_DRAW_INDEXED_COMMAND
+NriStruct(DrawIndexedDesc) {                // see NRI_FILL_DRAW_INDEXED_COMMAND
     uint32_t indexNum;
     uint32_t instanceNum;
-    uint32_t baseIndex; // index buffer offset = CmdSetIndexBuffer.offset + baseIndex * sizeof(CmdSetIndexBuffer.indexType)
-    int32_t baseVertex; // index += baseVertex
+    uint32_t baseIndex;                     // index buffer offset = CmdSetIndexBuffer.offset + baseIndex * sizeof(CmdSetIndexBuffer.indexType)
+    int32_t baseVertex;                     // index += baseVertex
     uint32_t baseInstance;
 };
 
@@ -1231,25 +1295,27 @@ NriStruct(DispatchDesc) {
 };
 
 // Modified draw command signatures (D3D12 only)
-//  If "DeviceDesc::isDrawParametersEmulationEnabled = true" (emulation globally enabled and allowed) and if a shader has "PipelineLayout::enableDrawParametersEmulation = true" (emulation requested)
+
+//  If the bound pipeline layout has "PipelineLayoutBits::ENABLE_D3D12_DRAW_PARAMETERS_EMULATION" (emulation requested)
 //  - the following structs must be used instead
-// - "NRI_ENABLE_DRAW_PARAMETERS_EMULATION" must be defined prior inclusion of "NRICompatibility.hlsli"
+// - "NRI_ENABLE_DRAW_PARAMETERS_EMULATION" must be defined prior inclusion of "NRI.hlsl"
+
 NriStruct(DrawBaseDesc) { // see NRI_FILL_DRAW_COMMAND
-    uint32_t shaderEmulatedBaseVertex; // root constant
-    uint32_t shaderEmulatedBaseInstance; // root constant
+    uint32_t shaderEmulatedBaseVertex;      // root constant
+    uint32_t shaderEmulatedBaseInstance;    // root constant
     uint32_t vertexNum;
     uint32_t instanceNum;
-    uint32_t baseVertex; // vertex buffer offset = CmdSetVertexBuffers.offset + baseVertex * VertexStreamDesc::stride
+    uint32_t baseVertex;                    // vertex buffer offset = CmdSetVertexBuffers.offset + baseVertex * VertexStreamDesc::stride
     uint32_t baseInstance;
 };
 
 NriStruct(DrawIndexedBaseDesc) { // see NRI_FILL_DRAW_INDEXED_COMMAND
-    int32_t shaderEmulatedBaseVertex; // root constant
-    uint32_t shaderEmulatedBaseInstance; // root constant
+    int32_t shaderEmulatedBaseVertex;       // root constant
+    uint32_t shaderEmulatedBaseInstance;    // root constant
     uint32_t indexNum;
     uint32_t instanceNum;
-    uint32_t baseIndex; // index buffer offset = CmdSetIndexBuffer.offset + baseIndex * sizeof(CmdSetIndexBuffer.indexType)
-    int32_t baseVertex; // index += baseVertex
+    uint32_t baseIndex;                     // index buffer offset = CmdSetIndexBuffer.offset + baseIndex * sizeof(CmdSetIndexBuffer.indexType)
+    int32_t baseVertex;                     // index += baseVertex
     uint32_t baseInstance;
 };
 
@@ -1260,11 +1326,13 @@ NriStruct(DrawIndexedBaseDesc) { // see NRI_FILL_DRAW_INDEXED_COMMAND
 //============================================================================================================================================================================================
 
 NriEnum(QueryType, uint8_t,
-    TIMESTAMP,
-    TIMESTAMP_COPY_QUEUE, // requires "isCopyQueueTimestampSupported"
-    OCCLUSION,
-    PIPELINE_STATISTICS,
-    ACCELERATION_STRUCTURE_COMPACTED_SIZE
+    TIMESTAMP,                              // uint64_t
+    TIMESTAMP_COPY_QUEUE,                   // uint64_t, requires "features.copyQueueTimestamp"
+    OCCLUSION,                              // uint64_t
+    PIPELINE_STATISTICS,                    // see "PipelineStatisticsDesc"
+    ACCELERATION_STRUCTURE_SIZE,            // uint64_t
+    ACCELERATION_STRUCTURE_COMPACTED_SIZE,  // uint64_t
+    MICROMAP_COMPACTED_SIZE                 // uint64_t
 );
 
 NriStruct(QueryPoolDesc) {
@@ -1273,7 +1341,6 @@ NriStruct(QueryPoolDesc) {
 };
 
 // Data layout for QueryType::PIPELINE_STATISTICS
-// Never used, only describes the data layout for various cases
 NriStruct(PipelineStatisticsDesc) {
     // Common part
     uint64_t inputVertexNum;
@@ -1288,11 +1355,11 @@ NriStruct(PipelineStatisticsDesc) {
     uint64_t tessEvaluationShaderInvocationNum;
     uint64_t computeShaderInvocationNum;
 
-    // If "isMeshShaderPipelineStatsSupported"
+    // If "features.meshShaderPipelineStats"
     uint64_t meshControlShaderInvocationNum;
     uint64_t meshEvaluationShaderInvocationNum;
 
-    // If "isMeshShaderPipelineStatsSupported" and D3D12
+    // If "features.meshShaderPipelineStats" and D3D12
     uint64_t meshEvaluationShaderPrimitiveNum;
 };
 
@@ -1310,9 +1377,9 @@ NriEnum(Vendor, uint8_t,
 );
 
 NriEnum(Architecture, uint8_t,
-    UNKNOWN,
-    DESCRETE,
-    INTEGRATED // UMA
+    UNKNOWN,    // CPU device, virtual GPU or other
+    INTEGRATED, // UMA
+    DESCRETE    // yes, please!
 );
 
 NriEnum(QueueType, uint8_t,
@@ -1334,216 +1401,289 @@ NriStruct(AdapterDesc) {
 
 NriStruct(DeviceDesc) {
     // Common
-    Nri(AdapterDesc) adapterDesc; // "queueNum" reflects available number of queues
+    Nri(AdapterDesc) adapterDesc; // "queueNum" reflects available number of queues per "QueueType"
     Nri(GraphicsAPI) graphicsAPI;
     uint16_t nriVersionMajor;
     uint16_t nriVersionMinor;
+    uint8_t shaderModel; // major * 10 + minor
 
-    // Viewports
-    uint32_t viewportMaxNum;
-    int32_t viewportBoundsRange[2];
+    // Viewport
+    struct {
+        uint32_t maxNum;
+        int16_t boundsMin;
+        int16_t boundsMax;
+    } viewport;
 
-    // Attachments
-    Nri(Dim_t) attachmentMaxDim;
-    Nri(Dim_t) attachmentLayerMaxNum;
-    Nri(Dim_t) colorAttachmentMaxNum;
+    // Multisampling
+    struct {
+        Nri(Sample_t) zeroAttachmentsSampleMaxNum;
+        Nri(Sample_t) attachmentColorSampleMaxNum;
+        Nri(Sample_t) attachmentDepthSampleMaxNum;
+        Nri(Sample_t) attachmentStencilSampleMaxNum;
+        Nri(Sample_t) textureColorSampleMaxNum;
+        Nri(Sample_t) textureDepthSampleMaxNum;
+        Nri(Sample_t) textureStencilSampleMaxNum;
+        Nri(Sample_t) textureIntegerSampleMaxNum;
+        Nri(Sample_t) storageTextureSampleMaxNum;
+    } multisampling;
 
-    // Multi-sampling
-    Nri(Sample_t) colorSampleMaxNum;
-    Nri(Sample_t) depthSampleMaxNum;
-    Nri(Sample_t) stencilSampleMaxNum;
-    Nri(Sample_t) zeroAttachmentsSampleMaxNum;
-    Nri(Sample_t) textureColorSampleMaxNum;
-    Nri(Sample_t) textureIntegerSampleMaxNum;
-    Nri(Sample_t) textureDepthSampleMaxNum;
-    Nri(Sample_t) textureStencilSampleMaxNum;
-    Nri(Sample_t) storageTextureSampleMaxNum;
+    // Dimensions
+    struct {
+        uint32_t typedBufferMaxDim;
+        Nri(Dim_t) attachmentMaxDim;
+        Nri(Dim_t) attachmentLayerMaxNum;
+        Nri(Dim_t) texture1DMaxDim;
+        Nri(Dim_t) texture2DMaxDim;
+        Nri(Dim_t) texture3DMaxDim;
+        Nri(Dim_t) textureLayerMaxNum;
+    } dimensions;
 
-    // Resource dimensions
-    Nri(Dim_t) texture1DMaxDim;
-    Nri(Dim_t) texture2DMaxDim;
-    Nri(Dim_t) texture3DMaxDim;
-    Nri(Dim_t) textureArrayLayerMaxNum;
-    uint32_t typedBufferMaxDim;
+    // Precision bits
+    struct {
+        uint32_t viewportBits;
+        uint32_t subPixelBits;
+        uint32_t subTexelBits;
+        uint32_t mipmapBits;
+    } precision;
 
     // Memory
-    uint64_t deviceUploadHeapSize; // ReBAR
-    uint32_t memoryAllocationMaxNum;
-    uint32_t samplerAllocationMaxNum;
-    uint32_t constantBufferMaxRange;
-    uint32_t storageBufferMaxRange;
-    uint32_t bufferTextureGranularity;
-    uint64_t bufferMaxSize;
+    struct {
+        uint64_t deviceUploadHeapSize; // ReBAR
+        uint32_t allocationMaxNum;
+        uint32_t samplerAllocationMaxNum;
+        uint32_t constantBufferMaxRange;
+        uint32_t storageBufferMaxRange;
+        uint32_t bufferTextureGranularity;
+        uint64_t bufferMaxSize;
+    } memory;
 
     // Memory alignment
-    uint32_t uploadBufferTextureRowAlignment;
-    uint32_t uploadBufferTextureSliceAlignment;
-    uint32_t bufferShaderResourceOffsetAlignment;
-    uint32_t constantBufferOffsetAlignment;
-    uint32_t scratchBufferOffsetAlignment;
-    uint32_t shaderBindingTableAlignment;
+    struct {
+        uint32_t uploadBufferTextureRow;
+        uint32_t uploadBufferTextureSlice;
+        uint32_t shaderBindingTable;
+        uint32_t bufferShaderResourceOffset;
+        uint32_t constantBufferOffset;
+        uint32_t scratchBufferOffset;
+        uint32_t accelerationStructureOffset;
+        uint32_t micromapOffset;
+    } memoryAlignment;
 
     // Pipeline layout
     // D3D12 only: rootConstantSize + descriptorSetNum * 4 + rootDescriptorNum * 8 <= 256 (see "FitPipelineLayoutSettingsIntoDeviceLimits")
-    uint32_t pipelineLayoutDescriptorSetMaxNum;
-    uint32_t pipelineLayoutRootConstantMaxSize;
-    uint32_t pipelineLayoutRootDescriptorMaxNum;
+    struct {
+        uint32_t descriptorSetMaxNum;
+        uint32_t rootConstantMaxSize;
+        uint32_t rootDescriptorMaxNum;
+    } pipelineLayout;
 
     // Descriptor set
-    uint32_t descriptorSetSamplerMaxNum;
-    uint32_t descriptorSetConstantBufferMaxNum;
-    uint32_t descriptorSetStorageBufferMaxNum;
-    uint32_t descriptorSetTextureMaxNum;
-    uint32_t descriptorSetStorageTextureMaxNum;
+    struct {
+        uint32_t samplerMaxNum;
+        uint32_t constantBufferMaxNum;
+        uint32_t storageBufferMaxNum;
+        uint32_t textureMaxNum;
+        uint32_t storageTextureMaxNum;
 
-    // Shader resources
-    uint32_t perStageDescriptorSamplerMaxNum;
-    uint32_t perStageDescriptorConstantBufferMaxNum;
-    uint32_t perStageDescriptorStorageBufferMaxNum;
-    uint32_t perStageDescriptorTextureMaxNum;
-    uint32_t perStageDescriptorStorageTextureMaxNum;
-    uint32_t perStageResourceMaxNum;
+        struct {
+            uint32_t samplerMaxNum;
+            uint32_t constantBufferMaxNum;
+            uint32_t storageBufferMaxNum;
+            uint32_t textureMaxNum;
+            uint32_t storageTextureMaxNum;
+        } updateAfterSet;
+    } descriptorSet;
 
-    // Vertex shader
-    uint32_t vertexShaderAttributeMaxNum;
-    uint32_t vertexShaderStreamMaxNum;
-    uint32_t vertexShaderOutputComponentMaxNum;
+    // Shader stages
+    struct {
+        // Per stage resources
+        uint32_t descriptorSamplerMaxNum;
+        uint32_t descriptorConstantBufferMaxNum;
+        uint32_t descriptorStorageBufferMaxNum;
+        uint32_t descriptorTextureMaxNum;
+        uint32_t descriptorStorageTextureMaxNum;
+        uint32_t resourceMaxNum;
 
-    // Tessellation shaders
-    float tessControlShaderGenerationMaxLevel;
-    uint32_t tessControlShaderPatchPointMaxNum;
-    uint32_t tessControlShaderPerVertexInputComponentMaxNum;
-    uint32_t tessControlShaderPerVertexOutputComponentMaxNum;
-    uint32_t tessControlShaderPerPatchOutputComponentMaxNum;
-    uint32_t tessControlShaderTotalOutputComponentMaxNum;
-    uint32_t tessEvaluationShaderInputComponentMaxNum;
-    uint32_t tessEvaluationShaderOutputComponentMaxNum;
+        struct {
+            uint32_t descriptorSamplerMaxNum;
+            uint32_t descriptorConstantBufferMaxNum;
+            uint32_t descriptorStorageBufferMaxNum;
+            uint32_t descriptorTextureMaxNum;
+            uint32_t descriptorStorageTextureMaxNum;
+            uint32_t resourceMaxNum;
+        } updateAfterSet;
 
-    // Geometry shader
-    uint32_t geometryShaderInvocationMaxNum;
-    uint32_t geometryShaderInputComponentMaxNum;
-    uint32_t geometryShaderOutputComponentMaxNum;
-    uint32_t geometryShaderOutputVertexMaxNum;
-    uint32_t geometryShaderTotalOutputComponentMaxNum;
+        // Vertex
+        struct {
+            uint32_t attributeMaxNum;
+            uint32_t streamMaxNum;
+            uint32_t outputComponentMaxNum;
+        } vertex;
 
-    // Fragment shader
-    uint32_t fragmentShaderInputComponentMaxNum;
-    uint32_t fragmentShaderOutputAttachmentMaxNum;
-    uint32_t fragmentShaderDualSourceAttachmentMaxNum;
+        // Tessellation control
+        struct {
+            float generationMaxLevel;
+            uint32_t patchPointMaxNum;
+            uint32_t perVertexInputComponentMaxNum;
+            uint32_t perVertexOutputComponentMaxNum;
+            uint32_t perPatchOutputComponentMaxNum;
+            uint32_t totalOutputComponentMaxNum;
+        } tesselationControl;
 
-    // Compute shader
-    uint32_t computeShaderSharedMemoryMaxSize;
-    uint32_t computeShaderWorkGroupMaxNum[3];
-    uint32_t computeShaderWorkGroupInvocationMaxNum;
-    uint32_t computeShaderWorkGroupMaxDim[3];
+        // Tessellation evaluation
+        struct {
+            uint32_t inputComponentMaxNum;
+            uint32_t outputComponentMaxNum;
+        } tesselationEvaluation;
 
-    // Ray tracing
-    uint32_t rayTracingShaderGroupIdentifierSize;
-    uint32_t rayTracingShaderTableMaxStride;
-    uint32_t rayTracingShaderRecursionMaxDepth;
-    uint32_t rayTracingGeometryObjectMaxNum;
+        // Geometry
+        struct {
+            uint32_t invocationMaxNum;
+            uint32_t inputComponentMaxNum;
+            uint32_t outputComponentMaxNum;
+            uint32_t outputVertexMaxNum;
+            uint32_t totalOutputComponentMaxNum;
+        } geometry;
 
-    // Mesh shaders
-    uint32_t meshControlSharedMemoryMaxSize;
-    uint32_t meshControlWorkGroupInvocationMaxNum;
-    uint32_t meshControlPayloadMaxSize;
-    uint32_t meshEvaluationOutputVerticesMaxNum;
-    uint32_t meshEvaluationOutputPrimitiveMaxNum;
-    uint32_t meshEvaluationOutputComponentMaxNum;
-    uint32_t meshEvaluationSharedMemoryMaxSize;
-    uint32_t meshEvaluationWorkGroupInvocationMaxNum;
+        // Fragment
+        struct {
+            uint32_t inputComponentMaxNum;
+            uint32_t attachmentMaxNum;
+            uint32_t dualSourceAttachmentMaxNum;
+        } fragment;
 
-    // Precision bits
-    uint32_t viewportPrecisionBits;
-    uint32_t subPixelPrecisionBits;
-    uint32_t subTexelPrecisionBits;
-    uint32_t mipmapPrecisionBits;
+        // Compute
+        struct {
+            uint32_t sharedMemoryMaxSize;
+            uint32_t workGroupMaxNum[3];
+            uint32_t workGroupInvocationMaxNum;
+            uint32_t workGroupMaxDim[3];
+        } compute;
+
+        // Ray tracing
+        struct {
+            uint32_t shaderGroupIdentifierSize;
+            uint32_t tableMaxStride;
+            uint32_t recursionMaxDepth;
+        } rayTracing;
+
+        // Mesh control
+        struct {
+            uint32_t sharedMemoryMaxSize;
+            uint32_t workGroupInvocationMaxNum;
+            uint32_t payloadMaxSize;
+        } meshControl;
+
+        // Mesh evaluation
+        struct {
+            uint32_t outputVerticesMaxNum;
+            uint32_t outputPrimitiveMaxNum;
+            uint32_t outputComponentMaxNum;
+            uint32_t sharedMemoryMaxSize;
+            uint32_t workGroupInvocationMaxNum;
+        } meshEvaluation;
+    } shaderStage;
 
     // Other
-    uint64_t timestampFrequencyHz;
-    uint32_t drawIndirectMaxNum;
-    float samplerLodBiasMin;
-    float samplerLodBiasMax;
-    float samplerAnisotropyMax;
-    int32_t texelOffsetMin;
-    uint32_t texelOffsetMax;
-    int32_t texelGatherOffsetMin;
-    uint32_t texelGatherOffsetMax;
-    uint32_t clipDistanceMaxNum;
-    uint32_t cullDistanceMaxNum;
-    uint32_t combinedClipAndCullDistanceMaxNum;
-    uint32_t viewMaxNum;                            // aka multiview
-    uint8_t shadingRateAttachmentTileSize;          // square size
-    uint8_t shaderModel;                            // major * 10 + minor
+    struct {
+        uint64_t timestampFrequencyHz;
+        uint32_t micromapSubdivisionMaxLevel;
+        uint32_t drawIndirectMaxNum;
+        float samplerLodBiasMax;
+        float samplerAnisotropyMax;
+        int8_t texelOffsetMin;
+        uint8_t texelOffsetMax;
+        int8_t texelGatherOffsetMin;
+        uint8_t texelGatherOffsetMax;
+        uint8_t clipDistanceMaxNum;
+        uint8_t cullDistanceMaxNum;
+        uint8_t combinedClipAndCullDistanceMaxNum;
+        uint8_t viewMaxNum;                         // multiview is supported if > 1
+        uint8_t shadingRateAttachmentTileSize;      // square size
+    } other;
 
     // Tiers (0 - unsupported)
+    struct {
+        // 1 - 1/2 pixel uncertainty region and does not support post-snap degenerates
+        // 2 - reduces the maximum uncertainty region to 1/256 and requires post-snap degenerates not be culled
+        // 3 - maintains a maximum 1/256 uncertainty region and adds support for inner input coverage, aka "SV_InnerCoverage"
+        uint8_t conservativeRaster;
 
-    // 1 - 1/2 pixel uncertainty region and does not support post-snap degenerates
-    // 2 - reduces the maximum uncertainty region to 1/256 and requires post-snap degenerates not be culled
-    // 3 - maintains a maximum 1/256 uncertainty region and adds support for inner input coverage, aka "SV_InnerCoverage"
-    uint8_t conservativeRasterTier;
+        // 1 - a single sample pattern can be specified to repeat for every pixel ("locationNum / sampleNum" must be 1 in "CmdSetSampleLocations")
+        // 2 - four separate sample patterns can be specified for each pixel in a 2x2 grid ("locationNum / sampleNum" can be up to 4 in "CmdSetSampleLocations")
+        uint8_t sampleLocations;
 
-    // 1 - a single sample pattern can be specified to repeat for every pixel ("locationNum / sampleNum" must be 1 in "CmdSetSampleLocations")
-    // 2 - four separate sample patterns can be specified for each pixel in a 2x2 grid ("locationNum / sampleNum" can be up to 4 in "CmdSetSampleLocations")
-    uint8_t sampleLocationsTier;
+        // 1 - DXR 1.0: full raytracing functionality, except features below
+        // 2 - DXR 1.1: adds - ray query, "CmdDispatchRaysIndirect", "GeometryIndex()" intrinsic, additional ray flags & vertex formats
+        // 3 - DXR 1.2: adds - micromap, shader execution reordering
+        uint8_t rayTracing;
 
-    // 1 - DXR 1.0: full raytracing functionality, except features below
-    // 2 - DXR 1.1: adds - ray query, "CmdDispatchRaysIndirect", "GeometryIndex()" intrinsic, additional ray flags & vertex formats
-    uint8_t rayTracingTier;
+        // 1 - shading rate can be specified only per draw
+        // 2 - adds: per primitive shading rate, per "shadingRateAttachmentTileSize" shading rate, combiners, "SV_ShadingRate" support
+        uint8_t shadingRate;
 
-    // 1 - shading rate can be specified only per draw
-    // 2 - adds: per primitive shading rate, per "shadingRateAttachmentTileSize" shading rate, combiners, "SV_ShadingRate" support
-    uint8_t shadingRateTier;
+        // 1 - unbound arrays with dynamic indexing
+        // 2 - D3D12 dynamic resources: https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_DynamicResources.html
+        uint8_t bindless;
 
-    // 1 - unbound arrays with dynamic indexing
-    // 2 - D3D12 dynamic resources: https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_DynamicResources.html
-    uint8_t bindlessTier;
+        // 0 - ALL descriptors in range must be valid by the time the command list executes
+        // 1 - only "CONSTANT_BUFFER" and "STORAGE" descriptors in range must be valid
+        // 2 - only referenced descriptors must be valid
+        uint8_t resourceBinding;
+
+        // 1 - a "Memory" can support resources from all 3 categories: buffers, attachments, all other textures
+        uint8_t memory;
+    } tiers;
 
     // Features
-    uint32_t isGetMemoryDesc2Supported : 1;             // D3D: always supported, VK: requires "maintenance4" support
-    uint32_t isEnchancedBarrierSupported : 1;           // aka can "Layout" be ignored?
-    uint32_t isMemoryTier2Supported : 1;                // a memory object can support resources from all 3 categories (buffers, attachments, all other textures)
+    struct {
+        // Bigger
+        uint32_t getMemoryDesc2                                  : 1; // "GetXxxMemoryDesc2" support (VK: requires "maintenance4", D3D: supported)
+        uint32_t enchancedBarrier                                : 1; // VK: supported, D3D12: requires "AgilitySDK", D3D11: unsupported
+        uint32_t swapChain                                       : 1; // NRISwapChain
+        uint32_t rayTracing                                      : 1; // NRIRayTracing
+        uint32_t meshShader                                      : 1; // NRIMeshShader
+        uint32_t lowLatency                                      : 1; // NRILowLatency
+        uint32_t micromap                                        : 1; // see "Micromap"
 
-    uint32_t isIndependentFrontAndBackStencilReferenceAndMasksSupported : 1; // see "StencilAttachmentDesc::back"
-    uint32_t isTextureFilterMinMaxSupported : 1;        // see "FilterExt"
-    uint32_t isLogicFuncSupported : 1;                  // see "LogicFunc"
-    uint32_t isDepthBoundsTestSupported : 1;            // see "DepthAttachmentDesc::boundsTest"
-    uint32_t isDrawIndirectCountSupported : 1;          // see "countBuffer" and "countBufferOffset"
-    uint32_t isLineSmoothingSupported : 1;              // see "RasterizationDesc::lineSmoothing"
-    uint32_t isCopyQueueTimestampSupported : 1;         // see "QueryType::TIMESTAMP_COPY_QUEUE"
-    uint32_t isMeshShaderPipelineStatsSupported : 1;    // see "PipelineStatisticsDesc"
-    uint32_t isDynamicDepthBiasSupported : 1;           // see "CmdSetDepthBias"
-    uint32_t isAdditionalShadingRatesSupported : 1;     // see "ShadingRate"
-    uint32_t isViewportOriginBottomLeftSupported : 1;   // see "Viewport"
-    uint32_t isRegionResolveSupported : 1;              // see "CmdResolveTexture"
-    uint32_t isFlexibleMultiviewSupported : 1;          // see "Multiview::FLEXIBLE"
-    uint32_t isLayerBasedMultiviewSupported : 1;        // see "Multiview::LAYRED_BASED"
-    uint32_t isViewportBasedMultiviewSupported : 1;     // see "Multiview::VIEWPORT_BASED"
-    uint32_t isPresentFromComputeSupported : 1;         // see "SwapChainDesc::queue"
-    uint32_t isWaitableSwapChainSupported : 1;          // see "SwapChainDesc::waitable"
+        // Smaller
+        uint32_t independentFrontAndBackStencilReferenceAndMasks : 1; // see "StencilAttachmentDesc::back"
+        uint32_t textureFilterMinMax                             : 1; // see "FilterExt"
+        uint32_t logicFunc                                       : 1; // see "LogicFunc"
+        uint32_t depthBoundsTest                                 : 1; // see "DepthAttachmentDesc::boundsTest"
+        uint32_t drawIndirectCount                               : 1; // see "countBuffer" and "countBufferOffset"
+        uint32_t lineSmoothing                                   : 1; // see "RasterizationDesc::lineSmoothing"
+        uint32_t copyQueueTimestamp                              : 1; // see "QueryType::TIMESTAMP_COPY_QUEUE"
+        uint32_t meshShaderPipelineStats                         : 1; // see "PipelineStatisticsDesc"
+        uint32_t dynamicDepthBias                                : 1; // see "CmdSetDepthBias"
+        uint32_t additionalShadingRates                          : 1; // see "ShadingRate"
+        uint32_t viewportOriginBottomLeft                        : 1; // see "Viewport"
+        uint32_t regionResolve                                   : 1; // see "CmdResolveTexture"
+        uint32_t flexibleMultiview                               : 1; // see "Multiview::FLEXIBLE"
+        uint32_t layerBasedMultiview                             : 1; // see "Multiview::LAYRED_BASED"
+        uint32_t viewportBasedMultiview                          : 1; // see "Multiview::VIEWPORT_BASED"
+        uint32_t presentFromCompute                              : 1; // see "SwapChainDesc::queue"
+        uint32_t waitableSwapChain                               : 1; // see "SwapChainDesc::waitable"
+    } features;
 
-    // Shader features (I32 + atomics and F32 are always supported)
-    uint32_t isShaderNativeI16Supported : 1;
-    uint32_t isShaderNativeF16Supported : 1;
-    uint32_t isShaderNativeI64Supported : 1;
-    uint32_t isShaderNativeF64Supported : 1;
-    uint32_t isShaderAtomicsI16Supported : 1;
-    uint32_t isShaderAtomicsF16Supported : 1;
-    uint32_t isShaderAtomicsF32Supported : 1;
-    uint32_t isShaderAtomicsI64Supported : 1;
-    uint32_t isShaderAtomicsF64Supported : 1;
-    uint32_t isShaderViewportIndexSupported : 1;        // always can be used from geometry shaders
-    uint32_t isShaderLayerSupported : 1;                // always can be used from geometry shaders
-    uint32_t isShaderClockSupported : 1;
-    uint32_t isRasterizedOrderedViewSupported : 1;      // ROV, aka fragment shader interlock
-    uint32_t isBarycentricSupported : 1;
-    uint32_t isRayTracingPositionFetchSupported : 1;    // currently VK only
-
-    // Extensions (unexposed are always supported)
-    uint32_t isSwapChainSupported : 1;                  // NRISwapChain
-    uint32_t isRayTracingSupported : 1;                 // NRIRayTracing
-    uint32_t isMeshShaderSupported : 1;                 // NRIMeshShader
-    uint32_t isLowLatencySupported : 1;                 // NRILowLatency
+    // Shader features (I32, F32 and I32 atomics are always supported)
+    struct {
+        uint32_t nativeI16                                       : 1; // "(u)int16_t"
+        uint32_t nativeF16                                       : 1; // "float16_t"
+        uint32_t nativeI64                                       : 1; // "(u)int64_t"
+        uint32_t nativeF64                                       : 1; // "double"
+        uint32_t atomicsI16                                      : 1; // "(u)int16_t" atomics (can be partial support of SMEM, texture or buffer atomics)
+        uint32_t atomicsF16                                      : 1; // "float16_t" atomics (can be partial support of SMEM, texture or buffer atomics)
+        uint32_t atomicsF32                                      : 1; // "float" atomics (can be partial support of SMEM, texture or buffer atomics)
+        uint32_t atomicsI64                                      : 1; // "(u)int64_t" atomics (can be partial support of SMEM, texture or buffer atomics)
+        uint32_t atomicsF64                                      : 1; // "double" atomics (can be partial support of SMEM, texture or buffer atomics)
+        uint32_t viewportIndex                                   : 1; // always can be used in geometry shaders
+        uint32_t layerIndex                                      : 1; // always can be used in geometry shaders
+        uint32_t clock                                           : 1; // shader clock (timer)
+        uint32_t rasterizedOrderedView                           : 1; // ROV, aka fragment shader interlock
+        uint32_t barycentric                                     : 1; // barycentric coordinates
+        uint32_t rayTracingPositionFetch                         : 1; // position fetching directly from AS
+    } shaderFeatures;
 };
 
 #pragma endregion

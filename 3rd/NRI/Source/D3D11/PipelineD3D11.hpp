@@ -60,20 +60,6 @@ Result PipelineD3D11::Create(const GraphicsPipelineDesc& pipelineDesc) {
         CHECK(vertexShader != nullptr, "VS can't be NULL");
         hr = m_Device->CreateInputLayout(&inputElements[0], vi.attributeNum, vertexShader->bytecode, (size_t)vertexShader->size, &m_InputLayout);
         RETURN_ON_BAD_HRESULT(&m_Device, hr, "ID3D11Device::CreateInputLayout()");
-
-        // Strides
-        uint32_t maxBindingSlot = 0;
-        for (uint32_t i = 0; i < vi.streamNum; i++) {
-            const VertexStreamDesc& stream = vi.streams[i];
-            if (stream.bindingSlot > maxBindingSlot)
-                maxBindingSlot = stream.bindingSlot;
-        }
-
-        m_VertexStreamStrides.resize(maxBindingSlot + 1);
-        for (uint32_t i = 0; i < vi.streamNum; i++) {
-            const VertexStreamDesc& stream = vi.streams[i];
-            m_VertexStreamStrides[stream.bindingSlot] = stream.stride;
-        }
     }
 
     // Multisample
@@ -101,7 +87,7 @@ Result PipelineD3D11::Create(const GraphicsPipelineDesc& pipelineDesc) {
         rasterizerDesc.AntialiasedLineEnable = r.lineSmoothing;
         rasterizerDesc.MultisampleEnable = sampleNum > 1 ? TRUE : FALSE;
         // D3D11_RASTERIZER_DESC1
-        rasterizerDesc.ForcedSampleCount = sampleNum > 1 ? sampleNum : 0;
+        // TODO: rasterizerDesc.ForcedSampleCount?
         // D3D11_RASTERIZER_DESC2
         rasterizerDesc.ConservativeRaster = r.conservativeRaster ? D3D11_CONSERVATIVE_RASTERIZATION_MODE_ON : D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 
@@ -121,7 +107,7 @@ Result PipelineD3D11::Create(const GraphicsPipelineDesc& pipelineDesc) {
         // Ex
         memcpy(&m_RasterizerDesc, &rasterizerDesc, sizeof(D3D11_RASTERIZER_DESC));
 #if NRI_ENABLE_D3D_EXTENSIONS
-        m_RasterizerDesc.ForcedSampleCount = sampleNum > 1 ? sampleNum : 0;
+        // TODO: m_RasterizerDesc.ForcedSampleCount?
         m_RasterizerDesc.ProgrammableSamplePositionsEnable = true;
         m_RasterizerDesc.SampleCount = sampleNum;
         m_RasterizerDesc.ConservativeRasterEnable = r.conservativeRaster;
@@ -166,13 +152,13 @@ Result PipelineD3D11::Create(const GraphicsPipelineDesc& pipelineDesc) {
             blendState1.RenderTarget[i].BlendEnable = bs.blendEnabled;
             blendState1.RenderTarget[i].SrcBlend = GetD3D11BlendFromBlendFactor(bs.colorBlend.srcFactor);
             blendState1.RenderTarget[i].DestBlend = GetD3D11BlendFromBlendFactor(bs.colorBlend.dstFactor);
-            blendState1.RenderTarget[i].BlendOp = GetyD3D11BlendOp(bs.colorBlend.func);
+            blendState1.RenderTarget[i].BlendOp = GetD3D11BlendOp(bs.colorBlend.func);
             blendState1.RenderTarget[i].SrcBlendAlpha = GetD3D11BlendFromBlendFactor(bs.alphaBlend.srcFactor);
             blendState1.RenderTarget[i].DestBlendAlpha = GetD3D11BlendFromBlendFactor(bs.alphaBlend.dstFactor);
-            blendState1.RenderTarget[i].BlendOpAlpha = GetyD3D11BlendOp(bs.alphaBlend.func);
+            blendState1.RenderTarget[i].BlendOpAlpha = GetD3D11BlendOp(bs.alphaBlend.func);
             blendState1.RenderTarget[i].RenderTargetWriteMask = uint8_t(bs.colorWriteMask);
             blendState1.RenderTarget[i].LogicOpEnable = om.logicFunc != LogicFunc::NONE ? TRUE : FALSE;
-            blendState1.RenderTarget[i].LogicOp = GetyD3D11LogicOp(om.logicFunc);
+            blendState1.RenderTarget[i].LogicOp = GetD3D11LogicOp(om.logicFunc);
         }
 
         if (m_Device.GetVersion() >= 1)

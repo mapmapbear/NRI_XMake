@@ -3,6 +3,7 @@
 #pragma once
 
 #include "NRIDeviceCreation.h"
+#include "NRIRayTracing.h"
 
 NonNriForwardStruct(AGSContext);
 NonNriForwardStruct(ID3D12Heap);
@@ -14,8 +15,6 @@ NonNriForwardStruct(ID3D12CommandAllocator);
 NonNriForwardStruct(ID3D12GraphicsCommandList);
 
 NriNamespaceBegin
-
-NriForwardStruct(AccelerationStructure);
 
 // A collection of queues of the same type
 NriStruct(QueueFamilyD3D12Desc) {
@@ -31,7 +30,9 @@ NriStruct(DeviceCreationD3D12Desc) {
     NriOptional AGSContext* agsContext;
     NriOptional Nri(CallbackInterface) callbackInterface;
     NriOptional Nri(AllocationCallbacks) allocationCallbacks;
-    bool isNVAPILoaded; // at least NVAPI requires calling "NvAPI_Initialize" in DLL/EXE where the device is created in addition to NRI
+    NriOptional uint32_t d3dShaderExtRegister;  // vendor specific shader extensions (default is NRI_SHADER_EXT_REGISTER, space is always "0")
+    NriOptional uint32_t d3dZeroBufferSize;     // no "memset" functionality in D3D, "CmdZeroBuffer" implemented via a bunch of copies (4 Mb by default)
+    bool isNVAPILoaded;                         // at least NVAPI requires calling "NvAPI_Initialize" in DLL/EXE where the device is created in addition to NRI
 
     // Switches (disabled by default)
     bool enableNRIValidation;
@@ -65,10 +66,15 @@ NriStruct(MemoryD3D12Desc) {
 
 NriStruct(AccelerationStructureD3D12Desc) {
     ID3D12Resource* d3d12Resource;
-    uint64_t scratchDataSize;
-    uint64_t updateScratchDataSize;
+    Nri(AccelerationStructureBits) flags;
+
+    // D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO
+    uint64_t size;
+    uint64_t buildScratchSize;
+    uint64_t updateScratchSize;
 };
 
+// Threadsafe: yes
 NriStruct(WrapperD3D12Interface) {
     Nri(Result) (NRI_CALL *CreateCommandBufferD3D12)            (NriRef(Device) device, const NriRef(CommandBufferD3D12Desc) commandBufferD3D12Desc, NriOut NriRef(CommandBuffer*) commandBuffer);
     Nri(Result) (NRI_CALL *CreateDescriptorPoolD3D12)           (NriRef(Device) device, const NriRef(DescriptorPoolD3D12Desc) descriptorPoolD3D12Desc, NriOut NriRef(DescriptorPool*) descriptorPool);

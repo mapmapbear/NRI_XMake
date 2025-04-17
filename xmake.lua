@@ -29,7 +29,7 @@ target("NRI")
     add_deps("D3D12Ma")
     add_defines("NOMINMAX", "NRI_ENABLE_D3D12_SUPPORT")
     if is_mode("debug") then
-        add_defines("NRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS", "NRI_ENABLE_AGILITY_SDK_SUPPORT")
+        add_defines("NRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS", "NRI_ENABLE_AGILITY_SDK_SUPPORT", "NRI_ENABLE_VALIDATION_SUPPORT")
     end
     add_includedirs("3rd/NRI/Include", {public = true})
     add_includedirs("3rd/NRI/Source/Shared/", {public = true})
@@ -104,6 +104,15 @@ target("DemoApp")
     add_includedirs("source/", {public = true})
     add_packages("glfw", "glm", "assimp")
     add_files("main.cpp", "source/**.cpp")
+
+target("Clear")
+    set_kind("binary")
+    add_deps("NRIFramework", "Detex", "NRI", "ImGUI")
+    add_includedirs("3rd/NRI_Framework/Include", {public = true})
+    add_includedirs("3rd/Detex", {public = true})
+    add_includedirs("source/", {public = true})
+    add_packages("glfw", "glm", "assimp")
+    add_files("clear.cpp")
 
 target("ShaderCompiler")
     set_kind("phony") -- 这里可以是 phony，避免 xmake 生成实际的二进制文件

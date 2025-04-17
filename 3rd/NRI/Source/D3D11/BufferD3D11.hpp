@@ -14,7 +14,7 @@ struct MultiThreadProtection {
 };
 
 BufferD3D11::~BufferD3D11() {
-    Destroy(m_Device.GetAllocationCallbacks(), m_ReadbackTexture);
+    Destroy(m_ReadbackTexture);
 }
 
 Result BufferD3D11::Create(MemoryLocation memoryLocation, float priority) {
@@ -24,16 +24,16 @@ Result BufferD3D11::Create(MemoryLocation memoryLocation, float priority) {
 
     D3D11_BUFFER_DESC desc = {};
     desc.ByteWidth = (uint32_t)m_Desc.size;
-    desc.StructureByteStride = m_Desc.structureStride;
 
-    // D3D11/D3D12 backends do not use FLAG_RAW for descriptors. It seems to be unnecessary because VK doesn't have
-    // RAW functionality, but "byte adress buffers" in HLSL do work in VK if the underlying buffer is a structured
-    // buffer with stride = 4. Since "ALLOW_RAW_VIEWS" is needed only for D3D11, add it here.
-    if (m_Desc.structureStride == 4)
-        desc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
-
-    if (m_Desc.structureStride)
-        desc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+    if (m_Desc.structureStride) {
+        if (m_Desc.structureStride == 4)
+            // It's a hack and spec violation, but allows to create multiple views with different "structured" layouts for a single buffer
+            desc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+        else {
+            desc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+            desc.StructureByteStride = m_Desc.structureStride;
+        }
+    }
 
     if (m_Desc.usage & BufferUsageBits::ARGUMENT_BUFFER)
         desc.MiscFlags |= D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
@@ -120,13 +120,13 @@ TextureD3D11& BufferD3D11::RecreateReadbackTexture(const TextureD3D11& srcTextur
         else if (srcRegionDesc.height == 1)
             textureDesc.type = TextureType::TEXTURE_1D;
 
-        Destroy(m_Device.GetAllocationCallbacks(), m_ReadbackTexture);
+        Destroy(m_ReadbackTexture);
 
         Result result = m_Device.CreateImplementation<TextureD3D11>(m_ReadbackTexture, textureDesc);
         if (result == Result::SUCCESS) {
             result = m_ReadbackTexture->Create(MemoryLocation::HOST_READBACK, 0.0f);
             if (result != Result::SUCCESS)
-                Destroy(m_Device.GetAllocationCallbacks(), m_ReadbackTexture);
+                Destroy(m_ReadbackTexture);
         }
     }
 
@@ -178,15 +178,18 @@ NRI_INLINE void* BufferD3D11::Map(uint64_t offset) {
             return nullptr;
         }
 
-        const uint32_t d = m_ReadbackTexture->GetDesc().depth;
-        const uint32_t h = m_ReadbackTexture->GetDesc().height;
+        const TextureDesc& readbackTextureDesc = m_ReadbackTexture->GetDesc();
+        uint32_t d = readbackTextureDesc.depth;
+        uint32_t h = readbackTextureDesc.height;
+        uint32_t rowSize = readbackTextureDesc.width * GetFormatProps(readbackTextureDesc.format).stride;
+
         const uint8_t* src = (uint8_t*)srcData.pData;
         uint8_t* dst = ptr;
         for (uint32_t i = 0; i < d; i++) {
             for (uint32_t j = 0; j < h; j++) {
-                const uint8_t* s = src + j * srcData.RowPitch;
+                const uint8_t* srcLocal = src + j * srcData.RowPitch;
                 uint8_t* dstLocal = dst + j * m_ReadbackDataLayoutDesc.rowPitch;
-                memcpy(dstLocal, s, srcData.RowPitch);
+                memcpy(dstLocal, srcLocal, rowSize);
             }
             src += srcData.DepthPitch;
             dst += m_ReadbackDataLayoutDesc.slicePitch;

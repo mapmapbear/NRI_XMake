@@ -5,7 +5,6 @@
 struct IDXGIAdapter;
 struct ID3D12DescriptorHeap;
 struct ID3D12CommandSignature;
-struct D3D12_CPU_DESCRIPTOR_HANDLE;
 
 #ifdef NRI_ENABLE_AGILITY_SDK_SUPPORT
 struct ID3D12Device14;
@@ -18,8 +17,6 @@ typedef ID3D12Device5 ID3D12DeviceBest;
 namespace nri {
 
 struct QueueD3D12;
-
-constexpr uint32_t DESCRIPTORS_BATCH_SIZE = 1024;
 
 struct DeviceD3D12 final : public DeviceBase {
     DeviceD3D12(const CallbackInterface& callbacks, const AllocationCallbacks& allocationCallbacks);
@@ -49,10 +46,8 @@ struct DeviceD3D12 final : public DeviceBase {
         return m_Vma;
     }
 
-    inline void FreeDescriptorHandle(D3D12_DESCRIPTOR_HEAP_TYPE type, const DescriptorHandle& descriptorHandle) {
-        ExclusiveScope lock(m_FreeDescriptorLocks[type]);
-        auto& freeDescriptors = m_FreeDescriptors[type];
-        freeDescriptors.push_back(descriptorHandle);
+    inline ID3D12Resource* GetZeroBuffer() const {
+        return m_ZeroBuffer;
     }
 
     inline bool HasPix() const {
@@ -61,6 +56,10 @@ struct DeviceD3D12 final : public DeviceBase {
 
     inline const PixExt& GetPix() const {
         return m_Pix;
+    }
+
+    inline uint8_t GetTightAlignmentTier() const {
+        return m_TightAlignmentTier;
     }
 
 #if NRI_ENABLE_D3D_EXTENSIONS
@@ -96,20 +95,23 @@ struct DeviceD3D12 final : public DeviceBase {
         return result;
     }
 
+    Result CreateVma();
     Result Create(const DeviceCreationDesc& deviceCreationDesc, const DeviceCreationD3D12Desc& deviceCreationD3D12Desc);
     Result CreateDefaultDrawSignatures(ID3D12RootSignature* rootSignature, bool enableDrawParametersEmulation);
-    Result CreateCpuOnlyVisibleDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE type);
     Result GetDescriptorHandle(D3D12_DESCRIPTOR_HEAP_TYPE type, DescriptorHandle& descriptorHandle);
-    DescriptorPointerCPU GetDescriptorPointerCPU(const DescriptorHandle& descriptorHandle);
+    void FreeDescriptorHandle(const DescriptorHandle& descriptorHandle);
+    void GetResourceDesc(const BufferDesc& bufferDesc, D3D12_RESOURCE_DESC& desc) const;
+    void GetResourceDesc(const TextureDesc& textureDesc, D3D12_RESOURCE_DESC& desc) const;
     void GetMemoryDesc(MemoryLocation memoryLocation, const D3D12_RESOURCE_DESC& resourceDesc, MemoryDesc& memoryDesc) const;
-    void GetMemoryDesc(const AccelerationStructureDesc& accelerationStructureDesc, MemoryLocation memoryLocation, MemoryDesc& memoryDesc);
-    void GetAccelerationStructurePrebuildInfo(const AccelerationStructureDesc& accelerationStructureDesc, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO& prebuildInfo);
+    void GetAccelerationStructurePrebuildInfo(const AccelerationStructureDesc& accelerationStructureDesc, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO& prebuildInfo) const;
+    void GetMicromapPrebuildInfo(const MicromapDesc& micromapDesc, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO& prebuildInfo) const;
+    D3D12_HEAP_TYPE GetHeapType(MemoryLocation memoryLocation) const;
+    DescriptorPointerCPU GetDescriptorPointerCPU(const DescriptorHandle& descriptorHandle);
     ID3D12CommandSignature* GetDrawCommandSignature(uint32_t stride, ID3D12RootSignature* rootSignature);
     ID3D12CommandSignature* GetDrawIndexedCommandSignature(uint32_t stride, ID3D12RootSignature* rootSignature);
     ID3D12CommandSignature* GetDrawMeshCommandSignature(uint32_t stride);
     ID3D12CommandSignature* GetDispatchRaysCommandSignature() const;
     ID3D12CommandSignature* GetDispatchCommandSignature() const;
-    Result CreateVma();
 
     //================================================================================================================
     // DebugNameBase
@@ -147,6 +149,7 @@ struct DeviceD3D12 final : public DeviceBase {
     Result BindBufferMemory(const BufferMemoryBindingDesc* memoryBindingDescs, uint32_t memoryBindingDescNum);
     Result BindTextureMemory(const TextureMemoryBindingDesc* memoryBindingDescs, uint32_t memoryBindingDescNum);
     Result BindAccelerationStructureMemory(const AccelerationStructureMemoryBindingDesc* memoryBindingDescs, uint32_t memoryBindingDescNum);
+    Result BindMicromapMemory(const MicromapMemoryBindingDesc* memoryBindingDescs, uint32_t memoryBindingDescNum);
     FormatSupportBits GetFormatSupport(Format format) const;
 
 private:
@@ -161,26 +164,31 @@ private:
     PixExt m_Pix = {};
 #if NRI_ENABLE_D3D_EXTENSIONS
     NvExt m_NvExt = {};
-    AmdExt m_AmdExt = {};
+    AmdExtD3D12 m_AmdExt = {};
 #endif
     ComPtr<ID3D12DeviceBest> m_Device;
     ComPtr<IDXGIAdapter> m_Adapter;
     ComPtr<ID3D12CommandSignature> m_DispatchCommandSignature;
     ComPtr<ID3D12CommandSignature> m_DispatchRaysCommandSignature;
     ComPtr<D3D12MA::Allocator> m_Vma;
-    Vector<DescriptorHeapDesc> m_DescriptorHeaps;
-    Vector<Vector<DescriptorHandle>> m_FreeDescriptors;
-    UnorderedMap<uint64_t, ComPtr<ID3D12CommandSignature>> m_DrawCommandSignatures;
-    UnorderedMap<uint64_t, ComPtr<ID3D12CommandSignature>> m_DrawIndexedCommandSignatures;
-    UnorderedMap<uint32_t, ComPtr<ID3D12CommandSignature>> m_DrawMeshCommandSignatures;
-    std::array<std::vector<QueueD3D12*>, (size_t)QueueType::MAX_NUM> m_QueueFamilies = {}; // TODO: use Vector!
+    ComPtr<ID3D12Resource> m_ZeroBuffer;
+    Vector<DescriptorHeapDesc> m_DescriptorHeaps;                                          // m_DescriptorHeapLock
+    Vector<Vector<DescriptorHandle>> m_FreeDescriptors;                                    // m_FreeDescriptorLocks
+    UnorderedMap<uint64_t, ComPtr<ID3D12CommandSignature>> m_DrawCommandSignatures;        // m_CommandSignatureLock
+    UnorderedMap<uint64_t, ComPtr<ID3D12CommandSignature>> m_DrawIndexedCommandSignatures; // m_CommandSignatureLock
+    UnorderedMap<uint32_t, ComPtr<ID3D12CommandSignature>> m_DrawMeshCommandSignatures;    // m_CommandSignatureLock
+    std::array<Vector<QueueD3D12*>, (size_t)QueueType::MAX_NUM> m_QueueFamilies;
     CoreInterface m_iCore = {};
     DeviceDesc m_Desc = {};
+    void* m_CallbackHandle = nullptr;
+    DWORD m_CallbackCookie = 0;
     uint8_t m_Version = 0;
+    uint8_t m_TightAlignmentTier = 0;
     bool m_IsWrapped = false;
 
     std::array<Lock, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_FreeDescriptorLocks;
     Lock m_DescriptorHeapLock;
+    Lock m_CommandSignatureLock;
 };
 
 } // namespace nri

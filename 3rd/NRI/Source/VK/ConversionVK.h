@@ -4,18 +4,29 @@
 
 namespace nri {
 
-constexpr std::array<VkIndexType, (size_t)IndexType::MAX_NUM> INDEX_TYPE_TABLE = {
+uint32_t ConvertBotomLevelGeometries(
+    VkAccelerationStructureBuildRangeInfoKHR* vkRanges,
+    VkAccelerationStructureGeometryKHR* vkGeometries,
+    VkAccelerationStructureTrianglesOpacityMicromapEXT* vkTrianglesMicromaps,
+    const BottomLevelGeometryDesc* geometries, uint32_t geometryNum);
+
+QueryType GetQueryTypeVK(uint32_t queryTypeVK);
+
+constexpr std::array<VkIndexType, (size_t)IndexType::MAX_NUM> g_IndexTypes = {
     VK_INDEX_TYPE_UINT16, // UINT16
     VK_INDEX_TYPE_UINT32, // UINT32
 };
+VALIDATE_ARRAY(g_IndexTypes);
 
 constexpr VkIndexType GetIndexType(IndexType indexType) {
-    return INDEX_TYPE_TABLE[(size_t)indexType];
+    return g_IndexTypes[(size_t)indexType];
 }
 
-constexpr std::array<VkImageLayout, (size_t)Layout::MAX_NUM> LAYOUT_TABLE = {
+constexpr std::array<VkImageLayout, (size_t)Layout::MAX_NUM> g_ImageLayouts = {
     VK_IMAGE_LAYOUT_UNDEFINED,                                    // UNKNOWN
+    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                              // PRESENT
     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,                     // COLOR_ATTACHMENT
+    VK_IMAGE_LAYOUT_FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL_KHR, // SHADING_RATE_ATTACHMENT
     VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,             // DEPTH_STENCIL_ATTACHMENT
     VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,              // DEPTH_STENCIL_READONLY
     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                     // SHADER_RESOURCE
@@ -24,15 +35,14 @@ constexpr std::array<VkImageLayout, (size_t)Layout::MAX_NUM> LAYOUT_TABLE = {
     IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                            // COPY_DESTINATION
     IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                            // RESOLVE_SOURCE
     IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,                            // RESOLVE_DESTINATION
-    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,                              // PRESENT
-    VK_IMAGE_LAYOUT_FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL_KHR, // SHADING_RATE_ATTACHMENT
 };
+VALIDATE_ARRAY(g_ImageLayouts);
 
 constexpr VkImageLayout GetImageLayout(Layout layout) {
-    return LAYOUT_TABLE[(size_t)layout];
+    return g_ImageLayouts[(size_t)layout];
 }
 
-constexpr std::array<VkDescriptorType, (size_t)DescriptorType::MAX_NUM> DESCRIPTOR_TYPES = {
+constexpr std::array<VkDescriptorType, (size_t)DescriptorType::MAX_NUM> g_DescriptorTypes = {
     VK_DESCRIPTOR_TYPE_SAMPLER,                    // SAMPLER
     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,             // CONSTANT_BUFFER
     VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,              // TEXTURE
@@ -43,12 +53,13 @@ constexpr std::array<VkDescriptorType, (size_t)DescriptorType::MAX_NUM> DESCRIPT
     VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,             // STORAGE_STRUCTURED_BUFFER
     VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, // ACCELERATION_STRUCTURE
 };
+VALIDATE_ARRAY(g_DescriptorTypes);
 
 constexpr VkDescriptorType GetDescriptorType(DescriptorType type) {
-    return DESCRIPTOR_TYPES[(size_t)type];
+    return g_DescriptorTypes[(size_t)type];
 }
 
-constexpr std::array<VkPrimitiveTopology, (size_t)Topology::MAX_NUM> TOPOLOGIES = {
+constexpr std::array<VkPrimitiveTopology, (size_t)Topology::MAX_NUM> g_Topologies = {
     VK_PRIMITIVE_TOPOLOGY_POINT_LIST,                    // POINT_LIST
     VK_PRIMITIVE_TOPOLOGY_LINE_LIST,                     // LINE_LIST
     VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,                    // LINE_STRIP
@@ -60,31 +71,34 @@ constexpr std::array<VkPrimitiveTopology, (size_t)Topology::MAX_NUM> TOPOLOGIES 
     VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY, // TRIANGLE_STRIP_WITH_ADJACENCY
     VK_PRIMITIVE_TOPOLOGY_PATCH_LIST                     // PATCH_LIST
 };
+VALIDATE_ARRAY(g_Topologies);
 
 constexpr VkPrimitiveTopology GetTopology(Topology topology) {
-    return TOPOLOGIES[(size_t)topology];
+    return g_Topologies[(size_t)topology];
 }
 
-constexpr std::array<VkCullModeFlags, (size_t)CullMode::MAX_NUM> CULL_MODES = {
+constexpr std::array<VkCullModeFlags, (size_t)CullMode::MAX_NUM> g_CullModes = {
     VK_CULL_MODE_NONE,      // NONE
     VK_CULL_MODE_FRONT_BIT, // FRONT
     VK_CULL_MODE_BACK_BIT   // BACK
 };
+VALIDATE_ARRAY(g_CullModes);
 
 constexpr VkCullModeFlags GetCullMode(CullMode cullMode) {
-    return CULL_MODES[(size_t)cullMode];
+    return g_CullModes[(size_t)cullMode];
 }
 
-constexpr std::array<VkPolygonMode, (size_t)FillMode::MAX_NUM> POLYGON_MODES = {
+constexpr std::array<VkPolygonMode, (size_t)FillMode::MAX_NUM> g_FillModes = {
     VK_POLYGON_MODE_FILL, // SOLID
     VK_POLYGON_MODE_LINE, // WIREFRAME
 };
+VALIDATE_ARRAY(g_FillModes);
 
 constexpr VkPolygonMode GetPolygonMode(FillMode fillMode) {
-    return POLYGON_MODES[(size_t)fillMode];
+    return g_FillModes[(size_t)fillMode];
 }
 
-constexpr std::array<VkCompareOp, (size_t)CompareFunc::MAX_NUM> COMPARE_OP = {
+constexpr std::array<VkCompareOp, (size_t)CompareFunc::MAX_NUM> g_CompareOps = {
     VK_COMPARE_OP_NEVER,            // NONE
     VK_COMPARE_OP_ALWAYS,           // ALWAYS
     VK_COMPARE_OP_NEVER,            // NEVER
@@ -95,12 +109,13 @@ constexpr std::array<VkCompareOp, (size_t)CompareFunc::MAX_NUM> COMPARE_OP = {
     VK_COMPARE_OP_GREATER,          // GREATER
     VK_COMPARE_OP_GREATER_OR_EQUAL, // GREATER_EQUAL
 };
+VALIDATE_ARRAY(g_CompareOps);
 
 constexpr VkCompareOp GetCompareOp(CompareFunc compareFunc) {
-    return COMPARE_OP[(size_t)compareFunc];
+    return g_CompareOps[(size_t)compareFunc];
 }
 
-constexpr std::array<VkStencilOp, (size_t)StencilFunc::MAX_NUM> STENCIL_OP = {
+constexpr std::array<VkStencilOp, (size_t)StencilFunc::MAX_NUM> g_StencilOps = {
     VK_STENCIL_OP_KEEP,                // KEEP,
     VK_STENCIL_OP_ZERO,                // ZERO,
     VK_STENCIL_OP_REPLACE,             // REPLACE,
@@ -110,12 +125,13 @@ constexpr std::array<VkStencilOp, (size_t)StencilFunc::MAX_NUM> STENCIL_OP = {
     VK_STENCIL_OP_INCREMENT_AND_WRAP,  // INCREMENT_AND_WRAP,
     VK_STENCIL_OP_DECREMENT_AND_WRAP   // DECREMENT_AND_WRAP
 };
+VALIDATE_ARRAY(g_StencilOps);
 
 constexpr VkStencilOp GetStencilOp(StencilFunc stencilFunc) {
-    return STENCIL_OP[(size_t)stencilFunc];
+    return g_StencilOps[(size_t)stencilFunc];
 }
 
-constexpr std::array<VkLogicOp, (size_t)LogicFunc::MAX_NUM> LOGIC_OP = {
+constexpr std::array<VkLogicOp, (size_t)LogicFunc::MAX_NUM> g_LogicOps = {
     VK_LOGIC_OP_MAX_ENUM,      // NONE
     VK_LOGIC_OP_CLEAR,         // CLEAR
     VK_LOGIC_OP_AND,           // AND
@@ -133,12 +149,13 @@ constexpr std::array<VkLogicOp, (size_t)LogicFunc::MAX_NUM> LOGIC_OP = {
     VK_LOGIC_OP_NAND,          // NAND
     VK_LOGIC_OP_SET            // SET
 };
+VALIDATE_ARRAY(g_LogicOps);
 
 constexpr VkLogicOp GetLogicOp(LogicFunc logicFunc) {
-    return LOGIC_OP[(size_t)logicFunc];
+    return g_LogicOps[(size_t)logicFunc];
 }
 
-constexpr std::array<VkBlendFactor, (size_t)BlendFactor::MAX_NUM> BLEND_FACTOR = {
+constexpr std::array<VkBlendFactor, (size_t)BlendFactor::MAX_NUM> g_BlendFactors = {
     VK_BLEND_FACTOR_ZERO,                     // ZERO
     VK_BLEND_FACTOR_ONE,                      // ONE
     VK_BLEND_FACTOR_SRC_COLOR,                // SRC_COLOR
@@ -159,49 +176,54 @@ constexpr std::array<VkBlendFactor, (size_t)BlendFactor::MAX_NUM> BLEND_FACTOR =
     VK_BLEND_FACTOR_SRC1_ALPHA,               // SRC1_ALPHA
     VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA,     // ONE_MINUS_SRC1_ALPHA
 };
+VALIDATE_ARRAY(g_BlendFactors);
 
 constexpr VkBlendFactor GetBlendFactor(BlendFactor blendFactor) {
-    return BLEND_FACTOR[(size_t)blendFactor];
+    return g_BlendFactors[(size_t)blendFactor];
 }
 
-constexpr std::array<VkBlendOp, (size_t)BlendFunc::MAX_NUM> BLEND_OP = {
+constexpr std::array<VkBlendOp, (size_t)BlendFunc::MAX_NUM> g_BlendOps = {
     VK_BLEND_OP_ADD,              // ADD
     VK_BLEND_OP_SUBTRACT,         // SUBTRACT
     VK_BLEND_OP_REVERSE_SUBTRACT, // REVERSE_SUBTRACT
     VK_BLEND_OP_MIN,              // MIN
     VK_BLEND_OP_MAX               // MAX
 };
+VALIDATE_ARRAY(g_BlendOps);
 
 constexpr VkBlendOp GetBlendOp(BlendFunc blendFunc) {
-    return BLEND_OP[(size_t)blendFunc];
+    return g_BlendOps[(size_t)blendFunc];
 }
 
-constexpr std::array<VkImageType, (size_t)TextureType::MAX_NUM> IMAGE_TYPES = {
+constexpr std::array<VkImageType, (size_t)TextureType::MAX_NUM> g_ImageTypes = {
     VK_IMAGE_TYPE_1D, // TEXTURE_1D
     VK_IMAGE_TYPE_2D, // TEXTURE_2D
     VK_IMAGE_TYPE_3D, // TEXTURE_3D
 };
+VALIDATE_ARRAY(g_ImageTypes);
 
 constexpr VkImageType GetImageType(TextureType type) {
-    return IMAGE_TYPES[(size_t)type];
+    return g_ImageTypes[(size_t)type];
 }
 
-constexpr std::array<VkFilter, (size_t)Filter::MAX_NUM> FILTER = {
+constexpr std::array<VkFilter, (size_t)Filter::MAX_NUM> g_Filters = {
     VK_FILTER_NEAREST, // NEAREST
     VK_FILTER_LINEAR,  // LINEAR
 };
+VALIDATE_ARRAY(g_Filters);
 
 constexpr VkFilter GetFilter(Filter filter) {
-    return FILTER[(size_t)filter];
+    return g_Filters[(size_t)filter];
 }
 
-constexpr std::array<VkSamplerMipmapMode, (size_t)Filter::MAX_NUM> SAMPLER_MIPMAP_MODE = {
+constexpr std::array<VkSamplerMipmapMode, (size_t)Filter::MAX_NUM> g_SamplerMipmapModes = {
     VK_SAMPLER_MIPMAP_MODE_NEAREST, // NEAREST
     VK_SAMPLER_MIPMAP_MODE_LINEAR,  // LINEAR
 };
+VALIDATE_ARRAY(g_SamplerMipmapModes);
 
 constexpr VkSamplerMipmapMode GetSamplerMipmapMode(Filter filter) {
-    return SAMPLER_MIPMAP_MODE[(size_t)filter];
+    return g_SamplerMipmapModes[(size_t)filter];
 }
 
 constexpr VkSamplerAddressMode GetSamplerAddressMode(AddressMode addressMode) {
@@ -231,7 +253,7 @@ constexpr VkImageViewType GetImageViewType(Texture3DViewType type, uint32_t laye
     return VK_IMAGE_VIEW_TYPE_3D;
 }
 
-constexpr std::array<VkImageUsageFlags, (size_t)Texture1DViewType::MAX_NUM> IMAGE_VIEW_USAGE_1D = {
+constexpr std::array<VkImageUsageFlags, (size_t)Texture1DViewType::MAX_NUM> g_ImageViewUsage1D = {
     VK_IMAGE_USAGE_SAMPLED_BIT,                  // SHADER_RESOURCE_1D,
     VK_IMAGE_USAGE_SAMPLED_BIT,                  // SHADER_RESOURCE_1D_ARRAY,
     VK_IMAGE_USAGE_STORAGE_BIT,                  // SHADER_RESOURCE_STORAGE_1D,
@@ -242,12 +264,13 @@ constexpr std::array<VkImageUsageFlags, (size_t)Texture1DViewType::MAX_NUM> IMAG
     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, // DEPTH_ATTACHMENT_STENCIL_READONLY,
     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, // DEPTH_STENCIL_READONLY,
 };
+VALIDATE_ARRAY(g_ImageViewUsage1D);
 
 constexpr VkImageUsageFlags GetImageViewUsage(Texture1DViewType type) {
-    return IMAGE_VIEW_USAGE_1D[(size_t)type];
+    return g_ImageViewUsage1D[(size_t)type];
 }
 
-constexpr std::array<VkImageUsageFlags, (size_t)Texture2DViewType::MAX_NUM> IMAGE_VIEW_USAGE_2D = {
+constexpr std::array<VkImageUsageFlags, (size_t)Texture2DViewType::MAX_NUM> g_ImageViewUsage2D = {
     VK_IMAGE_USAGE_SAMPLED_BIT,                              // SHADER_RESOURCE_2D,
     VK_IMAGE_USAGE_SAMPLED_BIT,                              // SHADER_RESOURCE_2D_ARRAY,
     VK_IMAGE_USAGE_SAMPLED_BIT,                              // SHADER_RESOURCE_CUBE,
@@ -261,22 +284,24 @@ constexpr std::array<VkImageUsageFlags, (size_t)Texture2DViewType::MAX_NUM> IMAG
     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,             // DEPTH_STENCIL_READONLY,
     VK_IMAGE_USAGE_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR, // SHADING_RATE_ATTACHMENT
 };
+VALIDATE_ARRAY(g_ImageViewUsage2D);
 
 constexpr VkImageUsageFlags GetImageViewUsage(Texture2DViewType type) {
-    return IMAGE_VIEW_USAGE_2D[(size_t)type];
+    return g_ImageViewUsage2D[(size_t)type];
 }
 
-constexpr std::array<VkImageUsageFlags, (size_t)Texture3DViewType::MAX_NUM> IMAGE_VIEW_USAGE_3D = {
+constexpr std::array<VkImageUsageFlags, (size_t)Texture3DViewType::MAX_NUM> g_ImageViewUsage3D = {
     VK_IMAGE_USAGE_SAMPLED_BIT,          // SHADER_RESOURCE_3D,
     VK_IMAGE_USAGE_STORAGE_BIT,          // SHADER_RESOURCE_STORAGE_3D,
     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, // COLOR_ATTACHMENT
 };
+VALIDATE_ARRAY(g_ImageViewUsage3D);
 
 constexpr VkImageUsageFlags GetImageViewUsage(Texture3DViewType type) {
-    return IMAGE_VIEW_USAGE_3D[(size_t)type];
+    return g_ImageViewUsage3D[(size_t)type];
 }
 
-constexpr std::array<VkImageLayout, (size_t)Texture1DViewType::MAX_NUM> IMAGE_LAYOUT_1D = {
+constexpr std::array<VkImageLayout, (size_t)Texture1DViewType::MAX_NUM> g_ImageLayout1D = {
     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                   // SHADER_RESOURCE_1D,
     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                   // SHADER_RESOURCE_1D_ARRAY,
     VK_IMAGE_LAYOUT_GENERAL,                                    // SHADER_RESOURCE_STORAGE_1D,
@@ -287,12 +312,13 @@ constexpr std::array<VkImageLayout, (size_t)Texture1DViewType::MAX_NUM> IMAGE_LA
     VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL, // DEPTH_ATTACHMENT_STENCIL_READONLY,
     VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,            // DEPTH_STENCIL_READONLY,
 };
+VALIDATE_ARRAY(g_ImageLayout1D);
 
 constexpr VkImageLayout GetImageLayoutForView(Texture1DViewType type) {
-    return IMAGE_LAYOUT_1D[(size_t)type];
+    return g_ImageLayout1D[(size_t)type];
 }
 
-constexpr std::array<VkImageLayout, (size_t)Texture2DViewType::MAX_NUM> IMAGE_LAYOUT_2D = {
+constexpr std::array<VkImageLayout, (size_t)Texture2DViewType::MAX_NUM> g_ImageLayout2D = {
     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                     // SHADER_RESOURCE_2D,
     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                     // SHADER_RESOURCE_2D_ARRAY,
     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                     // SHADER_RESOURCE_CUBE,
@@ -306,42 +332,46 @@ constexpr std::array<VkImageLayout, (size_t)Texture2DViewType::MAX_NUM> IMAGE_LA
     VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,              // DEPTH_STENCIL_READONLY,
     VK_IMAGE_LAYOUT_FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL_KHR, // SHADING_RATE_ATTACHMENT
 };
+VALIDATE_ARRAY(g_ImageLayout2D);
 
 constexpr VkImageLayout GetImageLayoutForView(Texture2DViewType type) {
-    return IMAGE_LAYOUT_2D[(size_t)type];
+    return g_ImageLayout2D[(size_t)type];
 }
 
-constexpr std::array<VkImageLayout, (size_t)Texture3DViewType::MAX_NUM> IMAGE_LAYOUT_3D = {
+constexpr std::array<VkImageLayout, (size_t)Texture3DViewType::MAX_NUM> g_ImageLayout3D = {
     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, // SHADER_RESOURCE_3D,
     VK_IMAGE_LAYOUT_GENERAL,                  // SHADER_RESOURCE_STORAGE_3D,
     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, // COLOR_ATTACHMENT
 };
+VALIDATE_ARRAY(g_ImageLayout3D);
 
 constexpr VkImageLayout GetImageLayoutForView(Texture3DViewType type) {
-    return IMAGE_LAYOUT_3D[(size_t)type];
+    return g_ImageLayout3D[(size_t)type];
 }
 
-constexpr std::array<VkFragmentShadingRateCombinerOpKHR, (size_t)ShadingRateCombiner::MAX_NUM> SHADING_RATE_COMBINER = {
-    VK_FRAGMENT_SHADING_RATE_COMBINER_OP_REPLACE_KHR, // REPLACE,
+constexpr std::array<VkFragmentShadingRateCombinerOpKHR, (size_t)ShadingRateCombiner::MAX_NUM> g_ShadingRateCombiner = {
     VK_FRAGMENT_SHADING_RATE_COMBINER_OP_KEEP_KHR,    // KEEP,
+    VK_FRAGMENT_SHADING_RATE_COMBINER_OP_REPLACE_KHR, // REPLACE,
     VK_FRAGMENT_SHADING_RATE_COMBINER_OP_MIN_KHR,     // MIN,
     VK_FRAGMENT_SHADING_RATE_COMBINER_OP_MAX_KHR,     // MAX,
     VK_FRAGMENT_SHADING_RATE_COMBINER_OP_MUL_KHR,     // SUM, // TODO: SUM vs MUL?
 };
+VALIDATE_ARRAY(g_ShadingRateCombiner);
 
 constexpr VkFragmentShadingRateCombinerOpKHR GetShadingRateCombiner(ShadingRateCombiner combiner) {
-    return SHADING_RATE_COMBINER[(size_t)combiner];
+    return g_ShadingRateCombiner[(size_t)combiner];
 }
 
-constexpr std::array<TextureType, (size_t)TextureType::MAX_NUM> TEXTURE_TYPE_TABLE = {
+constexpr std::array<TextureType, (size_t)TextureType::MAX_NUM> g_TextureTypes = {
     TextureType::TEXTURE_1D, // VK_IMAGE_TYPE_1D
     TextureType::TEXTURE_2D, // VK_IMAGE_TYPE_2D
     TextureType::TEXTURE_3D, // VK_IMAGE_TYPE_3D
 };
+VALIDATE_ARRAY(g_TextureTypes);
 
 constexpr TextureType GetTextureType(VkImageType type) {
-    if ((size_t)type < TEXTURE_TYPE_TABLE.size())
-        return TEXTURE_TYPE_TABLE[(size_t)type];
+    if ((size_t)type < g_TextureTypes.size())
+        return g_TextureTypes[(size_t)type];
 
     return TextureType::MAX_NUM;
 }
@@ -400,7 +430,10 @@ constexpr VkPipelineStageFlags2 GetPipelineStageFlags(StageBits stageBits) {
         flags |= VK_PIPELINE_STAGE_2_TRANSFER_BIT;
 
     if (stageBits & StageBits::ACCELERATION_STRUCTURE)
-        flags |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        flags |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR; // already includes "VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_COPY_BIT_KHR" (more strict according to the spec)
+
+    if (stageBits & StageBits::MICROMAP)
+        flags |= VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
 
     return flags;
 }
@@ -479,19 +512,16 @@ constexpr VkImageAspectFlags GetImageAspectFlags(Format format) {
     }
 }
 
-constexpr bool HasStencil(Format format) {
-    switch (format) {
-        case nri::Format::D24_UNORM_S8_UINT:
-            return true;
-        case nri::Format::D32_SFLOAT_S8_UINT_X24:
-            return true;
-        case nri::Format::X24_G8_UINT:
-            return true;
-        case nri::Format::X32_G8_UINT_X24:
-            return true;
-        default:
-            return false;
-    }
+constexpr VkImageAspectFlags GetImageAspectFlags(PlaneBits planes) {
+    VkImageAspectFlags aspectFlags = 0;
+    if (planes & PlaneBits::COLOR)
+        aspectFlags |= VK_IMAGE_ASPECT_COLOR_BIT;
+    if (planes & PlaneBits::DEPTH)
+        aspectFlags |= VK_IMAGE_ASPECT_DEPTH_BIT;
+    if (planes & PlaneBits::STENCIL)
+        aspectFlags |= VK_IMAGE_ASPECT_STENCIL_BIT;
+
+    return aspectFlags;
 }
 
 constexpr Result GetReturnCode(VkResult result) {
@@ -545,6 +575,21 @@ constexpr VkColorComponentFlags GetColorComponent(ColorWriteBits colorWriteMask)
     return VkColorComponentFlags(colorWriteMask & ColorWriteBits::RGBA);
 }
 
+constexpr VkBuildMicromapFlagsEXT GetBuildMicromapFlags(MicromapBits micromapBits) {
+    VkBuildMicromapFlagsEXT flags = 0;
+
+    if (micromapBits & MicromapBits::ALLOW_COMPACTION)
+        flags |= VK_BUILD_MICROMAP_ALLOW_COMPACTION_BIT_EXT;
+
+    if (micromapBits & MicromapBits::PREFER_FAST_TRACE)
+        flags |= VK_BUILD_MICROMAP_PREFER_FAST_TRACE_BIT_EXT;
+
+    if (micromapBits & MicromapBits::PREFER_FAST_BUILD)
+        flags |= VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
+
+    return flags;
+}
+
 constexpr VkAccelerationStructureTypeKHR GetAccelerationStructureType(AccelerationStructureType type) {
     static_assert(VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR == (uint32_t)AccelerationStructureType::TOP_LEVEL, "Enum mismatch");
     static_assert(VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR == (uint32_t)AccelerationStructureType::BOTTOM_LEVEL, "Enum mismatch");
@@ -552,26 +597,32 @@ constexpr VkAccelerationStructureTypeKHR GetAccelerationStructureType(Accelerati
     return (VkAccelerationStructureTypeKHR)type;
 }
 
-constexpr VkBuildAccelerationStructureFlagsKHR GetAccelerationStructureBuildFlags(AccelerationStructureBuildBits accelerationStructureBuildFlags) {
+constexpr VkBuildAccelerationStructureFlagsKHR GetBuildAccelerationStructureFlags(AccelerationStructureBits accelerationStructureBits) {
     VkBuildAccelerationStructureFlagsKHR flags = 0;
 
-    if (accelerationStructureBuildFlags & AccelerationStructureBuildBits::ALLOW_UPDATE)
+    if (accelerationStructureBits & AccelerationStructureBits::ALLOW_UPDATE)
         flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
 
-    if (accelerationStructureBuildFlags & AccelerationStructureBuildBits::ALLOW_COMPACTION)
+    if (accelerationStructureBits & AccelerationStructureBits::ALLOW_COMPACTION)
         flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
 
-    if (accelerationStructureBuildFlags & AccelerationStructureBuildBits::PREFER_FAST_TRACE)
+    if (accelerationStructureBits & AccelerationStructureBits::ALLOW_DATA_ACCESS)
+        flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DATA_ACCESS_KHR;
+
+    if (accelerationStructureBits & AccelerationStructureBits::ALLOW_MICROMAP_UPDATE)
+        flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_OPACITY_MICROMAP_UPDATE_EXT;
+
+    if (accelerationStructureBits & AccelerationStructureBits::ALLOW_DISABLE_MICROMAPS)
+        flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DISABLE_OPACITY_MICROMAPS_EXT;
+
+    if (accelerationStructureBits & AccelerationStructureBits::PREFER_FAST_TRACE)
         flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
 
-    if (accelerationStructureBuildFlags & AccelerationStructureBuildBits::PREFER_FAST_BUILD)
+    if (accelerationStructureBits & AccelerationStructureBits::PREFER_FAST_BUILD)
         flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
 
-    if (accelerationStructureBuildFlags & AccelerationStructureBuildBits::MINIMIZE_MEMORY)
+    if (accelerationStructureBits & AccelerationStructureBits::MINIMIZE_MEMORY)
         flags |= VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR;
-
-    if (accelerationStructureBuildFlags & AccelerationStructureBuildBits::ALLOW_DATA_ACCESS)
-        flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DATA_ACCESS_KHR;
 
     return flags;
 }
@@ -583,18 +634,31 @@ constexpr VkGeometryFlagsKHR GetGeometryFlags(BottomLevelGeometryBits geometryFl
     return (VkGeometryFlagsKHR)geometryFlags;
 }
 
-constexpr VkGeometryTypeKHR GetGeometryType(GeometryType geometryType) {
-    static_assert(VK_GEOMETRY_TYPE_TRIANGLES_KHR == (uint32_t)GeometryType::TRIANGLES, "Enum mismatch");
-    static_assert(VK_GEOMETRY_TYPE_AABBS_KHR == (uint32_t)GeometryType::AABBS, "Enum mismatch");
+constexpr VkGeometryTypeKHR GetGeometryType(BottomLevelGeometryType geometryType) {
+    static_assert(VK_GEOMETRY_TYPE_TRIANGLES_KHR == (uint32_t)BottomLevelGeometryType::TRIANGLES, "Enum mismatch");
+    static_assert(VK_GEOMETRY_TYPE_AABBS_KHR == (uint32_t)BottomLevelGeometryType::AABBS, "Enum mismatch");
 
     return (VkGeometryTypeKHR)geometryType;
 }
 
-constexpr VkCopyAccelerationStructureModeKHR GetCopyMode(CopyMode copyMode) {
-    static_assert(VK_COPY_ACCELERATION_STRUCTURE_MODE_CLONE_KHR == (uint32_t)CopyMode::CLONE, "Enum mismatch");
-    static_assert(VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR == (uint32_t)CopyMode::COMPACT, "Enum mismatch");
+constexpr VkCopyAccelerationStructureModeKHR GetAccelerationStructureCopyMode(CopyMode copyMode) {
+    if (copyMode == CopyMode::CLONE)
+        return VK_COPY_ACCELERATION_STRUCTURE_MODE_CLONE_KHR;
 
-    return (VkCopyAccelerationStructureModeKHR)copyMode;
+    if (copyMode == CopyMode::COMPACT)
+        return VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR;
+
+    return VK_COPY_ACCELERATION_STRUCTURE_MODE_MAX_ENUM_KHR;
+}
+
+constexpr VkCopyMicromapModeEXT GetMicromapCopyMode(CopyMode copyMode) {
+    if (copyMode == CopyMode::CLONE)
+        return VK_COPY_MICROMAP_MODE_CLONE_EXT;
+
+    if (copyMode == CopyMode::COMPACT)
+        return VK_COPY_MICROMAP_MODE_COMPACT_EXT;
+
+    return VK_COPY_MICROMAP_MODE_MAX_ENUM_EXT;
 }
 
 inline VkFormat GetVkFormat(Format format, bool demoteSrgb = false) {
@@ -627,8 +691,5 @@ inline VkExtent2D GetShadingRate(ShadingRate shadingRate) {
 
     return {};
 }
-
-void ConvertGeometryObjectSizesVK(VkAccelerationStructureGeometryKHR* destObjects, uint32_t* primitiveNums, const GeometryObject* sourceObjects, uint32_t objectNum);
-void ConvertGeometryObjectsVK(VkAccelerationStructureGeometryKHR* destObjects, VkAccelerationStructureBuildRangeInfoKHR* ranges, const GeometryObject* sourceObjects, uint32_t objectNum);
 
 } // namespace nri

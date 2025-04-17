@@ -89,8 +89,10 @@ NriStruct(AccelerationStructureVKDesc) {
     VKNonDispatchableHandle vkAccelerationStructure;
     uint64_t buildScratchSize;
     uint64_t updateScratchSize;
+    Nri(AccelerationStructureBits) flags;
 };
 
+// Threadsafe: yes
 NriStruct(WrapperVKInterface) {
     Nri(Result) (NRI_CALL *CreateCommandAllocatorVK)        (NriRef(Device) device, const NriRef(CommandAllocatorVKDesc) commandAllocatorVKDesc, NriOut NriRef(CommandAllocator*) commandAllocator);
     Nri(Result) (NRI_CALL *CreateCommandBufferVK)           (NriRef(Device) device, const NriRef(CommandBufferVKDesc) commandBufferVKDesc, NriOut NriRef(CommandBuffer*) commandBuffer);
@@ -102,6 +104,7 @@ NriStruct(WrapperVKInterface) {
     Nri(Result) (NRI_CALL *CreateComputePipelineVK)         (NriRef(Device) device, VKNonDispatchableHandle vkPipeline, NriOut NriRef(Pipeline*) pipeline);
     Nri(Result) (NRI_CALL *CreateQueryPoolVK)               (NriRef(Device) device, const NriRef(QueryPoolVKDesc) queryPoolVKDesc, NriOut NriRef(QueryPool*) queryPool);
     Nri(Result) (NRI_CALL *CreateAccelerationStructureVK)   (NriRef(Device) device, const NriRef(AccelerationStructureVKDesc) accelerationStructureVKDesc, NriOut NriRef(AccelerationStructure*) accelerationStructure);
+
     uint32_t    (NRI_CALL *GetQueueFamilyIndexVK)           (const NriRef(Queue) queue);
     VKHandle    (NRI_CALL *GetPhysicalDeviceVK)             (const NriRef(Device) device);
     VKHandle    (NRI_CALL *GetInstanceVK)                   (const NriRef(Device) device);

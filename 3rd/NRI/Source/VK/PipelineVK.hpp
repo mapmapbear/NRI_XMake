@@ -91,20 +91,6 @@ Result PipelineVK::Create(const GraphicsPipelineDesc& graphicsPipelineDesc) {
             vertexBindingDesc.binding = stream.bindingSlot;
             vertexBindingDesc.inputRate = stream.stepRate == VertexStreamStepRate::PER_VERTEX ? VK_VERTEX_INPUT_RATE_VERTEX : VK_VERTEX_INPUT_RATE_INSTANCE;
         }
-
-        // Strides
-        uint32_t maxBindingSlot = 0;
-        for (uint32_t i = 0; i < vi->streamNum; i++) {
-            const VertexStreamDesc& stream = vi->streams[i];
-            if (stream.bindingSlot > maxBindingSlot)
-                maxBindingSlot = stream.bindingSlot;
-        }
-
-        m_VertexStreamStrides.resize(maxBindingSlot + 1);
-        for (uint32_t i = 0; i < vi->streamNum; i++) {
-            const VertexStreamDesc& stream = vi->streams[i];
-            m_VertexStreamStrides[stream.bindingSlot] = stream.stride;
-        }
     }
 
     // Input assembly
@@ -233,6 +219,8 @@ Result PipelineVK::Create(const GraphicsPipelineDesc& graphicsPipelineDesc) {
     }
 
     // Formats
+    const FormatProps& depthStencilFormatProps = GetFormatProps(om.depthStencilFormat);
+
     Scratch<VkFormat> colorFormats = AllocateScratch(m_Device, VkFormat, om.colorNum);
     for (uint32_t i = 0; i < om.colorNum; i++)
         colorFormats[i] = GetVkFormat(om.colors[i].format);
@@ -242,14 +230,15 @@ Result PipelineVK::Create(const GraphicsPipelineDesc& graphicsPipelineDesc) {
     pipelineRenderingCreateInfo.colorAttachmentCount = om.colorNum;
     pipelineRenderingCreateInfo.pColorAttachmentFormats = colorFormats;
     pipelineRenderingCreateInfo.depthAttachmentFormat = GetVkFormat(om.depthStencilFormat);
-    pipelineRenderingCreateInfo.stencilAttachmentFormat = HasStencil(om.depthStencilFormat) ? GetVkFormat(om.depthStencilFormat) : VK_FORMAT_UNDEFINED;
+    pipelineRenderingCreateInfo.stencilAttachmentFormat = depthStencilFormatProps.isStencil ? GetVkFormat(om.depthStencilFormat) : VK_FORMAT_UNDEFINED;
 
     // Dynamic state
     uint32_t dynamicStateNum = 0;
     std::array<VkDynamicState, 16> dynamicStates;
     dynamicStates[dynamicStateNum++] = VK_DYNAMIC_STATE_VIEWPORT_WITH_COUNT;
     dynamicStates[dynamicStateNum++] = VK_DYNAMIC_STATE_SCISSOR_WITH_COUNT;
-    dynamicStates[dynamicStateNum++] = VK_DYNAMIC_STATE_VERTEX_INPUT_BINDING_STRIDE;
+    if (vi)
+        dynamicStates[dynamicStateNum++] = VK_DYNAMIC_STATE_VERTEX_INPUT_BINDING_STRIDE;
     if (rasterizationState.depthBiasEnable)
         dynamicStates[dynamicStateNum++] = VK_DYNAMIC_STATE_DEPTH_BIAS;
     if (depthStencilState.depthBoundsTestEnable)
@@ -378,9 +367,9 @@ Result PipelineVK::Create(const RayTracingPipelineDesc& rayTracingPipelineDesc) 
         stages[i].pName = shaderDesc.entryPointName ? shaderDesc.entryPointName : "main";
     }
 
-    Scratch<VkRayTracingShaderGroupCreateInfoKHR> groupArray = AllocateScratch(m_Device, VkRayTracingShaderGroupCreateInfoKHR, rayTracingPipelineDesc.shaderGroupDescNum);
-    for (uint32_t i = 0; i < rayTracingPipelineDesc.shaderGroupDescNum; i++) {
-        const ShaderGroupDesc& srcGroup = rayTracingPipelineDesc.shaderGroupDescs[i];
+    Scratch<VkRayTracingShaderGroupCreateInfoKHR> groupArray = AllocateScratch(m_Device, VkRayTracingShaderGroupCreateInfoKHR, rayTracingPipelineDesc.shaderGroupNum);
+    for (uint32_t i = 0; i < rayTracingPipelineDesc.shaderGroupNum; i++) {
+        const ShaderGroupDesc& srcGroup = rayTracingPipelineDesc.shaderGroups[i];
 
         VkRayTracingShaderGroupCreateInfoKHR& dstGroup = groupArray[i];
         dstGroup = {VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
@@ -428,14 +417,26 @@ Result PipelineVK::Create(const RayTracingPipelineDesc& rayTracingPipelineDesc) 
             dstGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
     }
 
+    VkRayTracingPipelineInterfaceCreateInfoKHR interfaceCreateInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_INTERFACE_CREATE_INFO_KHR};
+    interfaceCreateInfo.maxPipelineRayPayloadSize = rayTracingPipelineDesc.rayPayloadMaxSize;
+    interfaceCreateInfo.maxPipelineRayHitAttributeSize = rayTracingPipelineDesc.rayHitAttributeMaxSize;
+
     VkRayTracingPipelineCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR};
     createInfo.stageCount = stageNum;
     createInfo.pStages = stages;
-    createInfo.groupCount = rayTracingPipelineDesc.shaderGroupDescNum;
+    createInfo.groupCount = rayTracingPipelineDesc.shaderGroupNum;
     createInfo.pGroups = groupArray;
-    createInfo.maxPipelineRayRecursionDepth = rayTracingPipelineDesc.recursionDepthMax;
+    createInfo.maxPipelineRayRecursionDepth = rayTracingPipelineDesc.recursionMaxDepth;
+    createInfo.pLibraryInterface = &interfaceCreateInfo;
     createInfo.layout = pipelineLayoutVK;
     createInfo.basePipelineIndex = -1;
+
+    if (rayTracingPipelineDesc.flags & RayTracingPipelineBits::SKIP_TRIANGLES)
+        createInfo.flags |= VK_PIPELINE_CREATE_RAY_TRACING_SKIP_TRIANGLES_BIT_KHR;
+    if (rayTracingPipelineDesc.flags & RayTracingPipelineBits::SKIP_AABBS)
+        createInfo.flags |= VK_PIPELINE_CREATE_RAY_TRACING_SKIP_AABBS_BIT_KHR;
+    if (rayTracingPipelineDesc.flags & RayTracingPipelineBits::ALLOW_MICROMAPS)
+        createInfo.flags |= VK_PIPELINE_CREATE_RAY_TRACING_OPACITY_MICROMAP_BIT_EXT;
 
     VkPipelineRobustnessCreateInfoEXT robustnessInfo = {VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO_EXT};
     if (FillPipelineRobustness(m_Device, rayTracingPipelineDesc.robustness, robustnessInfo))
@@ -492,11 +493,11 @@ NRI_INLINE void PipelineVK::SetDebugName(const char* name) {
     m_Device.SetDebugNameToTrivialObject(VK_OBJECT_TYPE_PIPELINE, (uint64_t)m_Handle, name);
 }
 
-NRI_INLINE Result PipelineVK::WriteShaderGroupIdentifiers(uint32_t baseShaderGroupIndex, uint32_t shaderGroupNum, void* buffer) const {
-    const size_t dataSize = (size_t)(shaderGroupNum * m_Device.GetDesc().rayTracingShaderGroupIdentifierSize);
+NRI_INLINE Result PipelineVK::WriteShaderGroupIdentifiers(uint32_t baseShaderGroupIndex, uint32_t shaderGroupNum, void* dst) const {
+    const size_t dataSize = (size_t)shaderGroupNum * m_Device.GetDesc().shaderStage.rayTracing.shaderGroupIdentifierSize;
 
     const auto& vk = m_Device.GetDispatchTable();
-    VkResult result = vk.GetRayTracingShaderGroupHandlesKHR(m_Device, m_Handle, baseShaderGroupIndex, shaderGroupNum, dataSize, buffer);
+    VkResult result = vk.GetRayTracingShaderGroupHandlesKHR(m_Device, m_Handle, baseShaderGroupIndex, shaderGroupNum, dataSize, dst);
     RETURN_ON_FAILURE(&m_Device, result == VK_SUCCESS, GetReturnCode(result), "vkGetRayTracingShaderGroupHandlesKHR returned %d", (int32_t)result);
 
     return Result::SUCCESS;

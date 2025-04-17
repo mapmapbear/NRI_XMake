@@ -926,11 +926,15 @@ utils::MeshData utils::ProcessMesh(const aiMesh *mesh) {
 		if (mesh->HasNormals()) {
 			glm::vec3 normal = { mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z };
 			meshData.normals.push_back(normal);
+		} else {
+			meshData.normals.push_back({ 0, 0, 0 });
 		}
 
 		if (mesh->HasTextureCoords(0)) {
 			glm::vec2 texCoord = { mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y };
 			meshData.texCoords.push_back(texCoord);
+		} else {
+			meshData.texCoords.push_back({ 0, 0 });
 		}
 	}
 	for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {

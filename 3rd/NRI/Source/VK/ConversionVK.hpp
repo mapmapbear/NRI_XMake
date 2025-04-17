@@ -1,80 +1,114 @@
 // © 2021 NVIDIA Corporation
 
-void nri::ConvertGeometryObjectSizesVK(VkAccelerationStructureGeometryKHR* destObjects, uint32_t* primitiveNums, const GeometryObject* sourceObjects, uint32_t objectNum) {
-    for (uint32_t i = 0; i < objectNum; i++) {
-        const GeometryObject& src = sourceObjects[i];
+uint32_t nri::ConvertBotomLevelGeometries(
+    VkAccelerationStructureBuildRangeInfoKHR* vkRanges,
+    VkAccelerationStructureGeometryKHR* vkGeometries,
+    VkAccelerationStructureTrianglesOpacityMicromapEXT* vkTrianglesMicromaps,
+    const BottomLevelGeometryDesc* geometries, uint32_t geometryNum) {
+    uint32_t micromapNum = 0;
 
-        uint32_t triangleNum = (src.geometry.triangles.indexNum ? src.geometry.triangles.indexNum : src.geometry.triangles.vertexNum) / 3;
-        VkDeviceAddress transform = GetBufferDeviceAddress(src.geometry.triangles.transformBuffer) + src.geometry.triangles.transformOffset;
+    for (uint32_t i = 0; i < geometryNum; i++) {
+        const BottomLevelGeometryDesc& in = geometries[i];
+        VkAccelerationStructureGeometryKHR& out = vkGeometries[i];
 
-        primitiveNums[i] = src.type == GeometryType::TRIANGLES ? triangleNum : src.geometry.aabbs.boxNum;
+        out = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
+        out.flags = GetGeometryFlags(in.flags);
+        out.geometryType = GetGeometryType(in.type);
 
-        VkAccelerationStructureGeometryKHR& geometryDst = destObjects[i];
-        geometryDst = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
-        geometryDst.flags = GetGeometryFlags(src.flags);
-        geometryDst.geometryType = GetGeometryType(src.type);
-        geometryDst.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
-        geometryDst.geometry.aabbs.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
-        geometryDst.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-        geometryDst.geometry.triangles.maxVertex = src.geometry.triangles.vertexNum;
-        geometryDst.geometry.triangles.indexType = GetIndexType(src.geometry.triangles.indexType);
-        geometryDst.geometry.triangles.vertexFormat = GetVkFormat(src.geometry.triangles.vertexFormat);
-        geometryDst.geometry.triangles.transformData.deviceAddress = transform;
+        // Update ranges
+        if (vkRanges) {
+            vkRanges[i] = {}; // TODO: review struct fields...
+
+            if (in.type == BottomLevelGeometryType::TRIANGLES) {
+                uint32_t triangleNum = (in.triangles.indexNum ? in.triangles.indexNum : in.triangles.vertexNum) / 3;
+                vkRanges[i].primitiveCount = triangleNum;
+            } else if (in.type == BottomLevelGeometryType::AABBS)
+                vkRanges[i].primitiveCount = in.aabbs.num;
+        }
+
+        // Update geometry
+        if (in.type == BottomLevelGeometryType::TRIANGLES) {
+            const BottomLevelTrianglesDesc& triangles = in.triangles;
+
+            VkAccelerationStructureGeometryTrianglesDataKHR& outTriangles = out.geometry.triangles;
+            outTriangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+            outTriangles.maxVertex = triangles.vertexNum;
+            outTriangles.vertexStride = triangles.vertexStride;
+            outTriangles.vertexFormat = GetVkFormat(triangles.vertexFormat);
+            outTriangles.vertexData.deviceAddress = GetBufferDeviceAddress(triangles.vertexBuffer, triangles.vertexOffset);
+            outTriangles.transformData.deviceAddress = GetBufferDeviceAddress(triangles.transformBuffer, triangles.transformOffset);
+
+            if (triangles.indexBuffer) {
+                outTriangles.indexType = GetIndexType(triangles.indexType);
+                outTriangles.indexData.deviceAddress = GetBufferDeviceAddress(triangles.indexBuffer, triangles.indexOffset);
+            } else
+                outTriangles.indexType = VK_INDEX_TYPE_NONE_KHR;
+
+            // Update micromap
+            if (triangles.micromap) {
+                const BottomLevelMicromapDesc& trianglesMicromap = *triangles.micromap;
+
+                outTriangles.pNext = vkTrianglesMicromaps;
+
+                VkAccelerationStructureTrianglesOpacityMicromapEXT& outTrianglesMicromap = *vkTrianglesMicromaps;
+                outTrianglesMicromap = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT};
+                outTrianglesMicromap.indexStride = trianglesMicromap.indexType == IndexType::UINT32 ? sizeof(uint32_t) : sizeof(uint16_t);
+                outTrianglesMicromap.baseTriangle = trianglesMicromap.baseTriangle;
+
+                MicromapVK* micromap = (MicromapVK*)trianglesMicromap.micromap;
+                if (micromap) {
+                    outTrianglesMicromap.usageCountsCount = micromap->GetUsageNum();
+                    outTrianglesMicromap.pUsageCounts = micromap->GetUsages();
+                    outTrianglesMicromap.micromap = micromap->GetHandle();
+                }
+
+                if (trianglesMicromap.indexBuffer) {
+                    outTrianglesMicromap.indexType = GetIndexType(trianglesMicromap.indexType);
+                    outTrianglesMicromap.indexBuffer.deviceAddress = GetBufferDeviceAddress(trianglesMicromap.indexBuffer, trianglesMicromap.indexOffset);
+                } else
+                    outTrianglesMicromap.indexType = VK_INDEX_TYPE_NONE_KHR;
+
+                // Increment
+                vkTrianglesMicromaps++;
+                micromapNum++;
+            }
+        } else if (in.type == BottomLevelGeometryType::AABBS) {
+            const BottomLevelAabbsDesc& aabbs = in.aabbs;
+
+            VkAccelerationStructureGeometryAabbsDataKHR& outAabbs = out.geometry.aabbs;
+            outAabbs.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
+            outAabbs.data.deviceAddress = GetBufferDeviceAddress(aabbs.buffer, aabbs.offset);
+            outAabbs.stride = aabbs.stride;
+        }
     }
+
+    return micromapNum;
 }
 
-void nri::ConvertGeometryObjectsVK(VkAccelerationStructureGeometryKHR* destObjects, VkAccelerationStructureBuildRangeInfoKHR* ranges, const GeometryObject* sourceObjects, uint32_t objectNum) {
-    for (uint32_t i = 0; i < objectNum; i++) {
-        const GeometryObject& src = sourceObjects[i];
+QueryType nri::GetQueryTypeVK(uint32_t queryTypeVK) {
+    if (queryTypeVK == VK_QUERY_TYPE_TIMESTAMP)
+        return QueryType::TIMESTAMP;
 
-        uint32_t triangleNum = (src.geometry.triangles.indexNum ? src.geometry.triangles.indexNum : src.geometry.triangles.vertexNum) / 3;
-
-        VkDeviceAddress aabbs = GetBufferDeviceAddress(src.geometry.aabbs.buffer) + src.geometry.aabbs.offset;
-        VkDeviceAddress vertices = GetBufferDeviceAddress(src.geometry.triangles.vertexBuffer) + src.geometry.triangles.vertexOffset;
-        VkDeviceAddress indices = GetBufferDeviceAddress(src.geometry.triangles.indexBuffer) + src.geometry.triangles.indexOffset;
-        VkDeviceAddress transform = GetBufferDeviceAddress(src.geometry.triangles.transformBuffer) + src.geometry.triangles.transformOffset;
-
-        ranges[i] = {};
-        ranges[i].primitiveCount = src.type == GeometryType::TRIANGLES ? triangleNum : src.geometry.aabbs.boxNum;
-
-        VkAccelerationStructureGeometryKHR& geometryDst = destObjects[i];
-        geometryDst = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
-        geometryDst.flags = GetGeometryFlags(src.flags);
-        geometryDst.geometryType = GetGeometryType(src.type);
-        geometryDst.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
-        geometryDst.geometry.aabbs.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
-        geometryDst.geometry.aabbs.data.deviceAddress = aabbs;
-        geometryDst.geometry.aabbs.stride = src.geometry.aabbs.stride;
-        geometryDst.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-        geometryDst.geometry.triangles.maxVertex = src.geometry.triangles.vertexNum;
-        geometryDst.geometry.triangles.vertexData.deviceAddress = vertices;
-        geometryDst.geometry.triangles.vertexStride = src.geometry.triangles.vertexStride;
-        geometryDst.geometry.triangles.vertexFormat = GetVkFormat(src.geometry.triangles.vertexFormat);
-        geometryDst.geometry.triangles.indexData.deviceAddress = indices;
-        geometryDst.geometry.triangles.indexType = GetIndexType(src.geometry.triangles.indexType);
-        geometryDst.geometry.triangles.transformData.deviceAddress = transform;
-    }
-}
-
-TextureType GetTextureTypeVK(uint32_t vkImageType) {
-    return GetTextureType((VkImageType)vkImageType);
-}
-
-QueryType GetQueryTypeVK(uint32_t queryTypeVK) {
     if (queryTypeVK == VK_QUERY_TYPE_OCCLUSION)
         return QueryType::OCCLUSION;
 
     if (queryTypeVK == VK_QUERY_TYPE_PIPELINE_STATISTICS)
         return QueryType::PIPELINE_STATISTICS;
 
-    if (queryTypeVK == VK_QUERY_TYPE_TIMESTAMP)
-        return QueryType::TIMESTAMP;
+    if (queryTypeVK == VK_QUERY_TYPE_ACCELERATION_STRUCTURE_SIZE_KHR)
+        return QueryType::ACCELERATION_STRUCTURE_SIZE;
+
+    if (queryTypeVK == VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR)
+        return QueryType::ACCELERATION_STRUCTURE_COMPACTED_SIZE;
+
+    if (queryTypeVK == VK_QUERY_TYPE_MICROMAP_COMPACTED_SIZE_EXT)
+        return QueryType::MICROMAP_COMPACTED_SIZE;
 
     return QueryType::MAX_NUM;
 }
 
 // Each depth/stencil format is only compatible with itself in VK
-constexpr std::array<VkFormat, (size_t)Format::MAX_NUM> VK_FORMAT = {
+constexpr std::array<VkFormat, (size_t)Format::MAX_NUM> g_Formats = {
     VK_FORMAT_UNDEFINED,                // UNKNOWN
     VK_FORMAT_R8_UNORM,                 // R8_UNORM
     VK_FORMAT_R8_SNORM,                 // R8_SNORM
@@ -148,7 +182,8 @@ constexpr std::array<VkFormat, (size_t)Format::MAX_NUM> VK_FORMAT = {
     VK_FORMAT_D32_SFLOAT_S8_UINT,       // R32_SFLOAT_X8_X24
     VK_FORMAT_D32_SFLOAT_S8_UINT,       // X32_G8_UINT_X24
 };
+VALIDATE_ARRAY(g_Formats);
 
-uint32_t NRIFormatToVKFormat(Format format) {
-    return (uint32_t)VK_FORMAT[(uint32_t)format];
+uint32_t nri::NRIFormatToVKFormat(Format format) {
+    return (uint32_t)g_Formats[(uint32_t)format];
 }

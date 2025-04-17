@@ -7,7 +7,6 @@
 #include "render_pass/skyRenderPass.h"
 #include <memory>
 
-
 Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 		m_Device(device), m_NRI(NRI) {
 	NRI_ABORT_ON_FAILURE(NRI.GetQueue(*m_Device, nri::QueueType::GRAPHICS, 0, m_GraphicsQueue));
@@ -29,7 +28,7 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	NRI.SetDebugName(m_DescriptorPool, "m_DescriptorPool");
 
 	std::string sceneFile = utils::GetFullPath("Camera/Camera.gltf", utils::DataFolder::ROOT);
-
+	sceneFile = utils::GetFullPath("test.glb", utils::DataFolder::ROOT);
 	NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene, false));
 }
 
@@ -46,6 +45,7 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	skyPass->Render(info, camera);
 	gridPass->Render(info, camera);
 	meshPass->Render(info, camera);
+	simplePass->Render(info, camera);
 }
 
 void Renderer::OnPresent(RenderInfo &info) {

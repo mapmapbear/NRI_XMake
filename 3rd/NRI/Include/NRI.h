@@ -4,6 +4,7 @@
 Overview:
 - Generalized common denominator for VK, D3D12 and D3D11
     - VK spec: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html
+       - Best practices: https://developer.nvidia.com/blog/vulkan-dos-donts/
     - D3D12 spec: https://microsoft.github.io/DirectX-Specs/
     - D3D11 spec: https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm
 - C/C++ compatible interface (auto-selection or via "NRI_FORCE_C" macro)
@@ -20,13 +21,23 @@ Non-goals (exceptions apply to helper interfaces, where high-level abstraction a
 - high level (D3D11-like) abstraction
 - exposing entities not existing in gAPIs
 - hidden management of any kind
+
+Thread safety (a comment applies to a whole block unless stated otherwise, sub-blocks can be different):
+- Threadsafe: yes - free-threaded access
+- Threadsafe: no  - external synchronization required, i.e. one thread at a time (additional restrictions can apply)
+- Threadsafe: ?   - unclear status
+
+Implicit:
+- Create*         - thread safe
+- Destroy*        - not thread safe (because of VK)
+- Cmd*            - not thread safe
 */
 
 #pragma once
 
 #define NRI_VERSION_MAJOR 1
-#define NRI_VERSION_MINOR 164
-#define NRI_VERSION_DATE "19 February 2025"
+#define NRI_VERSION_MINOR 165
+#define NRI_VERSION_DATE "9 April 2025"
 
 #include "NRIDescs.h"
 
@@ -47,6 +58,7 @@ NRI_API void NRI_CALL nriEndAnnotation();                                   // e
 NRI_API void NRI_CALL nriAnnotation(const char* name, uint32_t bgra);       // emit a named simultaneous event
 NRI_API void NRI_CALL nriSetThreadName(const char* name);                   // assign a name to the current thread
 
+// Threadsafe: yes
 NriStruct(CoreInterface) {
     // Get
     const NriRef(DeviceDesc)    (NRI_CALL *GetDeviceDesc)           (const NriRef(Device) device);
@@ -54,10 +66,6 @@ NriStruct(CoreInterface) {
     const NriRef(TextureDesc)   (NRI_CALL *GetTextureDesc)          (const NriRef(Texture) texture);
     Nri(FormatSupportBits)      (NRI_CALL *GetFormatSupport)        (const NriRef(Device) device, Nri(Format) format);
     uint32_t                    (NRI_CALL *GetQuerySize)            (const NriRef(QueryPool) queryPool);
-    void                        (NRI_CALL *GetBufferMemoryDesc)     (const NriRef(Buffer) buffer, Nri(MemoryLocation) memoryLocation, NriOut NriRef(MemoryDesc) memoryDesc);
-    void                        (NRI_CALL *GetTextureMemoryDesc)    (const NriRef(Texture) texture, Nri(MemoryLocation) memoryLocation, NriOut NriRef(MemoryDesc) memoryDesc);
-    void                        (NRI_CALL *GetBufferMemoryDesc2)    (const NriRef(Device) device, const NriRef(BufferDesc) bufferDesc, Nri(MemoryLocation) memoryLocation, NriOut NriRef(MemoryDesc) memoryDesc); // requires "isGetMemoryDesc2Supported"
-    void                        (NRI_CALL *GetTextureMemoryDesc2)   (const NriRef(Device) device, const NriRef(TextureDesc) textureDesc, Nri(MemoryLocation) memoryLocation, NriOut NriRef(MemoryDesc) memoryDesc); // requires "isGetMemoryDesc2Supported"
 
     // Returns one of the pre-created queues (see "DeviceCreationDesc" or wrapper extensions). Return codes: UNSUPPORTED (no queues of "queueType") or INVALID_ARGUMENT (if "queueIndex" is out of bounds).
     // Getting COMPUTE and/or COPY queues switches VK "sharing mode" to "VK_SHARING_MODE_CONCURRENT", which can be slower on non-NVIDIA HW. This approach is used to avoid
@@ -104,6 +112,10 @@ NriStruct(CoreInterface) {
     //      - "CalculateAllocationNumber" and "AllocateAndBindMemory" simplify this process for buffers and textures
     //  High level:
     //      - "ResourceAllocatorInterface" allows to create resources already bound to memory
+    void                (NRI_CALL *GetBufferMemoryDesc)             (const NriRef(Buffer) buffer, Nri(MemoryLocation) memoryLocation, NriOut NriRef(MemoryDesc) memoryDesc);
+    void                (NRI_CALL *GetTextureMemoryDesc)            (const NriRef(Texture) texture, Nri(MemoryLocation) memoryLocation, NriOut NriRef(MemoryDesc) memoryDesc);
+    void                (NRI_CALL *GetBufferMemoryDesc2)            (const NriRef(Device) device, const NriRef(BufferDesc) bufferDesc, Nri(MemoryLocation) memoryLocation, NriOut NriRef(MemoryDesc) memoryDesc); // requires "features.getMemoryDesc2"
+    void                (NRI_CALL *GetTextureMemoryDesc2)           (const NriRef(Device) device, const NriRef(TextureDesc) textureDesc, Nri(MemoryLocation) memoryLocation, NriOut NriRef(MemoryDesc) memoryDesc); // requires "features.getMemoryDesc2"
     Nri(Result)         (NRI_CALL *AllocateMemory)                  (NriRef(Device) device, const NriRef(AllocateMemoryDesc) allocateMemoryDesc, NriOut NriRef(Memory*) memory);
     Nri(Result)         (NRI_CALL *BindBufferMemory)                (NriRef(Device) device, const NriPtr(BufferMemoryBindingDesc) memoryBindingDescs, uint32_t memoryBindingDescNum);
     Nri(Result)         (NRI_CALL *BindTextureMemory)               (NriRef(Device) device, const NriPtr(TextureMemoryBindingDesc) memoryBindingDescs, uint32_t memoryBindingDescNum);
@@ -128,7 +140,10 @@ NriStruct(CoreInterface) {
         void                (NRI_CALL *CmdSetPipelineLayout)        (NriRef(CommandBuffer) commandBuffer, const NriRef(PipelineLayout) pipelineLayout);
         void                (NRI_CALL *CmdSetPipeline)              (NriRef(CommandBuffer) commandBuffer, const NriRef(Pipeline) pipeline);
 
-        // Setup (expects "CmdSetPipelineLayout" to be called first, descriptor sets updates must be completed before this point)
+        // Setup
+        // - expects "CmdSetPipelineLayout" to be called first
+        // - if "ALLOW_UPDATE_AFTER_SET" not used, descriptor sets (and data pointed to by descriptors) must be updated before "CmdSetDescriptorSet"
+        // - if "ALLOW_UPDATE_AFTER_SET" used, descriptor sets (and data pointed to by descriptors) can be updated after "CmdSetDescriptorSet"
         void                (NRI_CALL *CmdSetDescriptorSet)         (NriRef(CommandBuffer) commandBuffer, uint32_t setIndex, const NriRef(DescriptorSet) descriptorSet, const uint32_t* dynamicConstantBufferOffsets); // expects dynamic constant buffer offsets as in the currently bound pipeline
         void                (NRI_CALL *CmdSetRootConstants)         (NriRef(CommandBuffer) commandBuffer, uint32_t rootConstantIndex, const void* data, uint32_t size); // requires "pipelineLayoutRootConstantMaxSize > 0"
         void                (NRI_CALL *CmdSetRootDescriptor)        (NriRef(CommandBuffer) commandBuffer, uint32_t rootDescriptorIndex, NriRef(Descriptor) descriptor); // requires "pipelineLayoutRootDescriptorMaxNum > 0"
@@ -138,21 +153,21 @@ NriStruct(CoreInterface) {
 
         // Input assembly
         void                (NRI_CALL *CmdSetIndexBuffer)           (NriRef(CommandBuffer) commandBuffer, const NriRef(Buffer) buffer, uint64_t offset, Nri(IndexType) indexType);
-        void                (NRI_CALL *CmdSetVertexBuffers)         (NriRef(CommandBuffer) commandBuffer, uint32_t baseSlot, uint32_t bufferNum, const NriPtr(Buffer) const* buffers, NriOptional const uint64_t* offsets); // expects "CmdSetPipeline" to be called first
+        void                (NRI_CALL *CmdSetVertexBuffers)         (NriRef(CommandBuffer) commandBuffer, uint32_t baseSlot, const NriPtr(VertexBufferDesc) vertexBufferDescs, uint32_t vertexBufferNum);
 
         // Initial state
         void                (NRI_CALL *CmdSetViewports)             (NriRef(CommandBuffer) commandBuffer, const NriPtr(Viewport) viewports, uint32_t viewportNum);
         void                (NRI_CALL *CmdSetScissors)              (NriRef(CommandBuffer) commandBuffer, const NriPtr(Rect) rects, uint32_t rectNum);
 
         // Initial state, if enabled in the pipeline
-        void                (NRI_CALL *CmdSetStencilReference)      (NriRef(CommandBuffer) commandBuffer, uint8_t frontRef, uint8_t backRef); // "backRef" requires "isIndependentFrontAndBackStencilReferenceAndMasksSupported"
-        void                (NRI_CALL *CmdSetDepthBounds)           (NriRef(CommandBuffer) commandBuffer, float boundsMin, float boundsMax); // requires "isDepthBoundsTestSupported"
+        void                (NRI_CALL *CmdSetStencilReference)      (NriRef(CommandBuffer) commandBuffer, uint8_t frontRef, uint8_t backRef); // "backRef" requires "features.independentFrontAndBackStencilReferenceAndMasks"
+        void                (NRI_CALL *CmdSetDepthBounds)           (NriRef(CommandBuffer) commandBuffer, float boundsMin, float boundsMax); // requires "features.depthBoundsTest"
         void                (NRI_CALL *CmdSetBlendConstants)        (NriRef(CommandBuffer) commandBuffer, const NriRef(Color32f) color);
-        void                (NRI_CALL *CmdSetSampleLocations)       (NriRef(CommandBuffer) commandBuffer, const NriPtr(SampleLocation) locations, Nri(Sample_t) locationNum, Nri(Sample_t) sampleNum); // requires "sampleLocationsTier != 0"
-        void                (NRI_CALL *CmdSetShadingRate)           (NriRef(CommandBuffer) commandBuffer, const NriRef(ShadingRateDesc) shadingRateDesc); // requires "shadingRateTier != 0"
+        void                (NRI_CALL *CmdSetSampleLocations)       (NriRef(CommandBuffer) commandBuffer, const NriPtr(SampleLocation) locations, Nri(Sample_t) locationNum, Nri(Sample_t) sampleNum); // requires "tiers.sampleLocations != 0"
+        void                (NRI_CALL *CmdSetShadingRate)           (NriRef(CommandBuffer) commandBuffer, const NriRef(ShadingRateDesc) shadingRateDesc); // requires "tiers.shadingRate != 0"
 
         // State override, if enabled in the pipeline
-        void                (NRI_CALL *CmdSetDepthBias)             (NriRef(CommandBuffer) commandBuffer, const NriRef(DepthBiasDesc) depthBiasDesc); // requires "isDynamicDepthBiasSupported"
+        void                (NRI_CALL *CmdSetDepthBias)             (NriRef(CommandBuffer) commandBuffer, const NriRef(DepthBiasDesc) depthBiasDesc); // requires "features.dynamicDepthBias"
 
         // Graphics
         void                (NRI_CALL *CmdBeginRendering)           (NriRef(CommandBuffer) commandBuffer, const NriRef(AttachmentsDesc) attachmentsDesc);
@@ -179,11 +194,15 @@ NriStruct(CoreInterface) {
         // Copy
         void                (NRI_CALL *CmdCopyBuffer)               (NriRef(CommandBuffer) commandBuffer, NriRef(Buffer) dstBuffer, uint64_t dstOffset, const NriRef(Buffer) srcBuffer, uint64_t srcOffset, uint64_t size);
         void                (NRI_CALL *CmdCopyTexture)              (NriRef(CommandBuffer) commandBuffer, NriRef(Texture) dstTexture, NriOptional const NriPtr(TextureRegionDesc) dstRegionDesc, const NriRef(Texture) srcTexture, NriOptional const NriPtr(TextureRegionDesc) srcRegionDesc);
-        void                (NRI_CALL *CmdResolveTexture)           (NriRef(CommandBuffer) commandBuffer, NriRef(Texture) dstTexture, NriOptional const NriPtr(TextureRegionDesc) dstRegionDesc, const NriRef(Texture) srcTexture, NriOptional const NriPtr(TextureRegionDesc) srcRegionDesc); // "isRegionResolveSupported" is needed for region specification
         void                (NRI_CALL *CmdUploadBufferToTexture)    (NriRef(CommandBuffer) commandBuffer, NriRef(Texture) dstTexture, const NriRef(TextureRegionDesc) dstRegionDesc, const NriRef(Buffer) srcBuffer, const NriRef(TextureDataLayoutDesc) srcDataLayoutDesc);
         void                (NRI_CALL *CmdReadbackTextureToBuffer)  (NriRef(CommandBuffer) commandBuffer, NriRef(Buffer) dstBuffer, const NriRef(TextureDataLayoutDesc) dstDataLayoutDesc, const NriRef(Texture) srcTexture, const NriRef(TextureRegionDesc) srcRegionDesc);
-        void                (NRI_CALL *CmdClearStorageBuffer)       (NriRef(CommandBuffer) commandBuffer, const NriRef(ClearStorageBufferDesc) clearDesc); // potentially slow clear
-        void                (NRI_CALL *CmdClearStorageTexture)      (NriRef(CommandBuffer) commandBuffer, const NriRef(ClearStorageTextureDesc) clearDesc); // potentially slow clear
+        void                (NRI_CALL *CmdZeroBuffer)               (NriRef(CommandBuffer) commandBuffer, NriRef(Buffer) buffer, uint64_t offset, uint64_t size);
+
+        // Resolve
+        void                (NRI_CALL *CmdResolveTexture)           (NriRef(CommandBuffer) commandBuffer, NriRef(Texture) dstTexture, NriOptional const NriPtr(TextureRegionDesc) dstRegionDesc, const NriRef(Texture) srcTexture, NriOptional const NriPtr(TextureRegionDesc) srcRegionDesc); // "features.regionResolve" is needed for region specification
+
+        // Clear (potentially slow)
+        void                (NRI_CALL *CmdClearStorage)             (NriRef(CommandBuffer) commandBuffer, const NriRef(ClearStorageDesc) clearDesc);
 
         // Query
         void                (NRI_CALL *CmdResetQueries)             (NriRef(CommandBuffer) commandBuffer, NriRef(QueryPool) queryPool, uint32_t offset, uint32_t num);
@@ -215,10 +234,13 @@ NriStruct(CoreInterface) {
     void                (NRI_CALL *ResetCommandAllocator)           (NriRef(CommandAllocator) commandAllocator);
 
     // Map / Unmap
+    // D3D11: persistent mapping unsupported
+    // D3D12: persistent mapping supported, "Map/Unmap" do nothing
+    // VK: persistent mapping supported, but "Unmap" can do a flush if underlying memory is not HOST_COHERENT (unlikely)
     void*               (NRI_CALL *MapBuffer)                       (NriRef(Buffer) buffer, uint64_t offset, uint64_t size);
     void                (NRI_CALL *UnmapBuffer)                     (NriRef(Buffer) buffer);
 
-    // Debug name (skipped for buffers/textures in D3D if they are not bound to memory)
+    // Debug name for any object declared as "NriForwardStruct" (skipped for buffers & textures in D3D if they are not bound to a memory)
     void                (NRI_CALL *SetDebugName)                    (NriPtr(Object) object, const char* name);
 
     // Native objects                                                                                            ___D3D11___________________________|_D3D12_______________________|_VK_________________________________

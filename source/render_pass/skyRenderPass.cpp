@@ -106,12 +106,8 @@ void SkyRenderPass::BuildPipeline() {
 
 void SkyRenderPass::AllocGPUMemory() {
 	auto NRI = *m_NRI;
-
-	tinyddsloader::DDSFile ddsImage;
 	std::string path = utils::GetFullPath("barcelona.dds", utils::DataFolder::TEXTURES);
-	ddsImage.Load(path.c_str());
-
-	if (!utils::LoadTexture(path, texture, true)) {
+	if (!utils::LoadTexture(path, m_texture, true)) {
 		printf("Can not found this texture %s", path.c_str());
 	}
 
@@ -120,13 +116,12 @@ void SkyRenderPass::AllocGPUMemory() {
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
 		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
 		textureDesc.format = nri::Format::BC7_RGBA_UNORM;
-		textureDesc.width = ddsImage.GetWidth();
-		textureDesc.height = ddsImage.GetHeight();
-		textureDesc.mipNum = ddsImage.GetMipCount();
+		textureDesc.width = m_texture.GetWidth();
+		textureDesc.height = m_texture.GetHeight();
+		textureDesc.mipNum = 1;
 
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture(*m_renderer->GetRenderDevice(), textureDesc, m_HDRTexture));
-		m_HDRTexture_DDS = &ddsImage;
 	}
 
 	std::vector<nri::Texture *> textureArray = { m_HDRTexture };
@@ -163,11 +158,8 @@ void SkyRenderPass::BindMemory() {
 				NRI.CreateTexture2DView(textureViewDesc, m_HDRTextureShaderResource));
 	}
 
-	std::string path = utils::GetFullPath("barcelona.dds", utils::DataFolder::TEXTURES);
-	m_HDRTexture_DDS->Load(path.c_str());
-
 	// Upload data
-	const tinyddsloader::DDSFile::ImageData *imgData = (*m_HDRTexture_DDS).GetImageData(0, 0);
+	const tinyddsloader::DDSFile::ImageData *imgData = m_texture.data.GetImageData(0, 0);
 
 	nri::TextureSubresourceUploadDesc hdrSubresources;
 	hdrSubresources.slices = imgData->m_mem;

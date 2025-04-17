@@ -3,25 +3,24 @@
 #include "NRIDescs.h"
 #include "assimp/scene.h"
 #include <stddef.h>
+#include <vector>
 
 CommonMeshPass::CommonMeshPass(Renderer *renderer, utils::Scene &scene) :
 		CommonRenderPass(renderer), m_Scene(scene) {
 	m_NRI = &m_renderer->GetNRI();
 	// m_Scene = scene;
 	auto NRI = *m_NRI;
-	// AllocGPUMemory();
-	// BindMemory();
-	// BuildPipeline();
+	AllocGPUMemory();
+	BindMemory();
+	BuildPipeline();
 }
 
 void CommonMeshPass::AllocGPUMemory() {
 	auto NRI = *m_NRI;
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
 
-	m_Scene.meshDatas;
-
 	// Load texture
-
+#if 0
 	std::string path =
 			utils::GetFullPath("DamagedHelmet/glTF/Default_albedo.dds", utils::DataFolder::ROOT);
 	if (!utils::LoadTexture(path, m_texture_albedo_data, true)) {
@@ -47,10 +46,10 @@ void CommonMeshPass::AllocGPUMemory() {
 	if (!utils::LoadTexture(path, m_texture_emissive_data, true)) {
 		printf("Can not found this texture %s", path.c_str());
 	}
-
+#endif
 	// GPU Resource
 	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
-			deviceDesc.constantBufferOffsetAlignment);
+			deviceDesc.memoryAlignment.constantBufferOffset);
 
 	{
 		nri::BufferDesc bufferDesc = {};
@@ -65,13 +64,18 @@ void CommonMeshPass::AllocGPUMemory() {
 
 	for (size_t i = 0; i < m_Scene.meshDatas.size(); ++i) {
 		utils::MeshData &node = m_Scene.meshDatas.at(i);
+		std::vector<Vertex> m_positionNode = {};
+		for (unsigned int i = 0; i != node.vertices.size(); i++) {
+			m_positionNode.push_back({ node.vertices.at(i), node.texCoords.at(i), node.normals.at(i) });
+		}
+		m_positions.push_back(m_positionNode);
 		const uint64_t indexDataSize = helper::GetByteSizeOf(node.indices);
 		const uint64_t indexDataAlignedSize = helper::Align(indexDataSize, 32);
-		const uint64_t vertexDataSize = helper::GetByteSizeOf(node.vertices);
+		const uint64_t vertexDataSize = helper::GetByteSizeOf(m_positionNode);
 
 		// Compute offsets for the current mesh
 		uint64_t indexOffset = (i == 0) ? 0 : previousIndexAndVertexSize;
-		uint64_t vertexOffset = (i == 0) ? indexDataAlignedSize : (previousVertexOffset + indexDataAlignedSize);
+		uint64_t vertexOffset = (i == 0) ? indexDataAlignedSize : (indexOffset + indexDataAlignedSize);
 
 		// Store the offsets
 		m_sceneMeshOffsets.push_back({ indexOffset, vertexOffset });
@@ -169,12 +173,6 @@ void CommonMeshPass::AllocGPUMemory() {
 
 void CommonMeshPass::BindMemory() {
 	auto NRI = *m_NRI;
-
-	// m_IndexCount = m_indices.size();
-	// const uint64_t indexDataSize = helper::GetByteSizeOf(m_indices);
-	// const uint64_t indexDataAlignedSize = helper::Align(indexDataSize, 32);
-	// const uint64_t vertexDataSize = helper::GetByteSizeOf(m_positions);
-
 	// Bind Memory
 	std::vector<nri::Buffer *> constantBufferArray = { m_ConstantBuffer };
 
@@ -204,7 +202,7 @@ void CommonMeshPass::BindMemory() {
 
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
 	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
-			deviceDesc.constantBufferOffsetAlignment);
+			deviceDesc.memoryAlignment.constantBufferOffset);
 
 	{
 		nri::BufferViewDesc bufferViewDesc = {};
@@ -222,7 +220,7 @@ void CommonMeshPass::BindMemory() {
 				m_vertexDataTotalSize);
 		for (size_t i = 0; i < m_Scene.meshDatas.size(); ++i) {
 			memcpy(&geometryBufferData[m_sceneMeshOffsets[i].first], m_Scene.meshDatas[i].indices.data(), helper::GetByteSizeOf(m_Scene.meshDatas[i].indices));
-			memcpy(&geometryBufferData[m_sceneMeshOffsets[i].second], m_Scene.meshDatas[i].vertices.data(), helper::GetByteSizeOf(m_Scene.meshDatas[i].vertices));
+			memcpy(&geometryBufferData[m_sceneMeshOffsets[i].second], m_positions.at(i).data(), helper::GetByteSizeOf(m_positions.at(i)));
 		}
 
 		nri::BufferUploadDesc bufferData = {};
@@ -362,16 +360,16 @@ void CommonMeshPass::BuildPipeline() {
 		descriptorRangeConstant[0] = { 0, 1, nri::DescriptorType::CONSTANT_BUFFER,
 			nri::StageBits::ALL };
 
-		nri::DescriptorRangeDesc descriptorRangeTexture[2];
-		descriptorRangeTexture[0] = { 0, 5, nri::DescriptorType::TEXTURE,
-			nri::StageBits::FRAGMENT_SHADER };
-		descriptorRangeTexture[1] = { 0, 1, nri::DescriptorType::SAMPLER,
-			nri::StageBits::FRAGMENT_SHADER };
+		// nri::DescriptorRangeDesc descriptorRangeTexture[2];
+		// descriptorRangeTexture[0] = { 0, 5, nri::DescriptorType::TEXTURE,
+		// 	nri::StageBits::FRAGMENT_SHADER };
+		// descriptorRangeTexture[1] = { 0, 1, nri::DescriptorType::SAMPLER,
+		// 	nri::StageBits::FRAGMENT_SHADER };
 
 		nri::DescriptorSetDesc descriptorSetDescs[] = {
 			{ 0, descriptorRangeConstant,
 					helper::GetCountOf(descriptorRangeConstant) },
-			{ 1, descriptorRangeTexture, helper::GetCountOf(descriptorRangeTexture) },
+			//{ 1, descriptorRangeTexture, helper::GetCountOf(descriptorRangeTexture) },
 		};
 
 		nri::RootConstantDesc rootConstant = { 1, sizeof(glm::vec4),
@@ -391,7 +389,6 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::VertexStreamDesc vertexStreamDesc = {};
 		vertexStreamDesc.bindingSlot = 0;
-		vertexStreamDesc.stride = sizeof(Vertex);
 
 		nri::VertexAttributeDesc vertexAttributeDesc[3] = {};
 		{
@@ -449,8 +446,8 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::ShaderDesc shaderStages[] = {
 			utils::LoadShader(deviceDesc.graphicsAPI,
-					"simpleMesh.vs", shaderCodeStorage),
-			utils::LoadShader(deviceDesc.graphicsAPI, "simpleMesh.fs",
+					"simpleModelMesh.vs", shaderCodeStorage),
+			utils::LoadShader(deviceDesc.graphicsAPI, "simpleModelMesh.fs",
 					shaderCodeStorage),
 		};
 
@@ -470,22 +467,22 @@ void CommonMeshPass::BuildPipeline() {
 	// Descriptor sets
 	{
 		// Texture
-		NRI_ABORT_ON_FAILURE(
-				NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_PipelineLayout, 1,
-						&m_TextureDescriptorSet, 1, 0));
+		// NRI_ABORT_ON_FAILURE(
+		// 		NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_PipelineLayout, 1,
+		// 				&m_TextureDescriptorSet, 1, 0));
 
-		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_texture_albedo_view, m_texture_normal_view, m_texture_mr_view, m_texture_ao_view, m_texture_emissive_view }; //, m_CubemapTextureShaderResource };
+		// std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_texture_albedo_view, m_texture_normal_view, m_texture_mr_view, m_texture_ao_view, m_texture_emissive_view }; //, m_CubemapTextureShaderResource };
 
-		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
-		descriptorRangeUpdateDescs[0].descriptorNum = shaderResoruceViewArray.size();
-		descriptorRangeUpdateDescs[0].descriptors = shaderResoruceViewArray.data();
+		// nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
+		// descriptorRangeUpdateDescs[0].descriptorNum = shaderResoruceViewArray.size();
+		// descriptorRangeUpdateDescs[0].descriptors = shaderResoruceViewArray.data();
 
-		descriptorRangeUpdateDescs[1].descriptorNum = 1;
-		descriptorRangeUpdateDescs[1].descriptors = &m_Sampler;
+		// descriptorRangeUpdateDescs[1].descriptorNum = 1;
+		// descriptorRangeUpdateDescs[1].descriptors = &m_Sampler;
 
-		NRI.UpdateDescriptorRanges(*m_TextureDescriptorSet, 0,
-				helper::GetCountOf(descriptorRangeUpdateDescs),
-				descriptorRangeUpdateDescs);
+		// NRI.UpdateDescriptorRanges(*m_TextureDescriptorSet, 0,
+		// 		helper::GetCountOf(descriptorRangeUpdateDescs),
+		// 		descriptorRangeUpdateDescs);
 
 		NRI_ABORT_ON_FAILURE(
 				NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_PipelineLayout, 0,
@@ -525,28 +522,34 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 	}
 
 	{
-		helper::Annotation annotation(NRI, info.cmdBuffer, "SimpleMeshTEST");
+		helper::Annotation annotation(NRI, info.cmdBuffer, "SimpleModelMesh");
 
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &cameraPos, sizeof(glm::vec4));
-		NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer, 0,
-				nri::IndexType::UINT32);
-		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, 1, &m_GeometryBuffer,
-				&m_GeometryOffset);
-		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
-				*m_ConstantBufferDescriptorSet, nullptr);
-		NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_TextureDescriptorSet,
-				nullptr);
-		{
-			const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
-				600.f, 0.0f, 1.0f };
-			NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
+		for (size_t i = 0; i < m_Scene.meshDatas.size(); ++i) {
+			uint32_t indexOffset = m_sceneMeshOffsets.at(i).first;
+			uint32_t vertexOffset = m_sceneMeshOffsets.at(i).second;
+			uint32_t indexCount = m_Scene.meshDatas.at(i).indices.size();
+			NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer, indexOffset,
+					nri::IndexType::UINT32);
+			nri::VertexBufferDesc vertexBufferDesc = {};
+			vertexBufferDesc.buffer = m_GeometryBuffer;
+			vertexBufferDesc.offset = vertexOffset;
+			vertexBufferDesc.stride = sizeof(Vertex);
+			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+			NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
+					*m_ConstantBufferDescriptorSet, nullptr);
+			{
+				const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
+					600.f, 0.0f, 1.0f };
+				NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
 
-			nri::Rect scissor = { 0, 0, 900, 600 };
-			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
+				nri::Rect scissor = { 0, 0, 900, 600 };
+				NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
+			}
+			uint32_t instanceCount = 1;
+			NRI.CmdDrawIndexed(info.cmdBuffer, { indexCount, instanceCount, 0, 0, 0 });
 		}
-		uint32_t instanceCount = 1;
-		NRI.CmdDrawIndexed(info.cmdBuffer, { m_IndexCount, instanceCount, 0, 0, 0 });
 	}
 }

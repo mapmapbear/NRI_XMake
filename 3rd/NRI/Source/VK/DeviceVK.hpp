@@ -1,6 +1,6 @@
 // © 2021 NVIDIA Corporation
 
-constexpr VkBufferUsageFlags GetBufferUsageFlags(BufferUsageBits bufferUsageBits, uint32_t structureStride, bool isDeviceAddressSupported) {
+static constexpr VkBufferUsageFlags GetBufferUsageFlags(BufferUsageBits bufferUsageBits, uint32_t structureStride, bool isDeviceAddressSupported) {
     VkBufferUsageFlags flags = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
     if (isDeviceAddressSupported)
@@ -30,6 +30,12 @@ constexpr VkBufferUsageFlags GetBufferUsageFlags(BufferUsageBits bufferUsageBits
     if (bufferUsageBits & BufferUsageBits::ACCELERATION_STRUCTURE_BUILD_INPUT)
         flags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
 
+    if (bufferUsageBits & BufferUsageBits::MICROMAP_STORAGE)
+        flags |= VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;
+
+    if (bufferUsageBits & BufferUsageBits::MICROMAP_BUILD_INPUT)
+        flags |= VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT;
+
     if (bufferUsageBits & BufferUsageBits::SHADER_RESOURCE)
         flags |= structureStride ? VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
 
@@ -39,7 +45,7 @@ constexpr VkBufferUsageFlags GetBufferUsageFlags(BufferUsageBits bufferUsageBits
     return flags;
 }
 
-constexpr VkImageUsageFlags GetImageUsageFlags(TextureUsageBits textureUsageBits) {
+static constexpr VkImageUsageFlags GetImageUsageFlags(TextureUsageBits textureUsageBits) {
     VkImageUsageFlags flags = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     if (textureUsageBits & TextureUsageBits::SHADER_RESOURCE)
@@ -60,7 +66,7 @@ constexpr VkImageUsageFlags GetImageUsageFlags(TextureUsageBits textureUsageBits
     return flags;
 }
 
-inline bool IsExtensionSupported(const char* ext, const Vector<VkExtensionProperties>& list) {
+static inline bool IsExtensionSupported(const char* ext, const Vector<VkExtensionProperties>& list) {
     for (auto& e : list) {
         if (!strcmp(ext, e.extensionName))
             return true;
@@ -69,7 +75,7 @@ inline bool IsExtensionSupported(const char* ext, const Vector<VkExtensionProper
     return false;
 }
 
-inline bool IsExtensionSupported(const char* ext, const Vector<const char*>& list) {
+static inline bool IsExtensionSupported(const char* ext, const Vector<const char*>& list) {
     for (auto& e : list) {
         if (!strcmp(ext, e))
             return true;
@@ -94,6 +100,34 @@ static void VKAPI_PTR vkFreeHostMemory(void* pUserData, void* pMemory) {
     const auto& allocationCallbacks = *(AllocationCallbacks*)pUserData;
 
     return allocationCallbacks.Free(allocationCallbacks.userArg, pMemory);
+}
+
+static VkBool32 VKAPI_PTR MessageCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData) {
+    DeviceVK& device = *(DeviceVK*)userData;
+
+    // TODO: some messages can be muted here
+    { 
+        // Loader info message
+        if (callbackData->messageIdNumber == 0)
+            return VK_FALSE;
+        // Validation Warning: [ WARNING-DEBUG-PRINTF ] Internal Warning: Setting VkPhysicalDeviceVulkan12Properties::maxUpdateAfterBindDescriptorsInAllPools to 32
+        if (callbackData->messageIdNumber == 0x76589099)
+            return VK_FALSE;
+        // (v1.4.309 issue) The storage image descriptor is accessed by a OpTypeImage that has a Format operand which doesn't match the VkImageView format
+        // TODO: there is no way to enable "storageWithoutFormat" capability in SPIRV in the current version of DXC, so ignore the warning if this feature is supported by the device
+        if (callbackData->messageIdNumber == 0x013365B2 && device.m_IsSupported.storageWithoutFormat)
+            return VK_FALSE;
+    }
+
+    Message severity = Message::INFO;
+    if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+        severity = Message::ERROR;
+    else if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+        severity = Message::WARNING;
+
+    device.ReportMessage(severity, __FILE__, __LINE__, "%s", callbackData->pMessage);
+
+    return VK_FALSE;
 }
 
 void DeviceVK::FilterInstanceLayers(Vector<const char*>& layers) {
@@ -301,7 +335,12 @@ void DeviceVK::ProcessDeviceExtensions(Vector<const char*>& desiredDeviceExts, b
 }
 
 DeviceVK::DeviceVK(const CallbackInterface& callbacks, const AllocationCallbacks& allocationCallbacks)
-    : DeviceBase(callbacks, allocationCallbacks) {
+    : DeviceBase(callbacks, allocationCallbacks)
+    , m_QueueFamilies{
+          Vector<QueueVK*>(GetStdAllocator()),
+          Vector<QueueVK*>(GetStdAllocator()),
+          Vector<QueueVK*>(GetStdAllocator()),
+      } {
     m_AllocationCallbacks.pUserData = (void*)&GetAllocationCallbacks();
     m_AllocationCallbacks.pfnAllocation = vkAllocateHostMemory;
     m_AllocationCallbacks.pfnReallocation = vkReallocateHostMemory;
@@ -700,12 +739,13 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
     m_IsSupported.robustness = features.features.robustBufferAccess != 0 && (imageRobustnessFeatures.robustImageAccess != 0 || features13.robustImageAccess != 0);
     m_IsSupported.robustness2 = robustness2Features.robustBufferAccess2 != 0 && robustness2Features.robustImageAccess2 != 0;
     m_IsSupported.pipelineRobustness = pipelineRobustnessFeatures.pipelineRobustness;
+    m_IsSupported.storageWithoutFormat = features.features.shaderStorageImageWriteWithoutFormat != 0 && features.features.shaderStorageImageReadWithoutFormat != 0;
 
     { // Check hard requirements
         bool hasDynamicRendering = features13.dynamicRendering != 0 || (dynamicRenderingFeatures.dynamicRendering != 0 && extendedDynamicStateFeatures.extendedDynamicState != 0);
         bool hasSynchronization2 = features13.synchronization2 != 0 || synchronization2features.synchronization2 != 0;
 
-        RETURN_ON_FAILURE(this, hasDynamicRendering && hasSynchronization2, nri::Result::UNSUPPORTED, "'dynamicRendering' and 'synchronization2' are not supported by the device");
+        RETURN_ON_FAILURE(this, hasDynamicRendering && hasSynchronization2, Result::UNSUPPORTED, "'dynamicRendering' and 'synchronization2' are not supported by the device");
     }
 
     { // Create device
@@ -736,13 +776,14 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
 
             for (uint32_t i = 0; i < desc.queueFamilyNum; i++) {
                 const QueueFamilyDesc& queueFamily = desc.queueFamilies[i];
+                uint32_t queueFamilyIndex = queueFamilyIndices[(size_t)queueFamily.queueType];
 
-                if (queueFamily.queueNum) {
+                if (queueFamily.queueNum && queueFamilyIndex != INVALID_FAMILY_INDEX) {
                     VkDeviceQueueCreateInfo& queueCreateInfo = queueCreateInfos[deviceCreateInfo.queueCreateInfoCount++];
 
                     queueCreateInfo = {VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
                     queueCreateInfo.queueCount = queueFamily.queueNum;
-                    queueCreateInfo.queueFamilyIndex = queueFamilyIndices[(size_t)queueFamily.queueType];
+                    queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
                     queueCreateInfo.pQueuePriorities = queueFamily.queuePriorities ? queueFamily.queuePriorities : zeroPriorities.data();
                 }
             }
@@ -762,43 +803,51 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
         for (uint32_t i = 0; i < descVK.queueFamilyNum; i++) {
             const QueueFamilyVKDesc& queueFamilyDesc = descVK.queueFamilies[i];
             auto& queueFamily = m_QueueFamilies[(size_t)queueFamilyDesc.queueType];
+            uint32_t queueFamilyIndex = queueFamilyIndices[(size_t)queueFamilyDesc.queueType];
 
-            for (uint32_t j = 0; j < queueFamilyDesc.queueNum; j++) {
-                VkDeviceQueueInfo2 queueInfo = {VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2};
-                queueInfo.queueFamilyIndex = queueFamilyIndices[(size_t)queueFamilyDesc.queueType];
-                queueInfo.queueIndex = j;
+            if (queueFamilyIndex != INVALID_FAMILY_INDEX) {
+                for (uint32_t j = 0; j < queueFamilyDesc.queueNum; j++) {
+                    VkDeviceQueueInfo2 queueInfo = {VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2};
+                    queueInfo.queueFamilyIndex = queueFamilyIndex;
+                    queueInfo.queueIndex = j;
 
-                VkQueue handle = VK_NULL_HANDLE;
-                m_VK.GetDeviceQueue2(m_Device, &queueInfo, &handle);
+                    VkQueue handle = VK_NULL_HANDLE;
+                    m_VK.GetDeviceQueue2(m_Device, &queueInfo, &handle);
 
-                QueueVK* queue;
-                Result result = CreateImplementation<QueueVK>(queue, queueFamilyDesc.queueType, queueFamilyDesc.familyIndex, handle);
-                if (result == Result::SUCCESS)
-                    queueFamily.push_back(queue);
-            }
+                    QueueVK* queue;
+                    Result result = CreateImplementation<QueueVK>(queue, queueFamilyDesc.queueType, queueFamilyDesc.familyIndex, handle);
+                    if (result == Result::SUCCESS)
+                        queueFamily.push_back(queue);
+                }
 
-            m_Desc.adapterDesc.queueNum[(size_t)queueFamilyDesc.queueType] = queueFamilyDesc.queueNum;
+                m_Desc.adapterDesc.queueNum[(size_t)queueFamilyDesc.queueType] = queueFamilyDesc.queueNum;
+            } else
+                m_Desc.adapterDesc.queueNum[(size_t)queueFamilyDesc.queueType] = 0;
         }
     } else {
         for (uint32_t i = 0; i < desc.queueFamilyNum; i++) {
             const QueueFamilyDesc& queueFamilyDesc = desc.queueFamilies[i];
             auto& queueFamily = m_QueueFamilies[(size_t)queueFamilyDesc.queueType];
+            uint32_t queueFamilyIndex = queueFamilyIndices[(size_t)queueFamilyDesc.queueType];
 
-            for (uint32_t j = 0; j < queueFamilyDesc.queueNum; j++) {
-                VkDeviceQueueInfo2 queueInfo = {VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2};
-                queueInfo.queueFamilyIndex = queueFamilyIndices[(size_t)queueFamilyDesc.queueType];
-                queueInfo.queueIndex = j;
+            if (queueFamilyIndex != INVALID_FAMILY_INDEX) {
+                for (uint32_t j = 0; j < queueFamilyDesc.queueNum; j++) {
+                    VkDeviceQueueInfo2 queueInfo = {VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2};
+                    queueInfo.queueFamilyIndex = queueFamilyIndices[(size_t)queueFamilyDesc.queueType];
+                    queueInfo.queueIndex = j;
 
-                VkQueue handle = VK_NULL_HANDLE;
-                m_VK.GetDeviceQueue2(m_Device, &queueInfo, &handle);
+                    VkQueue handle = VK_NULL_HANDLE;
+                    m_VK.GetDeviceQueue2(m_Device, &queueInfo, &handle);
 
-                QueueVK* queue;
-                Result result = CreateImplementation<QueueVK>(queue, queueFamilyDesc.queueType, queueInfo.queueFamilyIndex, handle);
-                if (result == Result::SUCCESS)
-                    queueFamily.push_back(queue);
-            }
+                    QueueVK* queue;
+                    Result result = CreateImplementation<QueueVK>(queue, queueFamilyDesc.queueType, queueInfo.queueFamilyIndex, handle);
+                    if (result == Result::SUCCESS)
+                        queueFamily.push_back(queue);
+                }
 
-            m_Desc.adapterDesc.queueNum[(size_t)queueFamilyDesc.queueType] = queueFamilyDesc.queueNum;
+                m_Desc.adapterDesc.queueNum[(size_t)queueFamilyDesc.queueType] = queueFamilyDesc.queueNum;
+            } else
+                m_Desc.adapterDesc.queueNum[(size_t)queueFamilyDesc.queueType] = 0;
         }
     }
 
@@ -861,13 +910,13 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
         VkPhysicalDeviceConservativeRasterizationPropertiesEXT conservativeRasterProps = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONSERVATIVE_RASTERIZATION_PROPERTIES_EXT};
         if (IsExtensionSupported(VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME, desiredDeviceExts)) {
             APPEND_EXT(conservativeRasterProps);
-            m_Desc.conservativeRasterTier = 1;
+            m_Desc.tiers.conservativeRaster = 1;
         }
 
         VkPhysicalDeviceSampleLocationsPropertiesEXT sampleLocationsProps = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLE_LOCATIONS_PROPERTIES_EXT};
         if (IsExtensionSupported(VK_EXT_SAMPLE_LOCATIONS_EXTENSION_NAME, desiredDeviceExts)) {
             APPEND_EXT(sampleLocationsProps);
-            m_Desc.sampleLocationsTier = 1;
+            m_Desc.tiers.sampleLocations = 1;
         }
 
         VkPhysicalDeviceMeshShaderPropertiesEXT meshShaderProps = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT};
@@ -875,222 +924,244 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
             APPEND_EXT(meshShaderProps);
         }
 
+        VkPhysicalDeviceOpacityMicromapPropertiesEXT micromapProps = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_PROPERTIES_EXT};
+        if (IsExtensionSupported(VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME, desiredDeviceExts)) {
+            APPEND_EXT(micromapProps);
+        }
+
         m_VK.GetPhysicalDeviceProperties2(m_PhysicalDevice, &props);
 
         // Fill desc
         const VkPhysicalDeviceLimits& limits = props.properties.limits;
 
-        m_Desc.viewportMaxNum = limits.maxViewports;
-        m_Desc.viewportBoundsRange[0] = int32_t(limits.viewportBoundsRange[0]);
-        m_Desc.viewportBoundsRange[1] = int32_t(limits.viewportBoundsRange[1]);
+        m_Desc.viewport.maxNum = limits.maxViewports;
+        m_Desc.viewport.boundsMin = (int16_t)limits.viewportBoundsRange[0];
+        m_Desc.viewport.boundsMax = (int16_t)limits.viewportBoundsRange[1];
 
-        m_Desc.attachmentMaxDim = (Dim_t)std::min(limits.maxFramebufferWidth, limits.maxFramebufferHeight);
-        m_Desc.attachmentLayerMaxNum = (Dim_t)limits.maxFramebufferLayers;
-        m_Desc.colorAttachmentMaxNum = (Dim_t)limits.maxColorAttachments;
+        m_Desc.multisampling.zeroAttachmentsSampleMaxNum = (Sample_t)limits.framebufferNoAttachmentsSampleCounts;
+        m_Desc.multisampling.attachmentColorSampleMaxNum = (Sample_t)limits.framebufferColorSampleCounts;
+        m_Desc.multisampling.attachmentDepthSampleMaxNum = (Sample_t)limits.framebufferDepthSampleCounts;
+        m_Desc.multisampling.attachmentStencilSampleMaxNum = (Sample_t)limits.framebufferStencilSampleCounts;
+        m_Desc.multisampling.textureColorSampleMaxNum = (Sample_t)limits.sampledImageColorSampleCounts;
+        m_Desc.multisampling.textureIntegerSampleMaxNum = (Sample_t)limits.sampledImageIntegerSampleCounts;
+        m_Desc.multisampling.textureDepthSampleMaxNum = (Sample_t)limits.sampledImageDepthSampleCounts;
+        m_Desc.multisampling.textureStencilSampleMaxNum = (Sample_t)limits.sampledImageStencilSampleCounts;
+        m_Desc.multisampling.storageTextureSampleMaxNum = (Sample_t)limits.storageImageSampleCounts;
 
-        m_Desc.colorSampleMaxNum = (Sample_t)limits.framebufferColorSampleCounts;
-        m_Desc.depthSampleMaxNum = (Sample_t)limits.framebufferDepthSampleCounts;
-        m_Desc.stencilSampleMaxNum = (Sample_t)limits.framebufferStencilSampleCounts;
-        m_Desc.zeroAttachmentsSampleMaxNum = (Sample_t)limits.framebufferNoAttachmentsSampleCounts;
-        m_Desc.textureColorSampleMaxNum = (Sample_t)limits.sampledImageColorSampleCounts;
-        m_Desc.textureIntegerSampleMaxNum = (Sample_t)limits.sampledImageIntegerSampleCounts;
-        m_Desc.textureDepthSampleMaxNum = (Sample_t)limits.sampledImageDepthSampleCounts;
-        m_Desc.textureStencilSampleMaxNum = (Sample_t)limits.sampledImageStencilSampleCounts;
-        m_Desc.storageTextureSampleMaxNum = (Sample_t)limits.storageImageSampleCounts;
+        m_Desc.dimensions.attachmentMaxDim = (Dim_t)std::min(limits.maxFramebufferWidth, limits.maxFramebufferHeight);
+        m_Desc.dimensions.attachmentLayerMaxNum = (Dim_t)limits.maxFramebufferLayers;
+        m_Desc.dimensions.texture1DMaxDim = (Dim_t)limits.maxImageDimension1D;
+        m_Desc.dimensions.texture2DMaxDim = (Dim_t)limits.maxImageDimension2D;
+        m_Desc.dimensions.texture3DMaxDim = (Dim_t)limits.maxImageDimension3D;
+        m_Desc.dimensions.textureLayerMaxNum = (Dim_t)limits.maxImageArrayLayers;
+        m_Desc.dimensions.typedBufferMaxDim = limits.maxTexelBufferElements;
 
-        m_Desc.texture1DMaxDim = (Dim_t)limits.maxImageDimension1D;
-        m_Desc.texture2DMaxDim = (Dim_t)limits.maxImageDimension2D;
-        m_Desc.texture3DMaxDim = (Dim_t)limits.maxImageDimension3D;
-        m_Desc.textureArrayLayerMaxNum = (Dim_t)limits.maxImageArrayLayers;
-        m_Desc.typedBufferMaxDim = limits.maxTexelBufferElements;
+        m_Desc.precision.viewportBits = limits.viewportSubPixelBits;
+        m_Desc.precision.subPixelBits = limits.subPixelPrecisionBits;
+        m_Desc.precision.subTexelBits = limits.subTexelPrecisionBits;
+        m_Desc.precision.mipmapBits = limits.mipmapPrecisionBits;
 
         const VkMemoryPropertyFlags neededFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
         for (uint32_t i = 0; i < m_MemoryProps.memoryTypeCount; i++) {
             const VkMemoryType& memoryType = m_MemoryProps.memoryTypes[i];
             if ((memoryType.propertyFlags & neededFlags) == neededFlags)
-                m_Desc.deviceUploadHeapSize += m_MemoryProps.memoryHeaps[memoryType.heapIndex].size;
+                m_Desc.memory.deviceUploadHeapSize += m_MemoryProps.memoryHeaps[memoryType.heapIndex].size;
         }
 
-        m_Desc.memoryAllocationMaxNum = limits.maxMemoryAllocationCount;
-        m_Desc.samplerAllocationMaxNum = limits.maxSamplerAllocationCount;
-        m_Desc.constantBufferMaxRange = limits.maxUniformBufferRange;
-        m_Desc.storageBufferMaxRange = limits.maxStorageBufferRange;
-        m_Desc.bufferTextureGranularity = (uint32_t)limits.bufferImageGranularity;
-        m_Desc.bufferMaxSize = m_MinorVersion >= 3 ? props13.maxBufferSize : maintenance4Props.maxBufferSize;
+        m_Desc.memory.allocationMaxNum = limits.maxMemoryAllocationCount;
+        m_Desc.memory.samplerAllocationMaxNum = limits.maxSamplerAllocationCount;
+        m_Desc.memory.constantBufferMaxRange = limits.maxUniformBufferRange;
+        m_Desc.memory.storageBufferMaxRange = limits.maxStorageBufferRange;
+        m_Desc.memory.bufferTextureGranularity = (uint32_t)limits.bufferImageGranularity;
+        m_Desc.memory.bufferMaxSize = m_MinorVersion >= 3 ? props13.maxBufferSize : maintenance4Props.maxBufferSize;
 
-        m_Desc.uploadBufferTextureRowAlignment = (uint32_t)limits.optimalBufferCopyRowPitchAlignment;
-        m_Desc.uploadBufferTextureSliceAlignment = (uint32_t)limits.optimalBufferCopyOffsetAlignment; // TODO: ?
-        m_Desc.bufferShaderResourceOffsetAlignment = (uint32_t)std::max(limits.minTexelBufferOffsetAlignment, limits.minStorageBufferOffsetAlignment);
-        m_Desc.constantBufferOffsetAlignment = (uint32_t)limits.minUniformBufferOffsetAlignment;
-        m_Desc.scratchBufferOffsetAlignment = accelerationStructureProps.minAccelerationStructureScratchOffsetAlignment;
-        m_Desc.shaderBindingTableAlignment = rayTracingProps.shaderGroupBaseAlignment;
+        m_Desc.memoryAlignment.uploadBufferTextureRow = (uint32_t)limits.optimalBufferCopyRowPitchAlignment;
+        m_Desc.memoryAlignment.uploadBufferTextureSlice = (uint32_t)limits.optimalBufferCopyOffsetAlignment; // TODO: ?
+        m_Desc.memoryAlignment.shaderBindingTable = rayTracingProps.shaderGroupBaseAlignment;
+        m_Desc.memoryAlignment.bufferShaderResourceOffset = (uint32_t)std::max(limits.minTexelBufferOffsetAlignment, limits.minStorageBufferOffsetAlignment);
+        m_Desc.memoryAlignment.constantBufferOffset = (uint32_t)limits.minUniformBufferOffsetAlignment;
+        m_Desc.memoryAlignment.scratchBufferOffset = accelerationStructureProps.minAccelerationStructureScratchOffsetAlignment;
+        m_Desc.memoryAlignment.accelerationStructureOffset = 256; // see the spec
+        m_Desc.memoryAlignment.micromapOffset = 256;              // see the spec
 
-        m_Desc.pipelineLayoutDescriptorSetMaxNum = limits.maxBoundDescriptorSets;
-        m_Desc.pipelineLayoutRootConstantMaxSize = limits.maxPushConstantsSize;
-        m_Desc.pipelineLayoutRootDescriptorMaxNum = pushDescriptorProps.maxPushDescriptors;
+        m_Desc.pipelineLayout.descriptorSetMaxNum = limits.maxBoundDescriptorSets;
+        m_Desc.pipelineLayout.rootConstantMaxSize = limits.maxPushConstantsSize;
+        m_Desc.pipelineLayout.rootDescriptorMaxNum = pushDescriptorProps.maxPushDescriptors;
 
-        m_Desc.perStageDescriptorSamplerMaxNum = limits.maxPerStageDescriptorSamplers;
-        m_Desc.perStageDescriptorConstantBufferMaxNum = limits.maxPerStageDescriptorUniformBuffers;
-        m_Desc.perStageDescriptorStorageBufferMaxNum = limits.maxPerStageDescriptorStorageBuffers;
-        m_Desc.perStageDescriptorTextureMaxNum = limits.maxPerStageDescriptorSampledImages;
-        m_Desc.perStageDescriptorStorageTextureMaxNum = limits.maxPerStageDescriptorStorageImages;
-        m_Desc.perStageResourceMaxNum = limits.maxPerStageResources;
+        m_Desc.descriptorSet.samplerMaxNum = limits.maxDescriptorSetSamplers;
+        m_Desc.descriptorSet.constantBufferMaxNum = limits.maxDescriptorSetUniformBuffers;
+        m_Desc.descriptorSet.storageBufferMaxNum = limits.maxDescriptorSetStorageBuffers;
+        m_Desc.descriptorSet.textureMaxNum = limits.maxDescriptorSetSampledImages;
+        m_Desc.descriptorSet.storageTextureMaxNum = limits.maxDescriptorSetStorageImages;
 
-        m_Desc.descriptorSetSamplerMaxNum = limits.maxDescriptorSetSamplers;
-        m_Desc.descriptorSetConstantBufferMaxNum = limits.maxDescriptorSetUniformBuffers;
-        m_Desc.descriptorSetStorageBufferMaxNum = limits.maxDescriptorSetStorageBuffers;
-        m_Desc.descriptorSetTextureMaxNum = limits.maxDescriptorSetSampledImages;
-        m_Desc.descriptorSetStorageTextureMaxNum = limits.maxDescriptorSetStorageImages;
+        m_Desc.descriptorSet.updateAfterSet.samplerMaxNum = props12.maxDescriptorSetUpdateAfterBindSamplers;
+        m_Desc.descriptorSet.updateAfterSet.constantBufferMaxNum = props12.maxDescriptorSetUpdateAfterBindUniformBuffers;
+        m_Desc.descriptorSet.updateAfterSet.storageBufferMaxNum = props12.maxDescriptorSetUpdateAfterBindStorageBuffers;
+        m_Desc.descriptorSet.updateAfterSet.textureMaxNum = props12.maxDescriptorSetUpdateAfterBindSampledImages;
+        m_Desc.descriptorSet.updateAfterSet.storageTextureMaxNum = props12.maxDescriptorSetUpdateAfterBindStorageImages;
 
-        m_Desc.vertexShaderAttributeMaxNum = limits.maxVertexInputAttributes;
-        m_Desc.vertexShaderStreamMaxNum = limits.maxVertexInputBindings;
-        m_Desc.vertexShaderOutputComponentMaxNum = limits.maxVertexOutputComponents;
+        m_Desc.shaderStage.descriptorSamplerMaxNum = limits.maxPerStageDescriptorSamplers;
+        m_Desc.shaderStage.descriptorConstantBufferMaxNum = limits.maxPerStageDescriptorUniformBuffers;
+        m_Desc.shaderStage.descriptorStorageBufferMaxNum = limits.maxPerStageDescriptorStorageBuffers;
+        m_Desc.shaderStage.descriptorTextureMaxNum = limits.maxPerStageDescriptorSampledImages;
+        m_Desc.shaderStage.descriptorStorageTextureMaxNum = limits.maxPerStageDescriptorStorageImages;
+        m_Desc.shaderStage.resourceMaxNum = limits.maxPerStageResources;
 
-        m_Desc.tessControlShaderGenerationMaxLevel = (float)limits.maxTessellationGenerationLevel;
-        m_Desc.tessControlShaderPatchPointMaxNum = limits.maxTessellationPatchSize;
-        m_Desc.tessControlShaderPerVertexInputComponentMaxNum = limits.maxTessellationControlPerVertexInputComponents;
-        m_Desc.tessControlShaderPerVertexOutputComponentMaxNum = limits.maxTessellationControlPerVertexOutputComponents;
-        m_Desc.tessControlShaderPerPatchOutputComponentMaxNum = limits.maxTessellationControlPerPatchOutputComponents;
-        m_Desc.tessControlShaderTotalOutputComponentMaxNum = limits.maxTessellationControlTotalOutputComponents;
-        m_Desc.tessEvaluationShaderInputComponentMaxNum = limits.maxTessellationEvaluationInputComponents;
-        m_Desc.tessEvaluationShaderOutputComponentMaxNum = limits.maxTessellationEvaluationOutputComponents;
+        m_Desc.shaderStage.updateAfterSet.descriptorSamplerMaxNum = props12.maxPerStageDescriptorUpdateAfterBindSamplers;
+        m_Desc.shaderStage.updateAfterSet.descriptorConstantBufferMaxNum = props12.maxPerStageDescriptorUpdateAfterBindUniformBuffers;
+        m_Desc.shaderStage.updateAfterSet.descriptorStorageBufferMaxNum = props12.maxPerStageDescriptorUpdateAfterBindStorageBuffers;
+        m_Desc.shaderStage.updateAfterSet.descriptorTextureMaxNum = props12.maxPerStageDescriptorUpdateAfterBindSampledImages;
+        m_Desc.shaderStage.updateAfterSet.descriptorStorageTextureMaxNum = props12.maxPerStageDescriptorUpdateAfterBindStorageImages;
+        m_Desc.shaderStage.updateAfterSet.resourceMaxNum = props12.maxPerStageUpdateAfterBindResources;
 
-        m_Desc.geometryShaderInvocationMaxNum = limits.maxGeometryShaderInvocations;
-        m_Desc.geometryShaderInputComponentMaxNum = limits.maxGeometryInputComponents;
-        m_Desc.geometryShaderOutputComponentMaxNum = limits.maxGeometryOutputComponents;
-        m_Desc.geometryShaderOutputVertexMaxNum = limits.maxGeometryOutputVertices;
-        m_Desc.geometryShaderTotalOutputComponentMaxNum = limits.maxGeometryTotalOutputComponents;
+        m_Desc.shaderStage.vertex.attributeMaxNum = limits.maxVertexInputAttributes;
+        m_Desc.shaderStage.vertex.streamMaxNum = limits.maxVertexInputBindings;
+        m_Desc.shaderStage.vertex.outputComponentMaxNum = limits.maxVertexOutputComponents;
 
-        m_Desc.fragmentShaderInputComponentMaxNum = limits.maxFragmentInputComponents;
-        m_Desc.fragmentShaderOutputAttachmentMaxNum = limits.maxFragmentOutputAttachments;
-        m_Desc.fragmentShaderDualSourceAttachmentMaxNum = limits.maxFragmentDualSrcAttachments;
+        m_Desc.shaderStage.tesselationControl.generationMaxLevel = (float)limits.maxTessellationGenerationLevel;
+        m_Desc.shaderStage.tesselationControl.patchPointMaxNum = limits.maxTessellationPatchSize;
+        m_Desc.shaderStage.tesselationControl.perVertexInputComponentMaxNum = limits.maxTessellationControlPerVertexInputComponents;
+        m_Desc.shaderStage.tesselationControl.perVertexOutputComponentMaxNum = limits.maxTessellationControlPerVertexOutputComponents;
+        m_Desc.shaderStage.tesselationControl.perPatchOutputComponentMaxNum = limits.maxTessellationControlPerPatchOutputComponents;
+        m_Desc.shaderStage.tesselationControl.totalOutputComponentMaxNum = limits.maxTessellationControlTotalOutputComponents;
 
-        m_Desc.computeShaderSharedMemoryMaxSize = limits.maxComputeSharedMemorySize;
-        m_Desc.computeShaderWorkGroupMaxNum[0] = limits.maxComputeWorkGroupCount[0];
-        m_Desc.computeShaderWorkGroupMaxNum[1] = limits.maxComputeWorkGroupCount[1];
-        m_Desc.computeShaderWorkGroupMaxNum[2] = limits.maxComputeWorkGroupCount[2];
-        m_Desc.computeShaderWorkGroupInvocationMaxNum = limits.maxComputeWorkGroupInvocations;
-        m_Desc.computeShaderWorkGroupMaxDim[0] = limits.maxComputeWorkGroupSize[0];
-        m_Desc.computeShaderWorkGroupMaxDim[1] = limits.maxComputeWorkGroupSize[1];
-        m_Desc.computeShaderWorkGroupMaxDim[2] = limits.maxComputeWorkGroupSize[2];
+        m_Desc.shaderStage.tesselationEvaluation.inputComponentMaxNum = limits.maxTessellationEvaluationInputComponents;
+        m_Desc.shaderStage.tesselationEvaluation.outputComponentMaxNum = limits.maxTessellationEvaluationOutputComponents;
 
-        m_Desc.rayTracingShaderGroupIdentifierSize = rayTracingProps.shaderGroupHandleSize;
-        m_Desc.rayTracingShaderTableMaxStride = rayTracingProps.maxShaderGroupStride;
-        m_Desc.rayTracingShaderRecursionMaxDepth = rayTracingProps.maxRayRecursionDepth;
-        m_Desc.rayTracingGeometryObjectMaxNum = (uint32_t)accelerationStructureProps.maxGeometryCount;
+        m_Desc.shaderStage.geometry.invocationMaxNum = limits.maxGeometryShaderInvocations;
+        m_Desc.shaderStage.geometry.inputComponentMaxNum = limits.maxGeometryInputComponents;
+        m_Desc.shaderStage.geometry.outputComponentMaxNum = limits.maxGeometryOutputComponents;
+        m_Desc.shaderStage.geometry.outputVertexMaxNum = limits.maxGeometryOutputVertices;
+        m_Desc.shaderStage.geometry.totalOutputComponentMaxNum = limits.maxGeometryTotalOutputComponents;
 
-        m_Desc.meshControlSharedMemoryMaxSize = meshShaderProps.maxTaskSharedMemorySize;
-        m_Desc.meshControlWorkGroupInvocationMaxNum = meshShaderProps.maxTaskWorkGroupInvocations;
-        m_Desc.meshControlPayloadMaxSize = meshShaderProps.maxTaskPayloadSize;
-        m_Desc.meshEvaluationOutputVerticesMaxNum = meshShaderProps.maxMeshOutputVertices;
-        m_Desc.meshEvaluationOutputPrimitiveMaxNum = meshShaderProps.maxMeshOutputPrimitives;
-        m_Desc.meshEvaluationOutputComponentMaxNum = meshShaderProps.maxMeshOutputComponents;
-        m_Desc.meshEvaluationSharedMemoryMaxSize = meshShaderProps.maxMeshSharedMemorySize;
-        m_Desc.meshEvaluationWorkGroupInvocationMaxNum = meshShaderProps.maxMeshWorkGroupInvocations;
+        m_Desc.shaderStage.fragment.inputComponentMaxNum = limits.maxFragmentInputComponents;
+        m_Desc.shaderStage.fragment.attachmentMaxNum = limits.maxFragmentOutputAttachments;
+        m_Desc.shaderStage.fragment.dualSourceAttachmentMaxNum = limits.maxFragmentDualSrcAttachments;
 
-        m_Desc.viewportPrecisionBits = limits.viewportSubPixelBits;
-        m_Desc.subPixelPrecisionBits = limits.subPixelPrecisionBits;
-        m_Desc.subTexelPrecisionBits = limits.subTexelPrecisionBits;
-        m_Desc.mipmapPrecisionBits = limits.mipmapPrecisionBits;
+        m_Desc.shaderStage.compute.sharedMemoryMaxSize = limits.maxComputeSharedMemorySize;
+        m_Desc.shaderStage.compute.workGroupMaxNum[0] = limits.maxComputeWorkGroupCount[0];
+        m_Desc.shaderStage.compute.workGroupMaxNum[1] = limits.maxComputeWorkGroupCount[1];
+        m_Desc.shaderStage.compute.workGroupMaxNum[2] = limits.maxComputeWorkGroupCount[2];
+        m_Desc.shaderStage.compute.workGroupInvocationMaxNum = limits.maxComputeWorkGroupInvocations;
+        m_Desc.shaderStage.compute.workGroupMaxDim[0] = limits.maxComputeWorkGroupSize[0];
+        m_Desc.shaderStage.compute.workGroupMaxDim[1] = limits.maxComputeWorkGroupSize[1];
+        m_Desc.shaderStage.compute.workGroupMaxDim[2] = limits.maxComputeWorkGroupSize[2];
 
-        m_Desc.timestampFrequencyHz = uint64_t(1e9 / double(limits.timestampPeriod) + 0.5);
-        m_Desc.drawIndirectMaxNum = limits.maxDrawIndirectCount;
-        m_Desc.samplerLodBiasMin = -limits.maxSamplerLodBias;
-        m_Desc.samplerLodBiasMax = limits.maxSamplerLodBias;
-        m_Desc.samplerAnisotropyMax = limits.maxSamplerAnisotropy;
-        m_Desc.texelOffsetMin = limits.minTexelOffset;
-        m_Desc.texelOffsetMax = limits.maxTexelOffset;
-        m_Desc.texelGatherOffsetMin = limits.minTexelGatherOffset;
-        m_Desc.texelGatherOffsetMax = limits.maxTexelGatherOffset;
-        m_Desc.clipDistanceMaxNum = limits.maxClipDistances;
-        m_Desc.cullDistanceMaxNum = limits.maxCullDistances;
-        m_Desc.combinedClipAndCullDistanceMaxNum = limits.maxCombinedClipAndCullDistances;
-        m_Desc.viewMaxNum = features11.multiview ? props11.maxMultiviewViewCount : 1;
-        m_Desc.shadingRateAttachmentTileSize = (uint8_t)shadingRateProps.minFragmentShadingRateAttachmentTexelSize.width;
+        m_Desc.shaderStage.rayTracing.shaderGroupIdentifierSize = rayTracingProps.shaderGroupHandleSize;
+        m_Desc.shaderStage.rayTracing.tableMaxStride = rayTracingProps.maxShaderGroupStride;
+        m_Desc.shaderStage.rayTracing.recursionMaxDepth = rayTracingProps.maxRayRecursionDepth;
 
-        if (m_Desc.conservativeRasterTier) {
+        m_Desc.shaderStage.meshControl.sharedMemoryMaxSize = meshShaderProps.maxTaskSharedMemorySize;
+        m_Desc.shaderStage.meshControl.workGroupInvocationMaxNum = meshShaderProps.maxTaskWorkGroupInvocations;
+        m_Desc.shaderStage.meshControl.payloadMaxSize = meshShaderProps.maxTaskPayloadSize;
+
+        m_Desc.shaderStage.meshEvaluation.outputVerticesMaxNum = meshShaderProps.maxMeshOutputVertices;
+        m_Desc.shaderStage.meshEvaluation.outputPrimitiveMaxNum = meshShaderProps.maxMeshOutputPrimitives;
+        m_Desc.shaderStage.meshEvaluation.outputComponentMaxNum = meshShaderProps.maxMeshOutputComponents;
+        m_Desc.shaderStage.meshEvaluation.sharedMemoryMaxSize = meshShaderProps.maxMeshSharedMemorySize;
+        m_Desc.shaderStage.meshEvaluation.workGroupInvocationMaxNum = meshShaderProps.maxMeshWorkGroupInvocations;
+
+        m_Desc.other.timestampFrequencyHz = uint64_t(1e9 / double(limits.timestampPeriod) + 0.5);
+        m_Desc.other.micromapSubdivisionMaxLevel = micromapProps.maxOpacity2StateSubdivisionLevel;
+        m_Desc.other.drawIndirectMaxNum = limits.maxDrawIndirectCount;
+        m_Desc.other.samplerLodBiasMax = limits.maxSamplerLodBias;
+        m_Desc.other.samplerAnisotropyMax = limits.maxSamplerAnisotropy;
+        m_Desc.other.texelOffsetMin = (int8_t)limits.minTexelOffset;
+        m_Desc.other.texelOffsetMax = (uint8_t)limits.maxTexelOffset;
+        m_Desc.other.texelGatherOffsetMin = (int8_t)limits.minTexelGatherOffset;
+        m_Desc.other.texelGatherOffsetMax = (uint8_t)limits.maxTexelGatherOffset;
+        m_Desc.other.clipDistanceMaxNum = (uint8_t)limits.maxClipDistances;
+        m_Desc.other.cullDistanceMaxNum = (uint8_t)limits.maxCullDistances;
+        m_Desc.other.combinedClipAndCullDistanceMaxNum = (uint8_t)limits.maxCombinedClipAndCullDistances;
+        m_Desc.other.viewMaxNum = features11.multiview ? (uint8_t)props11.maxMultiviewViewCount : 1;
+        m_Desc.other.shadingRateAttachmentTileSize = (uint8_t)shadingRateProps.minFragmentShadingRateAttachmentTexelSize.width;
+
+        if (m_Desc.tiers.conservativeRaster) {
             if (conservativeRasterProps.primitiveOverestimationSize < 1.0f / 2.0f && conservativeRasterProps.degenerateTrianglesRasterized)
-                m_Desc.conservativeRasterTier = 2;
+                m_Desc.tiers.conservativeRaster = 2;
             if (conservativeRasterProps.primitiveOverestimationSize <= 1.0 / 256.0f && conservativeRasterProps.degenerateTrianglesRasterized)
-                m_Desc.conservativeRasterTier = 3;
+                m_Desc.tiers.conservativeRaster = 3;
         }
 
-        if (m_Desc.sampleLocationsTier) {
+        if (m_Desc.tiers.sampleLocations) {
             if (sampleLocationsProps.variableSampleLocations) // TODO: it's weird...
-                m_Desc.sampleLocationsTier = 2;
+                m_Desc.tiers.sampleLocations = 2;
         }
 
-        m_Desc.rayTracingTier = accelerationStructureFeatures.accelerationStructure != 0;
-        if (m_Desc.rayTracingTier) {
+        m_Desc.tiers.rayTracing = accelerationStructureFeatures.accelerationStructure != 0;
+        if (m_Desc.tiers.rayTracing) {
             if (rayTracingPipelineFeatures.rayTracingPipelineTraceRaysIndirect && rayQueryFeatures.rayQuery)
-                m_Desc.rayTracingTier = 2;
+                m_Desc.tiers.rayTracing++;
+            if (micromapFeatures.micromap)
+                m_Desc.tiers.rayTracing++;
         }
 
-        m_Desc.shadingRateTier = shadingRateFeatures.pipelineFragmentShadingRate != 0;
-        if (m_Desc.shadingRateTier) {
+        m_Desc.tiers.shadingRate = shadingRateFeatures.pipelineFragmentShadingRate != 0;
+        if (m_Desc.tiers.shadingRate) {
             if (shadingRateFeatures.primitiveFragmentShadingRate && shadingRateFeatures.attachmentFragmentShadingRate)
-                m_Desc.shadingRateTier = 2;
+                m_Desc.tiers.shadingRate = 2;
 
-            m_Desc.isAdditionalShadingRatesSupported = shadingRateProps.maxFragmentSize.height > 2 || shadingRateProps.maxFragmentSize.width > 2;
+            m_Desc.features.additionalShadingRates = shadingRateProps.maxFragmentSize.height > 2 || shadingRateProps.maxFragmentSize.width > 2;
         }
 
-        m_Desc.bindlessTier = m_IsSupported.descriptorIndexing ? 1 : 0;
+        m_Desc.tiers.bindless = m_IsSupported.descriptorIndexing ? 1 : 0;
+        m_Desc.tiers.resourceBinding = 2; // TODO: seems to be the best match
+        m_Desc.tiers.memory = 1;          // TODO: seems to be the best match
 
-        m_Desc.isGetMemoryDesc2Supported = m_IsSupported.maintenance4;
-        m_Desc.isEnchancedBarrierSupported = true;
-        m_Desc.isMemoryTier2Supported = true; // TODO: seems to be the best match
+        m_Desc.features.getMemoryDesc2 = m_IsSupported.maintenance4;
+        m_Desc.features.enchancedBarrier = true;
+        m_Desc.features.swapChain = IsExtensionSupported(VK_KHR_SWAPCHAIN_EXTENSION_NAME, desiredDeviceExts);
+        m_Desc.features.rayTracing = m_Desc.tiers.rayTracing != 0;
+        m_Desc.features.meshShader = meshShaderFeatures.meshShader != 0 && meshShaderFeatures.taskShader != 0;
+        m_Desc.features.lowLatency = IsExtensionSupported(VK_NV_LOW_LATENCY_2_EXTENSION_NAME, desiredDeviceExts);
+        m_Desc.features.micromap = micromapFeatures.micromap != 0;
 
-        m_Desc.isIndependentFrontAndBackStencilReferenceAndMasksSupported = true;
-        m_Desc.isTextureFilterMinMaxSupported = features12.samplerFilterMinmax;
-        m_Desc.isLogicFuncSupported = features.features.logicOp;
-        m_Desc.isDepthBoundsTestSupported = features.features.depthBounds;
-        m_Desc.isDrawIndirectCountSupported = features12.drawIndirectCount;
-        m_Desc.isLineSmoothingSupported = lineRasterizationFeatures.smoothLines;
-        m_Desc.isCopyQueueTimestampSupported = limits.timestampComputeAndGraphics;
-        m_Desc.isMeshShaderPipelineStatsSupported = meshShaderFeatures.meshShaderQueries == VK_TRUE;
-        m_Desc.isDynamicDepthBiasSupported = true;
-        m_Desc.isViewportOriginBottomLeftSupported = true;
-        m_Desc.isRegionResolveSupported = true;
-        m_Desc.isLayerBasedMultiviewSupported = features11.multiview;
-        m_Desc.isPresentFromComputeSupported = true;
-        m_Desc.isWaitableSwapChainSupported = presentIdFeatures.presentId != 0 && presentWaitFeatures.presentWait != 0;;
+        m_Desc.features.independentFrontAndBackStencilReferenceAndMasks = true;
+        m_Desc.features.textureFilterMinMax = features12.samplerFilterMinmax;
+        m_Desc.features.logicFunc = features.features.logicOp;
+        m_Desc.features.depthBoundsTest = features.features.depthBounds;
+        m_Desc.features.drawIndirectCount = features12.drawIndirectCount;
+        m_Desc.features.lineSmoothing = lineRasterizationFeatures.smoothLines;
+        m_Desc.features.copyQueueTimestamp = limits.timestampComputeAndGraphics;
+        m_Desc.features.meshShaderPipelineStats = meshShaderFeatures.meshShaderQueries == VK_TRUE;
+        m_Desc.features.dynamicDepthBias = true;
+        m_Desc.features.viewportOriginBottomLeft = true;
+        m_Desc.features.regionResolve = true;
+        m_Desc.features.layerBasedMultiview = features11.multiview;
+        m_Desc.features.presentFromCompute = true;
+        m_Desc.features.waitableSwapChain = presentIdFeatures.presentId != 0 && presentWaitFeatures.presentWait != 0;
 
-        m_Desc.isShaderNativeI16Supported = features.features.shaderInt16;
-        m_Desc.isShaderNativeF16Supported = features12.shaderFloat16;
-        m_Desc.isShaderNativeI64Supported = features.features.shaderInt64;
-        m_Desc.isShaderNativeF64Supported = features.features.shaderFloat64;
-        m_Desc.isShaderAtomicsF16Supported = (shaderAtomicFloat2Features.shaderBufferFloat16Atomics || shaderAtomicFloat2Features.shaderSharedFloat16Atomics) ? true : false;
-        m_Desc.isShaderAtomicsF32Supported = (shaderAtomicFloatFeatures.shaderBufferFloat32Atomics || shaderAtomicFloatFeatures.shaderSharedFloat32Atomics) ? true : false;
-        m_Desc.isShaderAtomicsI64Supported = (features12.shaderBufferInt64Atomics || features12.shaderSharedInt64Atomics) ? true : false;
-        m_Desc.isShaderAtomicsF64Supported = (shaderAtomicFloatFeatures.shaderBufferFloat64Atomics || shaderAtomicFloatFeatures.shaderSharedFloat64Atomics) ? true : false;
-        m_Desc.isShaderViewportIndexSupported = features12.shaderOutputViewportIndex;
-        m_Desc.isShaderLayerSupported = features12.shaderOutputLayer;
-        m_Desc.isShaderClockSupported = (shaderClockFeatures.shaderDeviceClock || shaderClockFeatures.shaderSubgroupClock) ? true : false;
-        m_Desc.isRasterizedOrderedViewSupported = fragmentShaderInterlockFeatures.fragmentShaderPixelInterlock != 0 && fragmentShaderInterlockFeatures.fragmentShaderSampleInterlock != 0;
-        m_Desc.isBarycentricSupported = fragmentShaderBarycentricFeatures.fragmentShaderBarycentric;
-        m_Desc.isRayTracingPositionFetchSupported = rayTracingPositionFetchFeatures.rayTracingPositionFetch;
-
-        m_Desc.isSwapChainSupported = IsExtensionSupported(VK_KHR_SWAPCHAIN_EXTENSION_NAME, desiredDeviceExts);
-        m_Desc.isRayTracingSupported = m_Desc.rayTracingTier != 0;
-        m_Desc.isMeshShaderSupported = meshShaderFeatures.meshShader != 0 && meshShaderFeatures.taskShader != 0;
-        m_Desc.isLowLatencySupported = IsExtensionSupported(VK_NV_LOW_LATENCY_2_EXTENSION_NAME, desiredDeviceExts);
+        m_Desc.shaderFeatures.nativeI16 = features.features.shaderInt16;
+        m_Desc.shaderFeatures.nativeF16 = features12.shaderFloat16;
+        m_Desc.shaderFeatures.nativeI64 = features.features.shaderInt64;
+        m_Desc.shaderFeatures.nativeF64 = features.features.shaderFloat64;
+        m_Desc.shaderFeatures.atomicsF16 = (shaderAtomicFloat2Features.shaderBufferFloat16Atomics || shaderAtomicFloat2Features.shaderSharedFloat16Atomics) ? true : false;
+        m_Desc.shaderFeatures.atomicsF32 = (shaderAtomicFloatFeatures.shaderBufferFloat32Atomics || shaderAtomicFloatFeatures.shaderSharedFloat32Atomics) ? true : false;
+        m_Desc.shaderFeatures.atomicsI64 = (features12.shaderBufferInt64Atomics || features12.shaderSharedInt64Atomics) ? true : false;
+        m_Desc.shaderFeatures.atomicsF64 = (shaderAtomicFloatFeatures.shaderBufferFloat64Atomics || shaderAtomicFloatFeatures.shaderSharedFloat64Atomics) ? true : false;
+        m_Desc.shaderFeatures.viewportIndex = features12.shaderOutputViewportIndex;
+        m_Desc.shaderFeatures.layerIndex = features12.shaderOutputLayer;
+        m_Desc.shaderFeatures.clock = (shaderClockFeatures.shaderDeviceClock || shaderClockFeatures.shaderSubgroupClock) ? true : false;
+        m_Desc.shaderFeatures.rasterizedOrderedView = fragmentShaderInterlockFeatures.fragmentShaderPixelInterlock != 0 && fragmentShaderInterlockFeatures.fragmentShaderSampleInterlock != 0;
+        m_Desc.shaderFeatures.barycentric = fragmentShaderBarycentricFeatures.fragmentShaderBarycentric;
+        m_Desc.shaderFeatures.rayTracingPositionFetch = rayTracingPositionFetchFeatures.rayTracingPositionFetch;
 
         // Estimate shader model last since it depends on many "m_Desc" fields
         // Based on https://docs.vulkan.org/guide/latest/hlsl.html#_shader_model_coverage // TODO: code below needs to be improved
         m_Desc.shaderModel = 51;
-        if (m_Desc.isShaderNativeI64Supported)
+        if (m_Desc.shaderFeatures.nativeI64)
             m_Desc.shaderModel = 60;
-        if (m_Desc.viewMaxNum > 1 || m_Desc.isBarycentricSupported)
+        if (m_Desc.other.viewMaxNum > 1 || m_Desc.shaderFeatures.barycentric)
             m_Desc.shaderModel = 61;
-        if (m_Desc.isShaderNativeF16Supported || m_Desc.isShaderNativeI16Supported)
+        if (m_Desc.shaderFeatures.nativeF16 || m_Desc.shaderFeatures.nativeI16)
             m_Desc.shaderModel = 62;
-        if (m_Desc.isRayTracingSupported)
+        if (m_Desc.features.rayTracing)
             m_Desc.shaderModel = 63;
-        if (m_Desc.shadingRateTier >= 2)
+        if (m_Desc.tiers.shadingRate >= 2)
             m_Desc.shaderModel = 64;
-        if (m_Desc.isMeshShaderSupported || m_Desc.rayTracingTier >= 2)
+        if (m_Desc.features.meshShader || m_Desc.tiers.rayTracing >= 2)
             m_Desc.shaderModel = 65;
-        if (m_Desc.isShaderAtomicsI64Supported)
+        if (m_Desc.shaderFeatures.atomicsI64)
             m_Desc.shaderModel = 66;
         if (features.features.shaderStorageImageMultisample)
             m_Desc.shaderModel = 67;
@@ -1117,9 +1188,9 @@ void DeviceVK::FillCreateInfo(const TextureDesc& textureDesc, VkImageCreateInfo&
         flags |= VK_IMAGE_CREATE_BLOCK_TEXEL_VIEW_COMPATIBLE_BIT; // format can be used to create a view with an uncompressed format (1 texel covers 1 block)
     if (textureDesc.layerNum >= 6 && textureDesc.width == textureDesc.height)
         flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT; // allow cube maps
-    if (textureDesc.type == nri::TextureType::TEXTURE_3D)
+    if (textureDesc.type == TextureType::TEXTURE_3D)
         flags |= VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT; // allow 3D demotion to a set of layers // TODO: hook up "VK_EXT_image_2d_view_of_3d"?
-    if (m_Desc.sampleLocationsTier && formatProps.isDepth)
+    if (m_Desc.tiers.sampleLocations && formatProps.isDepth)
         flags |= VK_IMAGE_CREATE_SAMPLE_LOCATIONS_COMPATIBLE_DEPTH_BIT_EXT;
 
     info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO; // should be already set
@@ -1200,6 +1271,17 @@ void DeviceVK::GetMemoryDesc2(const AccelerationStructureDesc& accelerationStruc
 
     BufferDesc bufferDesc = {};
     bufferDesc.size = sizesInfo.accelerationStructureSize;
+    bufferDesc.usage = BufferUsageBits::ACCELERATION_STRUCTURE_STORAGE;
+
+    GetMemoryDesc2(bufferDesc, memoryLocation, memoryDesc);
+}
+
+void DeviceVK::GetMemoryDesc2(const MicromapDesc& micromapDesc, MemoryLocation memoryLocation, MemoryDesc& memoryDesc) {
+    VkMicromapBuildSizesInfoEXT sizesInfo = {VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT};
+    GetMicromapBuildSizesInfo(micromapDesc, sizesInfo);
+
+    BufferDesc bufferDesc = {};
+    bufferDesc.size = sizesInfo.micromapSize;
     bufferDesc.usage = BufferUsageBits::ACCELERATION_STRUCTURE_STORAGE;
 
     GetMemoryDesc2(bufferDesc, memoryLocation, memoryDesc);
@@ -1302,128 +1384,81 @@ bool DeviceVK::GetMemoryTypeByIndex(uint32_t index, MemoryTypeInfo& memoryTypeIn
 }
 
 void DeviceVK::GetAccelerationStructureBuildSizesInfo(const AccelerationStructureDesc& accelerationStructureDesc, VkAccelerationStructureBuildSizesInfoKHR& sizesInfo) {
-    uint32_t geometryCount = accelerationStructureDesc.type == AccelerationStructureType::BOTTOM_LEVEL ? accelerationStructureDesc.instanceOrGeometryObjectNum : 1;
-    Scratch<uint32_t> primitiveMaxNums = AllocateScratch(*this, uint32_t, geometryCount);
-    Scratch<VkAccelerationStructureGeometryKHR> geometries = AllocateScratch(*this, VkAccelerationStructureGeometryKHR, geometryCount);
+    // Allocate scratch
+    uint32_t geometryNum = 0;
+    uint32_t micromapNum = 0;
 
-    if (accelerationStructureDesc.type == AccelerationStructureType::BOTTOM_LEVEL)
-        ConvertGeometryObjectSizesVK(geometries, primitiveMaxNums, accelerationStructureDesc.geometryObjects, geometryCount);
-    else {
+    if (accelerationStructureDesc.type == AccelerationStructureType::BOTTOM_LEVEL) {
+        geometryNum = accelerationStructureDesc.geometryOrInstanceNum;
+
+        for (uint32_t i = 0; i < geometryNum; i++) {
+            const BottomLevelGeometryDesc& geometryDesc = accelerationStructureDesc.geometries[i];
+
+            if (geometryDesc.type == BottomLevelGeometryType::TRIANGLES && geometryDesc.triangles.micromap)
+                micromapNum++;
+        }
+    } else
+        geometryNum = 1;
+
+    Scratch<uint32_t> primitiveNums = AllocateScratch(*this, uint32_t, geometryNum);
+    Scratch<VkAccelerationStructureGeometryKHR> geometries = AllocateScratch(*this, VkAccelerationStructureGeometryKHR, geometryNum);
+    Scratch<VkAccelerationStructureTrianglesOpacityMicromapEXT> trianglesMicromaps = AllocateScratch(*this, VkAccelerationStructureTrianglesOpacityMicromapEXT, micromapNum);
+
+    // Convert geometries
+    if (accelerationStructureDesc.type == AccelerationStructureType::BOTTOM_LEVEL) {
+        micromapNum = ConvertBotomLevelGeometries(nullptr, geometries, trianglesMicromaps, accelerationStructureDesc.geometries, geometryNum);
+
+        for (uint32_t i = 0; i < geometryNum; i++) {
+            const BottomLevelGeometryDesc& in = accelerationStructureDesc.geometries[i];
+
+            if (in.type == BottomLevelGeometryType::TRIANGLES) {
+                uint32_t triangleNum = (in.triangles.indexNum ? in.triangles.indexNum : in.triangles.vertexNum) / 3;
+                primitiveNums[i] = triangleNum;
+            } else if (in.type == BottomLevelGeometryType::AABBS)
+                primitiveNums[i] = in.aabbs.num;
+        }
+    } else {
         geometries[0] = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
         geometries[0].geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
-        geometries[0].geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-        geometries[0].geometry.aabbs.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
         geometries[0].geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
 
-        primitiveMaxNums[0] = accelerationStructureDesc.instanceOrGeometryObjectNum;
+        primitiveNums[0] = accelerationStructureDesc.geometryOrInstanceNum;
     }
 
+    // Get sizes
     VkAccelerationStructureBuildGeometryInfoKHR buildInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
     buildInfo.type = GetAccelerationStructureType(accelerationStructureDesc.type);
-    buildInfo.flags = GetAccelerationStructureBuildFlags(accelerationStructureDesc.flags);
-    buildInfo.geometryCount = geometryCount;
+    buildInfo.flags = GetBuildAccelerationStructureFlags(accelerationStructureDesc.flags);
+    buildInfo.geometryCount = geometryNum;
     buildInfo.pGeometries = geometries;
 
     const auto& vk = GetDispatchTable();
-    vk.GetAccelerationStructureBuildSizesKHR(m_Device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, primitiveMaxNums, &sizesInfo);
+    vk.GetAccelerationStructureBuildSizesKHR(m_Device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, primitiveNums, &sizesInfo);
 }
 
-const char* GetObjectTypeName(VkObjectType objectType) {
-    switch (objectType) {
-        case VK_OBJECT_TYPE_INSTANCE:
-            return "VkInstance";
-        case VK_OBJECT_TYPE_PHYSICAL_DEVICE:
-            return "VkPhysicalDevice";
-        case VK_OBJECT_TYPE_DEVICE:
-            return "VkDevice";
-        case VK_OBJECT_TYPE_QUEUE:
-            return "VkQueue";
-        case VK_OBJECT_TYPE_SEMAPHORE:
-            return "VkSemaphore";
-        case VK_OBJECT_TYPE_COMMAND_BUFFER:
-            return "VkCommandBuffer";
-        case VK_OBJECT_TYPE_FENCE:
-            return "VkFence";
-        case VK_OBJECT_TYPE_DEVICE_MEMORY:
-            return "VkDeviceMemory";
-        case VK_OBJECT_TYPE_BUFFER:
-            return "VkBuffer";
-        case VK_OBJECT_TYPE_IMAGE:
-            return "VkImage";
-        case VK_OBJECT_TYPE_EVENT:
-            return "VkEvent";
-        case VK_OBJECT_TYPE_QUERY_POOL:
-            return "VkQueryPool";
-        case VK_OBJECT_TYPE_BUFFER_VIEW:
-            return "VkBufferView";
-        case VK_OBJECT_TYPE_IMAGE_VIEW:
-            return "VkImageView";
-        case VK_OBJECT_TYPE_SHADER_MODULE:
-            return "VkShaderModule";
-        case VK_OBJECT_TYPE_PIPELINE_CACHE:
-            return "VkPipelineCache";
-        case VK_OBJECT_TYPE_PIPELINE_LAYOUT:
-            return "VkPipelineLayout";
-        case VK_OBJECT_TYPE_RENDER_PASS:
-            return "VkRenderPass";
-        case VK_OBJECT_TYPE_PIPELINE:
-            return "VkPipeline";
-        case VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT:
-            return "VkDescriptorSetLayout";
-        case VK_OBJECT_TYPE_SAMPLER:
-            return "VkSampler";
-        case VK_OBJECT_TYPE_DESCRIPTOR_POOL:
-            return "VkDescriptorPool";
-        case VK_OBJECT_TYPE_DESCRIPTOR_SET:
-            return "VkDescriptorSet";
-        case VK_OBJECT_TYPE_FRAMEBUFFER:
-            return "VkFramebuffer";
-        case VK_OBJECT_TYPE_COMMAND_POOL:
-            return "VkCommandPool";
-        case VK_OBJECT_TYPE_SAMPLER_YCBCR_CONVERSION:
-            return "VkSamplerYcbcrConversion";
-        case VK_OBJECT_TYPE_DESCRIPTOR_UPDATE_TEMPLATE:
-            return "VkDescriptorUpdateTemplate";
-        case VK_OBJECT_TYPE_SURFACE_KHR:
-            return "VkSurfaceKHR";
-        case VK_OBJECT_TYPE_SWAPCHAIN_KHR:
-            return "VkSwapchainKHR";
-        case VK_OBJECT_TYPE_DISPLAY_KHR:
-            return "VkDisplayKHR";
-        case VK_OBJECT_TYPE_DISPLAY_MODE_KHR:
-            return "VkDisplayModeKHR";
-        case VK_OBJECT_TYPE_DEBUG_REPORT_CALLBACK_EXT:
-            return "VkDebugReportCallbackEXT";
-        case VK_OBJECT_TYPE_DEBUG_UTILS_MESSENGER_EXT:
-            return "VkDebugUtilsMessengerEXT";
-        case VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR:
-            return "VkAccelerationStructureKHR";
-        case VK_OBJECT_TYPE_VALIDATION_CACHE_EXT:
-            return "VkValidationCacheEXT";
-        case VK_OBJECT_TYPE_DEFERRED_OPERATION_KHR:
-            return "VkDeferredOperationKHR";
-        default:
-            return "unknown";
+void DeviceVK::GetMicromapBuildSizesInfo(const MicromapDesc& micromapDesc, VkMicromapBuildSizesInfoEXT& sizesInfo) {
+    static_assert((uint32_t)MicromapFormat::OPACITY_2_STATE == VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT, "Format doesn't match");
+    static_assert((uint32_t)MicromapFormat::OPACITY_4_STATE == VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT, "Format doesn't match");
+
+    Scratch<VkMicromapUsageEXT> usages = AllocateScratch(*this, VkMicromapUsageEXT, micromapDesc.usageNum);
+    for (uint32_t i = 0; i < micromapDesc.usageNum; i++) {
+        const MicromapUsageDesc& in = micromapDesc.usages[i];
+
+        VkMicromapUsageEXT& out = usages[i];
+        out = {};
+        out.count = in.triangleNum;
+        out.subdivisionLevel = in.subdivisionLevel;
+        out.format = (VkOpacityMicromapFormatEXT)in.format;
     }
-}
 
-VkBool32 VKAPI_PTR DebugUtilsMessenger(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData) {
-    // TODO: some messages can be muted here
-    if (callbackData->messageIdNumber == 0) // loader info message
-        return VK_FALSE;
-    if (callbackData->messageIdNumber == 0x76589099) // Validation Warning: [ WARNING-DEBUG-PRINTF ] Internal Warning: Setting VkPhysicalDeviceVulkan12Properties::maxUpdateAfterBindDescriptorsInAllPools to 32
-        return VK_FALSE;
+    VkMicromapBuildInfoEXT buildInfo = {VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT};
+    buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
+    buildInfo.flags = GetBuildMicromapFlags(micromapDesc.flags);
+    buildInfo.usageCountsCount = micromapDesc.usageNum;
+    buildInfo.pUsageCounts = usages;
 
-    Message severity = Message::INFO;
-    if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-        severity = Message::ERROR;
-    else if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
-        severity = Message::WARNING;
-
-    DeviceVK& device = *(DeviceVK*)userData;
-    device.ReportMessage(severity, __FILE__, __LINE__, "%s", callbackData->pMessage);
-
-    return VK_FALSE;
+    const auto& vk = GetDispatchTable();
+    vk.GetMicromapBuildSizesEXT(m_Device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &sizesInfo);
 }
 
 Result DeviceVK::CreateInstance(bool enableGraphicsAPIValidation, const Vector<const char*>& desiredInstanceExts) {
@@ -1461,7 +1496,7 @@ Result DeviceVK::CreateInstance(bool enableGraphicsAPIValidation, const Vector<c
     if (enableGraphicsAPIValidation) {
         VkDebugUtilsMessengerCreateInfoEXT createInfo = {VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
         createInfo.pUserData = this;
-        createInfo.pfnUserCallback = DebugUtilsMessenger;
+        createInfo.pfnUserCallback = MessageCallback;
 
         createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
         createInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
@@ -1541,7 +1576,7 @@ void DeviceVK::ReportDeviceGroupInfo() {
 #define MERGE_TOKENS2(a, b) a##b
 #define MERGE_TOKENS3(a, b, c) a##b##c
 
-#define GET_DEVICE_OPTIONAL_CORE_PROC(name) \
+#define GET_DEVICE_OPTIONAL_CORE_FUNC(name) \
     /* Core */ \
     m_VK.name = (PFN_vk##name)m_VK.GetDeviceProcAddr(m_Device, NRI_STRINGIFY(MERGE_TOKENS2(vk, name))); \
     /* KHR */ \
@@ -1551,21 +1586,21 @@ void DeviceVK::ReportDeviceGroupInfo() {
     if (!m_VK.name) \
     m_VK.name = (PFN_vk##name)m_VK.GetDeviceProcAddr(m_Device, NRI_STRINGIFY(MERGE_TOKENS3(vk, name, EXT)))
 
-#define GET_DEVICE_CORE_PROC(name) \
-    GET_DEVICE_OPTIONAL_CORE_PROC(name); \
+#define GET_DEVICE_CORE_FUNC(name) \
+    GET_DEVICE_OPTIONAL_CORE_FUNC(name); \
     if (!m_VK.name) { \
         REPORT_ERROR(this, "Failed to get device function: '%s'", NRI_STRINGIFY(MERGE_TOKENS2(vk, name))); \
         return Result::UNSUPPORTED; \
     }
 
-#define GET_DEVICE_PROC(name) \
+#define GET_DEVICE_FUNC(name) \
     m_VK.name = (PFN_vk##name)m_VK.GetDeviceProcAddr(m_Device, NRI_STRINGIFY(MERGE_TOKENS2(vk, name))); \
     if (!m_VK.name) { \
         REPORT_ERROR(this, "Failed to get device function: '%s'", NRI_STRINGIFY(MERGE_TOKENS2(vk, name))); \
         return Result::UNSUPPORTED; \
     }
 
-#define GET_INSTANCE_PROC(name) \
+#define GET_INSTANCE_FUNC(name) \
     m_VK.name = (PFN_vk##name)m_VK.GetInstanceProcAddr(m_Instance, NRI_STRINGIFY(MERGE_TOKENS2(vk, name))); \
     if (!m_VK.name) { \
         REPORT_ERROR(this, "Failed to get instance function: '%s'", NRI_STRINGIFY(MERGE_TOKENS2(vk, name))); \
@@ -1581,60 +1616,63 @@ Result DeviceVK::ResolvePreInstanceDispatchTable() {
         return Result::UNSUPPORTED;
     }
 
-    GET_INSTANCE_PROC(CreateInstance);
-    GET_INSTANCE_PROC(EnumerateInstanceExtensionProperties);
-    GET_INSTANCE_PROC(EnumerateInstanceLayerProperties);
+    GET_INSTANCE_FUNC(CreateInstance);
+    GET_INSTANCE_FUNC(EnumerateInstanceExtensionProperties);
+    GET_INSTANCE_FUNC(EnumerateInstanceLayerProperties);
 
     return Result::SUCCESS;
 }
 
 Result DeviceVK::ResolveInstanceDispatchTable(const Vector<const char*>& desiredInstanceExts) {
-    GET_INSTANCE_PROC(GetDeviceProcAddr);
-    GET_INSTANCE_PROC(DestroyInstance);
-    GET_INSTANCE_PROC(DestroyDevice);
-    GET_INSTANCE_PROC(GetPhysicalDeviceMemoryProperties2);
-    GET_INSTANCE_PROC(GetDeviceGroupPeerMemoryFeatures);
-    GET_INSTANCE_PROC(GetPhysicalDeviceFormatProperties2);
-    GET_INSTANCE_PROC(CreateDevice);
-    GET_INSTANCE_PROC(GetDeviceQueue2);
-    GET_INSTANCE_PROC(EnumeratePhysicalDeviceGroups);
-    GET_INSTANCE_PROC(GetPhysicalDeviceProperties2);
-    GET_INSTANCE_PROC(GetPhysicalDeviceFeatures2);
-    GET_INSTANCE_PROC(GetPhysicalDeviceQueueFamilyProperties2);
-    GET_INSTANCE_PROC(EnumerateDeviceExtensionProperties);
+    GET_INSTANCE_FUNC(GetDeviceProcAddr);
+    GET_INSTANCE_FUNC(DestroyInstance);
+    GET_INSTANCE_FUNC(DestroyDevice);
+    GET_INSTANCE_FUNC(GetPhysicalDeviceMemoryProperties2);
+    GET_INSTANCE_FUNC(GetDeviceGroupPeerMemoryFeatures);
+    GET_INSTANCE_FUNC(GetPhysicalDeviceFormatProperties2);
+    GET_INSTANCE_FUNC(CreateDevice);
+    GET_INSTANCE_FUNC(GetDeviceQueue2);
+    GET_INSTANCE_FUNC(EnumeratePhysicalDeviceGroups);
+    GET_INSTANCE_FUNC(GetPhysicalDeviceProperties2);
+    GET_INSTANCE_FUNC(GetPhysicalDeviceFeatures2);
+    GET_INSTANCE_FUNC(GetPhysicalDeviceQueueFamilyProperties2);
+    GET_INSTANCE_FUNC(EnumerateDeviceExtensionProperties);
 
     if (IsExtensionSupported(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, desiredInstanceExts)) {
-        GET_INSTANCE_PROC(SetDebugUtilsObjectNameEXT);
-        GET_INSTANCE_PROC(CmdBeginDebugUtilsLabelEXT);
-        GET_INSTANCE_PROC(CmdEndDebugUtilsLabelEXT);
-        GET_INSTANCE_PROC(CmdInsertDebugUtilsLabelEXT);
-        GET_INSTANCE_PROC(QueueBeginDebugUtilsLabelEXT);
-        GET_INSTANCE_PROC(QueueEndDebugUtilsLabelEXT);
-        GET_INSTANCE_PROC(QueueInsertDebugUtilsLabelEXT);
+        GET_INSTANCE_FUNC(SetDebugUtilsObjectNameEXT);
+        GET_INSTANCE_FUNC(CmdBeginDebugUtilsLabelEXT);
+        GET_INSTANCE_FUNC(CmdEndDebugUtilsLabelEXT);
+        GET_INSTANCE_FUNC(CmdInsertDebugUtilsLabelEXT);
+        GET_INSTANCE_FUNC(QueueBeginDebugUtilsLabelEXT);
+        GET_INSTANCE_FUNC(QueueEndDebugUtilsLabelEXT);
+        GET_INSTANCE_FUNC(QueueInsertDebugUtilsLabelEXT);
     }
 
     if (IsExtensionSupported(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME, desiredInstanceExts)) {
-        GET_INSTANCE_PROC(GetPhysicalDeviceSurfaceFormats2KHR);
-        GET_INSTANCE_PROC(GetPhysicalDeviceSurfaceCapabilities2KHR);
+        GET_INSTANCE_FUNC(GetPhysicalDeviceSurfaceFormats2KHR);
+        GET_INSTANCE_FUNC(GetPhysicalDeviceSurfaceCapabilities2KHR);
     }
 
     if (IsExtensionSupported(VK_KHR_SURFACE_EXTENSION_NAME, desiredInstanceExts)) {
-        GET_INSTANCE_PROC(GetPhysicalDeviceSurfaceSupportKHR);
-        GET_INSTANCE_PROC(GetPhysicalDeviceSurfacePresentModesKHR);
-        GET_INSTANCE_PROC(DestroySurfaceKHR);
+        GET_INSTANCE_FUNC(GetPhysicalDeviceSurfaceSupportKHR);
+        GET_INSTANCE_FUNC(GetPhysicalDeviceSurfacePresentModesKHR);
+        GET_INSTANCE_FUNC(DestroySurfaceKHR);
 
-#if VK_USE_PLATFORM_WIN32_KHR
-        GET_INSTANCE_PROC(CreateWin32SurfaceKHR);
-        GET_INSTANCE_PROC(GetMemoryWin32HandlePropertiesKHR);
+#ifdef VK_USE_PLATFORM_WIN32_KHR
+        GET_INSTANCE_FUNC(CreateWin32SurfaceKHR);
+        GET_INSTANCE_FUNC(GetMemoryWin32HandlePropertiesKHR);
 #endif
-#if VK_USE_PLATFORM_METAL_EXT
-        GET_INSTANCE_PROC(CreateMetalSurfaceEXT);
+
+#ifdef VK_USE_PLATFORM_METAL_EXT
+        GET_INSTANCE_FUNC(CreateMetalSurfaceEXT);
 #endif
-#if VK_USE_PLATFORM_XLIB_KHR
-        GET_INSTANCE_PROC(CreateXlibSurfaceKHR);
+
+#ifdef VK_USE_PLATFORM_XLIB_KHR
+        GET_INSTANCE_FUNC(CreateXlibSurfaceKHR);
 #endif
-#if VK_USE_PLATFORM_WAYLAND_KHR
-        GET_INSTANCE_PROC(CreateWaylandSurfaceKHR);
+
+#ifdef VK_USE_PLATFORM_WAYLAND_KHR
+        GET_INSTANCE_FUNC(CreateWaylandSurfaceKHR);
 #endif
     }
 
@@ -1642,161 +1680,179 @@ Result DeviceVK::ResolveInstanceDispatchTable(const Vector<const char*>& desired
 }
 
 Result DeviceVK::ResolveDispatchTable(const Vector<const char*>& desiredDeviceExts) {
-    GET_DEVICE_CORE_PROC(CreateBuffer);
-    GET_DEVICE_CORE_PROC(CreateImage);
-    GET_DEVICE_CORE_PROC(CreateBufferView);
-    GET_DEVICE_CORE_PROC(CreateImageView);
-    GET_DEVICE_CORE_PROC(CreateSampler);
-    GET_DEVICE_CORE_PROC(CreateQueryPool);
-    GET_DEVICE_CORE_PROC(CreateCommandPool);
-    GET_DEVICE_CORE_PROC(CreateSemaphore);
-    GET_DEVICE_CORE_PROC(CreateDescriptorPool);
-    GET_DEVICE_CORE_PROC(CreatePipelineLayout);
-    GET_DEVICE_CORE_PROC(CreateDescriptorSetLayout);
-    GET_DEVICE_CORE_PROC(CreateShaderModule);
-    GET_DEVICE_CORE_PROC(CreateGraphicsPipelines);
-    GET_DEVICE_CORE_PROC(CreateComputePipelines);
-    GET_DEVICE_CORE_PROC(DestroyBuffer);
-    GET_DEVICE_CORE_PROC(DestroyImage);
-    GET_DEVICE_CORE_PROC(DestroyBufferView);
-    GET_DEVICE_CORE_PROC(DestroyImageView);
-    GET_DEVICE_CORE_PROC(DestroySampler);
-    GET_DEVICE_CORE_PROC(DestroyFramebuffer);
-    GET_DEVICE_CORE_PROC(DestroyQueryPool);
-    GET_DEVICE_CORE_PROC(DestroyCommandPool);
-    GET_DEVICE_CORE_PROC(DestroySemaphore);
-    GET_DEVICE_CORE_PROC(DestroyDescriptorPool);
-    GET_DEVICE_CORE_PROC(DestroyPipelineLayout);
-    GET_DEVICE_CORE_PROC(DestroyDescriptorSetLayout);
-    GET_DEVICE_CORE_PROC(DestroyShaderModule);
-    GET_DEVICE_CORE_PROC(DestroyPipeline);
-    GET_DEVICE_CORE_PROC(AllocateMemory);
-    GET_DEVICE_CORE_PROC(MapMemory);
-    GET_DEVICE_CORE_PROC(UnmapMemory);
-    GET_DEVICE_CORE_PROC(FreeMemory);
-    GET_DEVICE_CORE_PROC(FlushMappedMemoryRanges);
-    GET_DEVICE_CORE_PROC(QueueWaitIdle);
-    GET_DEVICE_CORE_PROC(QueueSubmit2);
-    GET_DEVICE_CORE_PROC(GetSemaphoreCounterValue);
-    GET_DEVICE_CORE_PROC(WaitSemaphores);
-    GET_DEVICE_CORE_PROC(ResetCommandPool);
-    GET_DEVICE_CORE_PROC(ResetDescriptorPool);
-    GET_DEVICE_CORE_PROC(AllocateCommandBuffers);
-    GET_DEVICE_CORE_PROC(AllocateDescriptorSets);
-    GET_DEVICE_CORE_PROC(FreeCommandBuffers);
-    GET_DEVICE_CORE_PROC(FreeDescriptorSets);
-    GET_DEVICE_CORE_PROC(UpdateDescriptorSets);
-    GET_DEVICE_CORE_PROC(BindBufferMemory2);
-    GET_DEVICE_CORE_PROC(BindImageMemory2);
-    GET_DEVICE_CORE_PROC(GetBufferMemoryRequirements2);
-    GET_DEVICE_CORE_PROC(GetImageMemoryRequirements2);
-    GET_DEVICE_CORE_PROC(ResetQueryPool);
-    GET_DEVICE_CORE_PROC(GetBufferDeviceAddress);
-    GET_DEVICE_CORE_PROC(BeginCommandBuffer);
-    GET_DEVICE_CORE_PROC(CmdSetViewportWithCount);
-    GET_DEVICE_CORE_PROC(CmdSetScissorWithCount);
-    GET_DEVICE_CORE_PROC(CmdSetDepthBounds);
-    GET_DEVICE_CORE_PROC(CmdSetStencilReference);
-    GET_DEVICE_CORE_PROC(CmdSetBlendConstants);
-    GET_DEVICE_CORE_PROC(CmdSetDepthBias);
-    GET_DEVICE_CORE_PROC(CmdClearAttachments);
-    GET_DEVICE_CORE_PROC(CmdClearColorImage);
-    GET_DEVICE_CORE_PROC(CmdBindVertexBuffers2);
-    GET_DEVICE_CORE_PROC(CmdBindIndexBuffer);
-    GET_DEVICE_CORE_PROC(CmdBindPipeline);
-    GET_DEVICE_CORE_PROC(CmdBindDescriptorSets);
-    GET_DEVICE_CORE_PROC(CmdPushConstants);
-    GET_DEVICE_CORE_PROC(CmdDispatch);
-    GET_DEVICE_CORE_PROC(CmdDispatchIndirect);
-    GET_DEVICE_CORE_PROC(CmdDraw);
-    GET_DEVICE_CORE_PROC(CmdDrawIndexed);
-    GET_DEVICE_CORE_PROC(CmdDrawIndirect);
-    GET_DEVICE_CORE_PROC(CmdDrawIndirectCount);
-    GET_DEVICE_CORE_PROC(CmdDrawIndexedIndirect);
-    GET_DEVICE_CORE_PROC(CmdDrawIndexedIndirectCount);
-    GET_DEVICE_CORE_PROC(CmdCopyBuffer2);
-    GET_DEVICE_CORE_PROC(CmdCopyImage2);
-    GET_DEVICE_CORE_PROC(CmdResolveImage2);
-    GET_DEVICE_CORE_PROC(CmdCopyBufferToImage2);
-    GET_DEVICE_CORE_PROC(CmdCopyImageToBuffer2);
-    GET_DEVICE_CORE_PROC(CmdPipelineBarrier2);
-    GET_DEVICE_CORE_PROC(CmdBeginQuery);
-    GET_DEVICE_CORE_PROC(CmdEndQuery);
-    GET_DEVICE_CORE_PROC(CmdWriteTimestamp2);
-    GET_DEVICE_CORE_PROC(CmdCopyQueryPoolResults);
-    GET_DEVICE_CORE_PROC(CmdResetQueryPool);
-    GET_DEVICE_CORE_PROC(CmdFillBuffer);
-    GET_DEVICE_CORE_PROC(CmdBeginRendering);
-    GET_DEVICE_CORE_PROC(CmdEndRendering);
-    GET_DEVICE_CORE_PROC(EndCommandBuffer);
+    GET_DEVICE_CORE_FUNC(CreateBuffer);
+    GET_DEVICE_CORE_FUNC(CreateImage);
+    GET_DEVICE_CORE_FUNC(CreateBufferView);
+    GET_DEVICE_CORE_FUNC(CreateImageView);
+    GET_DEVICE_CORE_FUNC(CreateSampler);
+    GET_DEVICE_CORE_FUNC(CreateQueryPool);
+    GET_DEVICE_CORE_FUNC(CreateCommandPool);
+    GET_DEVICE_CORE_FUNC(CreateSemaphore);
+    GET_DEVICE_CORE_FUNC(CreateDescriptorPool);
+    GET_DEVICE_CORE_FUNC(CreatePipelineLayout);
+    GET_DEVICE_CORE_FUNC(CreateDescriptorSetLayout);
+    GET_DEVICE_CORE_FUNC(CreateShaderModule);
+    GET_DEVICE_CORE_FUNC(CreateGraphicsPipelines);
+    GET_DEVICE_CORE_FUNC(CreateComputePipelines);
+    GET_DEVICE_CORE_FUNC(AllocateMemory);
+
+    GET_DEVICE_CORE_FUNC(DestroyBuffer);
+    GET_DEVICE_CORE_FUNC(DestroyImage);
+    GET_DEVICE_CORE_FUNC(DestroyBufferView);
+    GET_DEVICE_CORE_FUNC(DestroyImageView);
+    GET_DEVICE_CORE_FUNC(DestroySampler);
+    GET_DEVICE_CORE_FUNC(DestroyFramebuffer);
+    GET_DEVICE_CORE_FUNC(DestroyQueryPool);
+    GET_DEVICE_CORE_FUNC(DestroyCommandPool);
+    GET_DEVICE_CORE_FUNC(DestroySemaphore);
+    GET_DEVICE_CORE_FUNC(DestroyDescriptorPool);
+    GET_DEVICE_CORE_FUNC(DestroyPipelineLayout);
+    GET_DEVICE_CORE_FUNC(DestroyDescriptorSetLayout);
+    GET_DEVICE_CORE_FUNC(DestroyShaderModule);
+    GET_DEVICE_CORE_FUNC(DestroyPipeline);
+    GET_DEVICE_CORE_FUNC(FreeMemory);
+    GET_DEVICE_CORE_FUNC(FreeCommandBuffers);
+    GET_DEVICE_CORE_FUNC(FreeDescriptorSets);
+
+    GET_DEVICE_CORE_FUNC(MapMemory);
+    GET_DEVICE_CORE_FUNC(FlushMappedMemoryRanges);
+    GET_DEVICE_CORE_FUNC(QueueWaitIdle);
+    GET_DEVICE_CORE_FUNC(QueueSubmit2);
+    GET_DEVICE_CORE_FUNC(GetSemaphoreCounterValue);
+    GET_DEVICE_CORE_FUNC(WaitSemaphores);
+    GET_DEVICE_CORE_FUNC(ResetCommandPool);
+    GET_DEVICE_CORE_FUNC(ResetDescriptorPool);
+    GET_DEVICE_CORE_FUNC(AllocateCommandBuffers);
+    GET_DEVICE_CORE_FUNC(AllocateDescriptorSets);
+    GET_DEVICE_CORE_FUNC(UpdateDescriptorSets);
+    GET_DEVICE_CORE_FUNC(BindBufferMemory2);
+    GET_DEVICE_CORE_FUNC(BindImageMemory2);
+    GET_DEVICE_CORE_FUNC(GetBufferMemoryRequirements2);
+    GET_DEVICE_CORE_FUNC(GetImageMemoryRequirements2);
+    GET_DEVICE_CORE_FUNC(ResetQueryPool);
+    GET_DEVICE_CORE_FUNC(GetBufferDeviceAddress);
+
+    GET_DEVICE_CORE_FUNC(BeginCommandBuffer);
+    GET_DEVICE_CORE_FUNC(CmdSetViewportWithCount);
+    GET_DEVICE_CORE_FUNC(CmdSetScissorWithCount);
+    GET_DEVICE_CORE_FUNC(CmdSetDepthBounds);
+    GET_DEVICE_CORE_FUNC(CmdSetStencilReference);
+    GET_DEVICE_CORE_FUNC(CmdSetBlendConstants);
+    GET_DEVICE_CORE_FUNC(CmdSetDepthBias);
+    GET_DEVICE_CORE_FUNC(CmdClearAttachments);
+    GET_DEVICE_CORE_FUNC(CmdClearColorImage);
+    GET_DEVICE_CORE_FUNC(CmdBindVertexBuffers2);
+    GET_DEVICE_CORE_FUNC(CmdBindIndexBuffer);
+    GET_DEVICE_CORE_FUNC(CmdBindPipeline);
+    GET_DEVICE_CORE_FUNC(CmdBindDescriptorSets);
+    GET_DEVICE_CORE_FUNC(CmdPushConstants);
+    GET_DEVICE_CORE_FUNC(CmdDispatch);
+    GET_DEVICE_CORE_FUNC(CmdDispatchIndirect);
+    GET_DEVICE_CORE_FUNC(CmdDraw);
+    GET_DEVICE_CORE_FUNC(CmdDrawIndexed);
+    GET_DEVICE_CORE_FUNC(CmdDrawIndirect);
+    GET_DEVICE_CORE_FUNC(CmdDrawIndirectCount);
+    GET_DEVICE_CORE_FUNC(CmdDrawIndexedIndirect);
+    GET_DEVICE_CORE_FUNC(CmdDrawIndexedIndirectCount);
+    GET_DEVICE_CORE_FUNC(CmdCopyBuffer2);
+    GET_DEVICE_CORE_FUNC(CmdCopyImage2);
+    GET_DEVICE_CORE_FUNC(CmdResolveImage2);
+    GET_DEVICE_CORE_FUNC(CmdCopyBufferToImage2);
+    GET_DEVICE_CORE_FUNC(CmdCopyImageToBuffer2);
+    GET_DEVICE_CORE_FUNC(CmdPipelineBarrier2);
+    GET_DEVICE_CORE_FUNC(CmdBeginQuery);
+    GET_DEVICE_CORE_FUNC(CmdEndQuery);
+    GET_DEVICE_CORE_FUNC(CmdWriteTimestamp2);
+    GET_DEVICE_CORE_FUNC(CmdCopyQueryPoolResults);
+    GET_DEVICE_CORE_FUNC(CmdResetQueryPool);
+    GET_DEVICE_CORE_FUNC(CmdFillBuffer);
+    GET_DEVICE_CORE_FUNC(CmdBeginRendering);
+    GET_DEVICE_CORE_FUNC(CmdEndRendering);
+    GET_DEVICE_CORE_FUNC(EndCommandBuffer);
 
     // IMPORTANT: { } are mandatory here!
 
     if (m_MinorVersion >= 3 || IsExtensionSupported(VK_KHR_MAINTENANCE_4_EXTENSION_NAME, desiredDeviceExts)) {
-        GET_DEVICE_CORE_PROC(GetDeviceBufferMemoryRequirements);
-        GET_DEVICE_CORE_PROC(GetDeviceImageMemoryRequirements);
+        GET_DEVICE_CORE_FUNC(GetDeviceBufferMemoryRequirements);
+        GET_DEVICE_CORE_FUNC(GetDeviceImageMemoryRequirements);
     }
 
     if (IsExtensionSupported(VK_KHR_MAINTENANCE_5_EXTENSION_NAME, desiredDeviceExts)) {
-        GET_DEVICE_PROC(CmdBindIndexBuffer2KHR);
-    }
-
-    if (IsExtensionSupported(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, desiredDeviceExts)) {
-        GET_DEVICE_PROC(CmdSetFragmentShadingRateKHR);
+        GET_DEVICE_FUNC(CmdBindIndexBuffer2KHR);
     }
 
     if (IsExtensionSupported(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, desiredDeviceExts)) {
-        GET_DEVICE_PROC(CmdPushDescriptorSetKHR);
+        GET_DEVICE_FUNC(CmdPushDescriptorSetKHR);
+    }
+
+    if (IsExtensionSupported(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, desiredDeviceExts)) {
+        GET_DEVICE_FUNC(CmdSetFragmentShadingRateKHR);
     }
 
     if (IsExtensionSupported(VK_KHR_SWAPCHAIN_EXTENSION_NAME, desiredDeviceExts)) {
-        GET_DEVICE_PROC(AcquireNextImageKHR);
-        GET_DEVICE_PROC(QueuePresentKHR);
-        GET_DEVICE_PROC(CreateSwapchainKHR);
-        GET_DEVICE_PROC(DestroySwapchainKHR);
-        GET_DEVICE_PROC(GetSwapchainImagesKHR);
+        GET_DEVICE_FUNC(AcquireNextImageKHR);
+        GET_DEVICE_FUNC(QueuePresentKHR);
+        GET_DEVICE_FUNC(CreateSwapchainKHR);
+        GET_DEVICE_FUNC(DestroySwapchainKHR);
+        GET_DEVICE_FUNC(GetSwapchainImagesKHR);
     }
 
     if (IsExtensionSupported(VK_KHR_PRESENT_WAIT_EXTENSION_NAME, desiredDeviceExts)) {
-        GET_DEVICE_PROC(WaitForPresentKHR);
+        GET_DEVICE_FUNC(WaitForPresentKHR);
     }
 
     if (IsExtensionSupported(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME, desiredDeviceExts)) {
-        GET_DEVICE_PROC(CreateAccelerationStructureKHR);
-        GET_DEVICE_PROC(DestroyAccelerationStructureKHR);
-        GET_DEVICE_PROC(GetAccelerationStructureDeviceAddressKHR);
-        GET_DEVICE_PROC(GetAccelerationStructureBuildSizesKHR);
-        GET_DEVICE_PROC(CmdBuildAccelerationStructuresKHR);
-        GET_DEVICE_PROC(CmdCopyAccelerationStructureKHR);
-        GET_DEVICE_PROC(CmdWriteAccelerationStructuresPropertiesKHR);
+        GET_DEVICE_FUNC(CreateAccelerationStructureKHR);
+        GET_DEVICE_FUNC(DestroyAccelerationStructureKHR);
+        GET_DEVICE_FUNC(GetAccelerationStructureDeviceAddressKHR);
+        GET_DEVICE_FUNC(GetAccelerationStructureBuildSizesKHR);
+        GET_DEVICE_FUNC(CmdBuildAccelerationStructuresKHR);
+        GET_DEVICE_FUNC(CmdCopyAccelerationStructureKHR);
+        GET_DEVICE_FUNC(CmdWriteAccelerationStructuresPropertiesKHR);
     }
 
     if (IsExtensionSupported(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME, desiredDeviceExts)) {
-        GET_DEVICE_PROC(CreateRayTracingPipelinesKHR);
-        GET_DEVICE_PROC(GetRayTracingShaderGroupHandlesKHR);
-        GET_DEVICE_PROC(CmdTraceRaysKHR);
-        GET_DEVICE_PROC(CmdTraceRaysIndirect2KHR);
+        GET_DEVICE_FUNC(CreateRayTracingPipelinesKHR);
+        GET_DEVICE_FUNC(GetRayTracingShaderGroupHandlesKHR);
+        GET_DEVICE_FUNC(CmdTraceRaysKHR);
+        GET_DEVICE_FUNC(CmdTraceRaysIndirect2KHR);
+    }
+
+    if (IsExtensionSupported(VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME, desiredDeviceExts)) {
+        GET_DEVICE_FUNC(CreateMicromapEXT);
+        GET_DEVICE_FUNC(DestroyMicromapEXT);
+        GET_DEVICE_FUNC(GetMicromapBuildSizesEXT);
+        GET_DEVICE_FUNC(CmdBuildMicromapsEXT);
+        GET_DEVICE_FUNC(CmdCopyMicromapEXT);
+        GET_DEVICE_FUNC(CmdWriteMicromapsPropertiesEXT);
     }
 
     if (IsExtensionSupported(VK_EXT_SAMPLE_LOCATIONS_EXTENSION_NAME, desiredDeviceExts)) {
-        GET_DEVICE_PROC(CmdSetSampleLocationsEXT);
+        GET_DEVICE_FUNC(CmdSetSampleLocationsEXT);
     }
 
     if (IsExtensionSupported(VK_EXT_MESH_SHADER_EXTENSION_NAME, desiredDeviceExts)) {
-        GET_DEVICE_PROC(CmdDrawMeshTasksEXT);
-        GET_DEVICE_PROC(CmdDrawMeshTasksIndirectEXT);
-        GET_DEVICE_PROC(CmdDrawMeshTasksIndirectCountEXT);
+        GET_DEVICE_FUNC(CmdDrawMeshTasksEXT);
+        GET_DEVICE_FUNC(CmdDrawMeshTasksIndirectEXT);
+        GET_DEVICE_FUNC(CmdDrawMeshTasksIndirectCountEXT);
     }
 
     if (IsExtensionSupported(VK_NV_LOW_LATENCY_2_EXTENSION_NAME, desiredDeviceExts)) {
-        GET_DEVICE_PROC(GetLatencyTimingsNV);
-        GET_DEVICE_PROC(LatencySleepNV);
-        GET_DEVICE_PROC(SetLatencyMarkerNV);
-        GET_DEVICE_PROC(SetLatencySleepModeNV);
+        GET_DEVICE_FUNC(GetLatencyTimingsNV);
+        GET_DEVICE_FUNC(LatencySleepNV);
+        GET_DEVICE_FUNC(SetLatencyMarkerNV);
+        GET_DEVICE_FUNC(SetLatencySleepModeNV);
     }
 
     return Result::SUCCESS;
 }
+
+#undef MERGE_TOKENS2
+#undef MERGE_TOKENS3
+#undef GET_DEVICE_OPTIONAL_CORE_FUNC
+#undef GET_DEVICE_CORE_FUNC
+#undef GET_DEVICE_FUNC
+#undef GET_INSTANCE_FUNC
 
 void DeviceVK::Destruct() {
     Destroy(GetAllocationCallbacks(), this);
@@ -1905,24 +1961,51 @@ NRI_INLINE Result DeviceVK::BindAccelerationStructureMemory(const AccelerationSt
     if (!memoryBindingDescNum)
         return Result::SUCCESS;
 
-    Scratch<BufferMemoryBindingDesc> infos = AllocateScratch(*this, BufferMemoryBindingDesc, memoryBindingDescNum);
+    Scratch<BufferMemoryBindingDesc> bufferMemoryBindingDescs = AllocateScratch(*this, BufferMemoryBindingDesc, memoryBindingDescNum);
 
     for (uint32_t i = 0; i < memoryBindingDescNum; i++) {
         const AccelerationStructureMemoryBindingDesc& memoryBindingDesc = memoryBindingDescs[i];
         AccelerationStructureVK& accelerationStructure = *(AccelerationStructureVK*)memoryBindingDesc.accelerationStructure;
 
-        BufferMemoryBindingDesc& bufferMemoryBinding = infos[i];
+        BufferMemoryBindingDesc& bufferMemoryBinding = bufferMemoryBindingDescs[i];
         bufferMemoryBinding = {};
         bufferMemoryBinding.buffer = (Buffer*)accelerationStructure.GetBuffer();
         bufferMemoryBinding.memory = memoryBindingDesc.memory;
         bufferMemoryBinding.offset = memoryBindingDesc.offset;
     }
 
-    Result result = BindBufferMemory(infos, memoryBindingDescNum);
+    Result result = BindBufferMemory(bufferMemoryBindingDescs, memoryBindingDescNum);
 
     for (uint32_t i = 0; i < memoryBindingDescNum && result == Result::SUCCESS; i++) {
         AccelerationStructureVK& accelerationStructure = *(AccelerationStructureVK*)memoryBindingDescs[i].accelerationStructure;
         result = accelerationStructure.FinishCreation();
+    }
+
+    return result;
+}
+
+NRI_INLINE Result DeviceVK::BindMicromapMemory(const MicromapMemoryBindingDesc* memoryBindingDescs, uint32_t memoryBindingDescNum) {
+    if (!memoryBindingDescNum)
+        return Result::SUCCESS;
+
+    Scratch<BufferMemoryBindingDesc> bufferMemoryBindingDescs = AllocateScratch(*this, BufferMemoryBindingDesc, memoryBindingDescNum);
+
+    for (uint32_t i = 0; i < memoryBindingDescNum; i++) {
+        const MicromapMemoryBindingDesc& memoryBindingDesc = memoryBindingDescs[i];
+        MicromapVK& micromap = *(MicromapVK*)memoryBindingDesc.micromap;
+
+        BufferMemoryBindingDesc& bufferMemoryBinding = bufferMemoryBindingDescs[i];
+        bufferMemoryBinding = {};
+        bufferMemoryBinding.buffer = (Buffer*)micromap.GetBuffer();
+        bufferMemoryBinding.memory = memoryBindingDesc.memory;
+        bufferMemoryBinding.offset = memoryBindingDesc.offset;
+    }
+
+    Result result = BindBufferMemory(bufferMemoryBindingDescs, memoryBindingDescNum);
+
+    for (uint32_t i = 0; i < memoryBindingDescNum && result == Result::SUCCESS; i++) {
+        MicromapVK& micromap = *(MicromapVK*)memoryBindingDescs[i].micromap;
+        result = micromap.FinishCreation();
     }
 
     return result;
@@ -1977,7 +2060,7 @@ NRI_INLINE Result DeviceVK::QueryVideoMemoryInfo(MemoryLocation memoryLocation, 
     const auto& vk = GetDispatchTable();
     vk.GetPhysicalDeviceMemoryProperties2(m_PhysicalDevice, &memoryProps);
 
-    bool isLocal = memoryLocation == nri::MemoryLocation::DEVICE || memoryLocation == nri::MemoryLocation::DEVICE_UPLOAD;
+    bool isLocal = memoryLocation == MemoryLocation::DEVICE || memoryLocation == MemoryLocation::DEVICE_UPLOAD;
 
     for (uint32_t i = 0; i < GetCountOf(budgetProps.heapBudget); i++) {
         VkDeviceSize size = budgetProps.heapBudget[i];

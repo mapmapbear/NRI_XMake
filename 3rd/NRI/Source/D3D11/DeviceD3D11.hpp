@@ -24,7 +24,12 @@ static uint8_t QueryLatestDevice(ComPtr<ID3D11DeviceBest>& in, ComPtr<ID3D11Devi
 }
 
 DeviceD3D11::DeviceD3D11(const CallbackInterface& callbacks, const AllocationCallbacks& allocationCallbacks)
-    : DeviceBase(callbacks, allocationCallbacks) {
+    : DeviceBase(callbacks, allocationCallbacks)
+    , m_QueueFamilies{
+          Vector<QueueD3D11*>(GetStdAllocator()),
+          Vector<QueueD3D11*>(GetStdAllocator()),
+          Vector<QueueD3D11*>(GetStdAllocator()),
+      } {
     m_Desc.graphicsAPI = GraphicsAPI::D3D11;
     m_Desc.nriVersionMajor = NRI_VERSION_MAJOR;
     m_Desc.nriVersionMinor = NRI_VERSION_MINOR;
@@ -97,9 +102,10 @@ Result DeviceD3D11::Create(const DeviceCreationDesc& desc, const DeviceCreationD
         bool isDepthBoundsTestSupported = false;
         bool isDrawIndirectCountSupported = false;
         bool isShaderAtomicsI64Supported = false;
+        bool isShaderClockSupported = false;
 
 #if NRI_ENABLE_D3D_EXTENSIONS
-        uint32_t shaderExtRegister = desc.shaderExtRegister ? desc.shaderExtRegister : NRI_SHADER_EXT_REGISTER;
+        uint32_t d3dShaderExtRegister = desc.d3dShaderExtRegister ? desc.d3dShaderExtRegister : NRI_SHADER_EXT_REGISTER;
         if (HasAmdExt()) {
             AGSDX11DeviceCreationParams deviceCreationParams = {};
             deviceCreationParams.pAdapter = m_Adapter;
@@ -110,7 +116,7 @@ Result DeviceD3D11::Create(const DeviceCreationDesc& desc, const DeviceCreationD
             deviceCreationParams.SDKVersion = D3D11_SDK_VERSION;
 
             AGSDX11ExtensionParams extensionsParams = {};
-            extensionsParams.uavSlot = shaderExtRegister;
+            extensionsParams.uavSlot = d3dShaderExtRegister;
 
             AGSDX11ReturnedParams agsParams = {};
             AGSReturnCode result = m_AmdExt.CreateDeviceD3D11(m_AmdExt.context, &deviceCreationParams, &extensionsParams, &agsParams);
@@ -127,9 +133,9 @@ Result DeviceD3D11::Create(const DeviceCreationDesc& desc, const DeviceCreationD
             isDrawIndirectCountSupported = agsParams.extensionsSupported.multiDrawIndirectCountIndirect;
             isShaderAtomicsI64Supported = agsParams.extensionsSupported.intrinsics19;
 
-            m_Desc.isBarycentricSupported = agsParams.extensionsSupported.intrinsics16;
-            m_Desc.viewMaxNum = agsParams.extensionsSupported.multiView ? 4 : 1;
-            m_Desc.isViewportBasedMultiviewSupported = agsParams.extensionsSupported.multiView;
+            m_Desc.shaderFeatures.barycentric = agsParams.extensionsSupported.intrinsics16;
+            m_Desc.other.viewMaxNum = agsParams.extensionsSupported.multiView ? 4 : 1;
+            m_Desc.features.viewportBasedMultiview = agsParams.extensionsSupported.multiView;
         } else {
 #endif
             HRESULT hr = D3D11CreateDevice(m_Adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags, levels, levelNum, D3D11_SDK_VERSION, (ID3D11Device**)&deviceTemp, nullptr, nullptr);
@@ -143,21 +149,48 @@ Result DeviceD3D11::Create(const DeviceCreationDesc& desc, const DeviceCreationD
 #if NRI_ENABLE_D3D_EXTENSIONS
             if (HasNvExt()) {
                 REPORT_ERROR_ON_BAD_STATUS(this, NvAPI_D3D_RegisterDevice(deviceTemp));
-                REPORT_ERROR_ON_BAD_STATUS(this, NvAPI_D3D11_SetNvShaderExtnSlot(deviceTemp, shaderExtRegister));
+                REPORT_ERROR_ON_BAD_STATUS(this, NvAPI_D3D11_SetNvShaderExtnSlot(deviceTemp, d3dShaderExtRegister));
                 REPORT_ERROR_ON_BAD_STATUS(this, NvAPI_D3D11_IsNvShaderExtnOpCodeSupported(deviceTemp, NV_EXTN_OP_UINT64_ATOMIC, &isShaderAtomicsI64Supported));
+                REPORT_ERROR_ON_BAD_STATUS(this, NvAPI_D3D11_IsNvShaderExtnOpCodeSupported(deviceTemp, NV_EXTN_OP_GET_SPECIAL, &isShaderClockSupported));
                 isDepthBoundsTestSupported = true;
             }
         }
 #endif
 
         // Start filling here to avoid passing additional arguments into "FillDesc"
-        m_Desc.isDepthBoundsTestSupported = isDepthBoundsTestSupported;
-        m_Desc.isDrawIndirectCountSupported = isDrawIndirectCountSupported;
-        m_Desc.isShaderAtomicsI64Supported = isShaderAtomicsI64Supported;
+        m_Desc.features.depthBoundsTest = isDepthBoundsTestSupported;
+        m_Desc.features.drawIndirectCount = isDrawIndirectCountSupported;
+        m_Desc.shaderFeatures.atomicsI64 = isShaderAtomicsI64Supported;
+        m_Desc.shaderFeatures.clock = isShaderClockSupported;
     }
 
     m_Version = QueryLatestDevice(deviceTemp, m_Device);
     REPORT_INFO(this, "Using ID3D11Device%u", m_Version);
+
+    if (desc.enableGraphicsAPIValidation) {
+        ComPtr<ID3D11InfoQueue> pInfoQueue;
+        HRESULT hr = m_Device->QueryInterface(&pInfoQueue);
+
+        if (SUCCEEDED(hr)) {
+            hr = pInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
+            RETURN_ON_BAD_HRESULT(this, hr, "ID3D11InfoQueue::SetBreakOnSeverity()");
+
+            hr = pInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
+            RETURN_ON_BAD_HRESULT(this, hr, "ID3D11InfoQueue::SetBreakOnSeverity()");
+
+            // TODO: this code is currently needed to disable known false-positive errors reported by the debug layer
+            D3D11_MESSAGE_ID disableMessageIDs[] = {
+                // Disobey the spec, but allow multiple structured views for a single buffer
+                D3D11_MESSAGE_ID_DEVICE_SHADERRESOURCEVIEW_BUFFER_TYPE_MISMATCH,
+            };
+
+            D3D11_INFO_QUEUE_FILTER filter = {};
+            filter.DenyList.pIDList = disableMessageIDs;
+            filter.DenyList.NumIDs = GetCountOf(disableMessageIDs);
+            hr = pInfoQueue->AddStorageFilterEntries(&filter);
+            RETURN_ON_BAD_HRESULT(this, hr, "ID3D11InfoQueue::AddStorageFilterEntries()");
+        }
+    }
 
     // Immediate context
     ComPtr<ID3D11DeviceContextBest> immediateContext;
@@ -210,6 +243,24 @@ Result DeviceD3D11::Create(const DeviceCreationDesc& desc, const DeviceCreationD
         }
 
         m_Desc.adapterDesc.queueNum[(size_t)queueFamilyDesc.queueType] = queueFamilyDesc.queueNum;
+    }
+
+    { // Create zero buffer
+        D3D11_BUFFER_DESC zeroBufferDesc = {};
+        zeroBufferDesc.ByteWidth = desc.d3dZeroBufferSize ? desc.d3dZeroBufferSize : ZERO_BUFFER_DEFAULT_SIZE;
+        zeroBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+
+        auto& allocator = GetAllocationCallbacks();
+        uint8_t* zeros = (uint8_t*)allocator.Allocate(allocator.userArg, zeroBufferDesc.ByteWidth, 16);
+        memset(zeros, 0, zeroBufferDesc.ByteWidth);
+
+        D3D11_SUBRESOURCE_DATA data = {};
+        data.pSysMem = zeros;
+
+        hr = m_Device->CreateBuffer(&zeroBufferDesc, nullptr, &m_ZeroBuffer);
+        RETURN_ON_BAD_HRESULT(this, hr, "ID3D11Device::CreateBuffer()");
+
+        allocator.Free(allocator.userArg, zeros);
     }
 
     // Fill desc
@@ -268,111 +319,125 @@ void DeviceD3D11::FillDesc() {
         }
     }
 
-    m_Desc.viewportMaxNum = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
-    m_Desc.viewportBoundsRange[0] = D3D11_VIEWPORT_BOUNDS_MIN;
-    m_Desc.viewportBoundsRange[1] = D3D11_VIEWPORT_BOUNDS_MAX;
-
-    m_Desc.attachmentMaxDim = D3D11_REQ_RENDER_TO_BUFFER_WINDOW_WIDTH;
-    m_Desc.attachmentLayerMaxNum = D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION;
-    m_Desc.colorAttachmentMaxNum = D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT;
-
-    m_Desc.colorSampleMaxNum = D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT;
-    m_Desc.depthSampleMaxNum = D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT;
-    m_Desc.stencilSampleMaxNum = D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT;
-    m_Desc.zeroAttachmentsSampleMaxNum = D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT;
-    m_Desc.textureColorSampleMaxNum = D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT;
-    m_Desc.textureIntegerSampleMaxNum = 1;
-    m_Desc.textureDepthSampleMaxNum = D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT;
-    m_Desc.textureStencilSampleMaxNum = D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT;
-    m_Desc.storageTextureSampleMaxNum = 1;
-
-    m_Desc.texture1DMaxDim = D3D11_REQ_TEXTURE1D_U_DIMENSION;
-    m_Desc.texture2DMaxDim = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
-    m_Desc.texture3DMaxDim = D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION;
-    m_Desc.textureArrayLayerMaxNum = D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION;
-    m_Desc.typedBufferMaxDim = 1 << D3D11_REQ_BUFFER_RESOURCE_TEXEL_COUNT_2_TO_EXP;
-
-    m_Desc.memoryAllocationMaxNum = (uint32_t)(-1);
-    m_Desc.samplerAllocationMaxNum = D3D11_REQ_SAMPLER_OBJECT_COUNT_PER_DEVICE;
-    m_Desc.constantBufferMaxRange = D3D11_REQ_IMMEDIATE_CONSTANT_BUFFER_ELEMENT_COUNT * 16;
-    m_Desc.storageBufferMaxRange = 1 << D3D11_REQ_BUFFER_RESOURCE_TEXEL_COUNT_2_TO_EXP;
-    m_Desc.bufferTextureGranularity = 1;
-    m_Desc.bufferMaxSize = D3D11_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_C_TERM * 1024ull * 1024ull;
-
-    m_Desc.uploadBufferTextureRowAlignment = 256;   // D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
-    m_Desc.uploadBufferTextureSliceAlignment = 512; // D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT;
-    m_Desc.bufferShaderResourceOffsetAlignment = D3D11_RAW_UAV_SRV_BYTE_ALIGNMENT;
-    m_Desc.constantBufferOffsetAlignment = 256; // D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
-
-    m_Desc.pipelineLayoutDescriptorSetMaxNum = ROOT_SIGNATURE_DWORD_NUM / 1;
-    m_Desc.pipelineLayoutRootConstantMaxSize = sizeof(uint32_t) * ROOT_SIGNATURE_DWORD_NUM / 1;
-    m_Desc.pipelineLayoutRootDescriptorMaxNum = ROOT_SIGNATURE_DWORD_NUM / 2;
-
-    m_Desc.perStageDescriptorSamplerMaxNum = D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT;
-    m_Desc.perStageDescriptorConstantBufferMaxNum = D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT;
-    m_Desc.perStageDescriptorStorageBufferMaxNum = m_Version >= 1 ? D3D11_1_UAV_SLOT_COUNT : D3D11_PS_CS_UAV_REGISTER_COUNT;
-    m_Desc.perStageDescriptorTextureMaxNum = D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT;
-    m_Desc.perStageDescriptorStorageTextureMaxNum = m_Version >= 1 ? D3D11_1_UAV_SLOT_COUNT : D3D11_PS_CS_UAV_REGISTER_COUNT;
-    m_Desc.perStageResourceMaxNum = D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT;
-
-    m_Desc.descriptorSetSamplerMaxNum = m_Desc.perStageDescriptorSamplerMaxNum;
-    m_Desc.descriptorSetConstantBufferMaxNum = m_Desc.perStageDescriptorConstantBufferMaxNum;
-    m_Desc.descriptorSetStorageBufferMaxNum = m_Desc.perStageDescriptorStorageBufferMaxNum;
-    m_Desc.descriptorSetTextureMaxNum = m_Desc.perStageDescriptorTextureMaxNum;
-    m_Desc.descriptorSetStorageTextureMaxNum = m_Desc.perStageDescriptorStorageTextureMaxNum;
-
-    m_Desc.vertexShaderAttributeMaxNum = D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT;
-    m_Desc.vertexShaderStreamMaxNum = D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT;
-    m_Desc.vertexShaderOutputComponentMaxNum = D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT * 4;
-
-    m_Desc.tessControlShaderGenerationMaxLevel = D3D11_HS_MAXTESSFACTOR_UPPER_BOUND;
-    m_Desc.tessControlShaderPatchPointMaxNum = D3D11_IA_PATCH_MAX_CONTROL_POINT_COUNT;
-    m_Desc.tessControlShaderPerVertexInputComponentMaxNum = D3D11_HS_CONTROL_POINT_PHASE_INPUT_REGISTER_COUNT * D3D11_HS_CONTROL_POINT_REGISTER_COMPONENTS;
-    m_Desc.tessControlShaderPerVertexOutputComponentMaxNum = D3D11_HS_CONTROL_POINT_PHASE_OUTPUT_REGISTER_COUNT * D3D11_HS_CONTROL_POINT_REGISTER_COMPONENTS;
-    m_Desc.tessControlShaderPerPatchOutputComponentMaxNum = D3D11_HS_OUTPUT_PATCH_CONSTANT_REGISTER_SCALAR_COMPONENTS;
-    m_Desc.tessControlShaderTotalOutputComponentMaxNum = m_Desc.tessControlShaderPatchPointMaxNum * m_Desc.tessControlShaderPerVertexOutputComponentMaxNum + m_Desc.tessControlShaderPerPatchOutputComponentMaxNum;
-    m_Desc.tessEvaluationShaderInputComponentMaxNum = D3D11_DS_INPUT_CONTROL_POINT_REGISTER_COUNT * D3D11_DS_INPUT_CONTROL_POINT_REGISTER_COMPONENTS;
-    m_Desc.tessEvaluationShaderOutputComponentMaxNum = D3D11_DS_INPUT_CONTROL_POINT_REGISTER_COUNT * D3D11_DS_INPUT_CONTROL_POINT_REGISTER_COMPONENTS;
-
-    m_Desc.geometryShaderInvocationMaxNum = D3D11_GS_MAX_INSTANCE_COUNT;
-    m_Desc.geometryShaderInputComponentMaxNum = D3D11_GS_INPUT_REGISTER_COUNT * D3D11_GS_INPUT_REGISTER_COMPONENTS;
-    m_Desc.geometryShaderOutputComponentMaxNum = D3D11_GS_OUTPUT_REGISTER_COUNT * D3D11_GS_INPUT_REGISTER_COMPONENTS;
-    m_Desc.geometryShaderOutputVertexMaxNum = D3D11_GS_MAX_OUTPUT_VERTEX_COUNT_ACROSS_INSTANCES;
-    m_Desc.geometryShaderTotalOutputComponentMaxNum = D3D11_REQ_GS_INVOCATION_32BIT_OUTPUT_COMPONENT_LIMIT;
-
-    m_Desc.fragmentShaderInputComponentMaxNum = D3D11_PS_INPUT_REGISTER_COUNT * D3D11_PS_INPUT_REGISTER_COMPONENTS;
-    m_Desc.fragmentShaderOutputAttachmentMaxNum = D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT;
-    m_Desc.fragmentShaderDualSourceAttachmentMaxNum = 1;
-
-    m_Desc.computeShaderSharedMemoryMaxSize = D3D11_CS_THREAD_LOCAL_TEMP_REGISTER_POOL;
-    m_Desc.computeShaderWorkGroupMaxNum[0] = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
-    m_Desc.computeShaderWorkGroupMaxNum[1] = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
-    m_Desc.computeShaderWorkGroupMaxNum[2] = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
-    m_Desc.computeShaderWorkGroupInvocationMaxNum = D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP;
-    m_Desc.computeShaderWorkGroupMaxDim[0] = D3D11_CS_THREAD_GROUP_MAX_X;
-    m_Desc.computeShaderWorkGroupMaxDim[1] = D3D11_CS_THREAD_GROUP_MAX_Y;
-    m_Desc.computeShaderWorkGroupMaxDim[2] = D3D11_CS_THREAD_GROUP_MAX_Z;
-
-    m_Desc.viewportPrecisionBits = D3D11_SUBPIXEL_FRACTIONAL_BIT_COUNT;
-    m_Desc.subPixelPrecisionBits = D3D11_SUBPIXEL_FRACTIONAL_BIT_COUNT;
-    m_Desc.subTexelPrecisionBits = D3D11_SUBTEXEL_FRACTIONAL_BIT_COUNT;
-    m_Desc.mipmapPrecisionBits = D3D11_MIP_LOD_FRACTIONAL_BIT_COUNT;
-
-    m_Desc.timestampFrequencyHz = timestampFrequency;
-    m_Desc.drawIndirectMaxNum = (1ull << D3D11_REQ_DRAWINDEXED_INDEX_COUNT_2_TO_EXP) - 1;
-    m_Desc.samplerLodBiasMin = D3D11_MIP_LOD_BIAS_MIN;
-    m_Desc.samplerLodBiasMax = D3D11_MIP_LOD_BIAS_MAX;
-    m_Desc.samplerAnisotropyMax = D3D11_DEFAULT_MAX_ANISOTROPY;
-    m_Desc.texelOffsetMin = D3D11_COMMONSHADER_TEXEL_OFFSET_MAX_NEGATIVE;
-    m_Desc.texelOffsetMax = D3D11_COMMONSHADER_TEXEL_OFFSET_MAX_POSITIVE;
-    m_Desc.texelGatherOffsetMin = D3D11_COMMONSHADER_TEXEL_OFFSET_MAX_NEGATIVE;
-    m_Desc.texelGatherOffsetMax = D3D11_COMMONSHADER_TEXEL_OFFSET_MAX_POSITIVE;
-    m_Desc.clipDistanceMaxNum = D3D11_CLIP_OR_CULL_DISTANCE_COUNT;
-    m_Desc.cullDistanceMaxNum = D3D11_CLIP_OR_CULL_DISTANCE_COUNT;
-    m_Desc.combinedClipAndCullDistanceMaxNum = D3D11_CLIP_OR_CULL_DISTANCE_COUNT;
     m_Desc.shaderModel = 51;
 
-    m_Desc.conservativeRasterTier = (uint8_t)options2.ConservativeRasterizationTier;
+    m_Desc.viewport.maxNum = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+    m_Desc.viewport.boundsMin = D3D11_VIEWPORT_BOUNDS_MIN;
+    m_Desc.viewport.boundsMax = D3D11_VIEWPORT_BOUNDS_MAX;
+
+    m_Desc.multisampling.zeroAttachmentsSampleMaxNum = D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT;
+    m_Desc.multisampling.attachmentColorSampleMaxNum = D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT;
+    m_Desc.multisampling.attachmentDepthSampleMaxNum = D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT;
+    m_Desc.multisampling.attachmentStencilSampleMaxNum = D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT;
+    m_Desc.multisampling.textureColorSampleMaxNum = D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT;
+    m_Desc.multisampling.textureDepthSampleMaxNum = D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT;
+    m_Desc.multisampling.textureStencilSampleMaxNum = D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT;
+    m_Desc.multisampling.textureIntegerSampleMaxNum = 1;
+    m_Desc.multisampling.storageTextureSampleMaxNum = 1;
+
+    m_Desc.dimensions.attachmentMaxDim = D3D11_REQ_RENDER_TO_BUFFER_WINDOW_WIDTH;
+    m_Desc.dimensions.attachmentLayerMaxNum = D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION;
+    m_Desc.dimensions.texture1DMaxDim = D3D11_REQ_TEXTURE1D_U_DIMENSION;
+    m_Desc.dimensions.texture2DMaxDim = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+    m_Desc.dimensions.texture3DMaxDim = D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION;
+    m_Desc.dimensions.textureLayerMaxNum = D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION;
+    m_Desc.dimensions.typedBufferMaxDim = 1 << D3D11_REQ_BUFFER_RESOURCE_TEXEL_COUNT_2_TO_EXP;
+
+    m_Desc.precision.viewportBits = D3D11_SUBPIXEL_FRACTIONAL_BIT_COUNT;
+    m_Desc.precision.subPixelBits = D3D11_SUBPIXEL_FRACTIONAL_BIT_COUNT;
+    m_Desc.precision.subTexelBits = D3D11_SUBTEXEL_FRACTIONAL_BIT_COUNT;
+    m_Desc.precision.mipmapBits = D3D11_MIP_LOD_FRACTIONAL_BIT_COUNT;
+
+    m_Desc.memory.allocationMaxNum = (uint32_t)(-1);
+    m_Desc.memory.samplerAllocationMaxNum = D3D11_REQ_SAMPLER_OBJECT_COUNT_PER_DEVICE;
+    m_Desc.memory.constantBufferMaxRange = D3D11_REQ_IMMEDIATE_CONSTANT_BUFFER_ELEMENT_COUNT * 16;
+    m_Desc.memory.storageBufferMaxRange = 1 << D3D11_REQ_BUFFER_RESOURCE_TEXEL_COUNT_2_TO_EXP;
+    m_Desc.memory.bufferTextureGranularity = 1;
+    m_Desc.memory.bufferMaxSize = D3D11_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_C_TERM * 1024ull * 1024ull;
+
+    m_Desc.memoryAlignment.uploadBufferTextureRow = 256;   // D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
+    m_Desc.memoryAlignment.uploadBufferTextureSlice = 512; // D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT;
+    m_Desc.memoryAlignment.bufferShaderResourceOffset = D3D11_RAW_UAV_SRV_BYTE_ALIGNMENT;
+    m_Desc.memoryAlignment.constantBufferOffset = 256; // D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
+
+    m_Desc.pipelineLayout.descriptorSetMaxNum = ROOT_SIGNATURE_DWORD_NUM / 1;
+    m_Desc.pipelineLayout.rootConstantMaxSize = sizeof(uint32_t) * ROOT_SIGNATURE_DWORD_NUM / 1;
+    m_Desc.pipelineLayout.rootDescriptorMaxNum = ROOT_SIGNATURE_DWORD_NUM / 2;
+
+    m_Desc.descriptorSet.samplerMaxNum = D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT;
+    m_Desc.descriptorSet.constantBufferMaxNum = D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT;
+    m_Desc.descriptorSet.storageBufferMaxNum = m_Version >= 1 ? D3D11_1_UAV_SLOT_COUNT : D3D11_PS_CS_UAV_REGISTER_COUNT;
+    m_Desc.descriptorSet.textureMaxNum = D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT;
+    m_Desc.descriptorSet.storageTextureMaxNum = m_Desc.descriptorSet.storageBufferMaxNum;
+
+    m_Desc.descriptorSet.updateAfterSet.samplerMaxNum = m_Desc.descriptorSet.samplerMaxNum;
+    m_Desc.descriptorSet.updateAfterSet.constantBufferMaxNum = m_Desc.descriptorSet.constantBufferMaxNum;
+    m_Desc.descriptorSet.updateAfterSet.storageBufferMaxNum = m_Desc.descriptorSet.storageBufferMaxNum;
+    m_Desc.descriptorSet.updateAfterSet.textureMaxNum = m_Desc.descriptorSet.textureMaxNum;
+    m_Desc.descriptorSet.updateAfterSet.storageTextureMaxNum = m_Desc.descriptorSet.storageTextureMaxNum;
+
+    m_Desc.shaderStage.descriptorSamplerMaxNum = m_Desc.descriptorSet.samplerMaxNum;
+    m_Desc.shaderStage.descriptorConstantBufferMaxNum = m_Desc.descriptorSet.constantBufferMaxNum;
+    m_Desc.shaderStage.descriptorStorageBufferMaxNum = m_Desc.descriptorSet.storageBufferMaxNum;
+    m_Desc.shaderStage.descriptorTextureMaxNum = m_Desc.descriptorSet.textureMaxNum;
+    m_Desc.shaderStage.descriptorStorageTextureMaxNum = m_Desc.descriptorSet.storageTextureMaxNum;
+    m_Desc.shaderStage.resourceMaxNum = m_Desc.descriptorSet.textureMaxNum;
+
+    m_Desc.shaderStage.updateAfterSet.descriptorSamplerMaxNum = m_Desc.shaderStage.descriptorSamplerMaxNum;
+    m_Desc.shaderStage.updateAfterSet.descriptorConstantBufferMaxNum = m_Desc.shaderStage.descriptorConstantBufferMaxNum;
+    m_Desc.shaderStage.updateAfterSet.descriptorStorageBufferMaxNum = m_Desc.shaderStage.descriptorStorageBufferMaxNum;
+    m_Desc.shaderStage.updateAfterSet.descriptorTextureMaxNum = m_Desc.shaderStage.descriptorTextureMaxNum;
+    m_Desc.shaderStage.updateAfterSet.descriptorStorageTextureMaxNum = m_Desc.shaderStage.descriptorStorageTextureMaxNum;
+    m_Desc.shaderStage.updateAfterSet.resourceMaxNum = m_Desc.shaderStage.resourceMaxNum;
+
+    m_Desc.shaderStage.vertex.attributeMaxNum = D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT;
+    m_Desc.shaderStage.vertex.streamMaxNum = D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT;
+    m_Desc.shaderStage.vertex.outputComponentMaxNum = D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT * 4;
+
+    m_Desc.shaderStage.tesselationControl.generationMaxLevel = D3D11_HS_MAXTESSFACTOR_UPPER_BOUND;
+    m_Desc.shaderStage.tesselationControl.patchPointMaxNum = D3D11_IA_PATCH_MAX_CONTROL_POINT_COUNT;
+    m_Desc.shaderStage.tesselationControl.perVertexInputComponentMaxNum = D3D11_HS_CONTROL_POINT_PHASE_INPUT_REGISTER_COUNT * D3D11_HS_CONTROL_POINT_REGISTER_COMPONENTS;
+    m_Desc.shaderStage.tesselationControl.perVertexOutputComponentMaxNum = D3D11_HS_CONTROL_POINT_PHASE_OUTPUT_REGISTER_COUNT * D3D11_HS_CONTROL_POINT_REGISTER_COMPONENTS;
+    m_Desc.shaderStage.tesselationControl.perPatchOutputComponentMaxNum = D3D11_HS_OUTPUT_PATCH_CONSTANT_REGISTER_SCALAR_COMPONENTS;
+    m_Desc.shaderStage.tesselationControl.totalOutputComponentMaxNum
+        = m_Desc.shaderStage.tesselationControl.patchPointMaxNum * m_Desc.shaderStage.tesselationControl.perVertexOutputComponentMaxNum
+        + m_Desc.shaderStage.tesselationControl.perPatchOutputComponentMaxNum;
+
+    m_Desc.shaderStage.tesselationEvaluation.inputComponentMaxNum = D3D11_DS_INPUT_CONTROL_POINT_REGISTER_COUNT * D3D11_DS_INPUT_CONTROL_POINT_REGISTER_COMPONENTS;
+    m_Desc.shaderStage.tesselationEvaluation.outputComponentMaxNum = D3D11_DS_INPUT_CONTROL_POINT_REGISTER_COUNT * D3D11_DS_INPUT_CONTROL_POINT_REGISTER_COMPONENTS;
+
+    m_Desc.shaderStage.geometry.invocationMaxNum = D3D11_GS_MAX_INSTANCE_COUNT;
+    m_Desc.shaderStage.geometry.inputComponentMaxNum = D3D11_GS_INPUT_REGISTER_COUNT * D3D11_GS_INPUT_REGISTER_COMPONENTS;
+    m_Desc.shaderStage.geometry.outputComponentMaxNum = D3D11_GS_OUTPUT_REGISTER_COUNT * D3D11_GS_INPUT_REGISTER_COMPONENTS;
+    m_Desc.shaderStage.geometry.outputVertexMaxNum = D3D11_GS_MAX_OUTPUT_VERTEX_COUNT_ACROSS_INSTANCES;
+    m_Desc.shaderStage.geometry.totalOutputComponentMaxNum = D3D11_REQ_GS_INVOCATION_32BIT_OUTPUT_COMPONENT_LIMIT;
+
+    m_Desc.shaderStage.fragment.inputComponentMaxNum = D3D11_PS_INPUT_REGISTER_COUNT * D3D11_PS_INPUT_REGISTER_COMPONENTS;
+    m_Desc.shaderStage.fragment.attachmentMaxNum = D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT;
+    m_Desc.shaderStage.fragment.dualSourceAttachmentMaxNum = 1;
+
+    m_Desc.shaderStage.compute.sharedMemoryMaxSize = D3D11_CS_THREAD_LOCAL_TEMP_REGISTER_POOL;
+    m_Desc.shaderStage.compute.workGroupMaxNum[0] = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
+    m_Desc.shaderStage.compute.workGroupMaxNum[1] = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
+    m_Desc.shaderStage.compute.workGroupMaxNum[2] = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
+    m_Desc.shaderStage.compute.workGroupInvocationMaxNum = D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP;
+    m_Desc.shaderStage.compute.workGroupMaxDim[0] = D3D11_CS_THREAD_GROUP_MAX_X;
+    m_Desc.shaderStage.compute.workGroupMaxDim[1] = D3D11_CS_THREAD_GROUP_MAX_Y;
+    m_Desc.shaderStage.compute.workGroupMaxDim[2] = D3D11_CS_THREAD_GROUP_MAX_Z;
+
+    m_Desc.other.timestampFrequencyHz = timestampFrequency;
+    m_Desc.other.drawIndirectMaxNum = (1ull << D3D11_REQ_DRAWINDEXED_INDEX_COUNT_2_TO_EXP) - 1;
+    m_Desc.other.samplerLodBiasMax = D3D11_MIP_LOD_BIAS_MAX;
+    m_Desc.other.samplerAnisotropyMax = D3D11_DEFAULT_MAX_ANISOTROPY;
+    m_Desc.other.texelOffsetMin = D3D11_COMMONSHADER_TEXEL_OFFSET_MAX_NEGATIVE;
+    m_Desc.other.texelOffsetMax = D3D11_COMMONSHADER_TEXEL_OFFSET_MAX_POSITIVE;
+    m_Desc.other.texelGatherOffsetMin = D3D11_COMMONSHADER_TEXEL_OFFSET_MAX_NEGATIVE;
+    m_Desc.other.texelGatherOffsetMax = D3D11_COMMONSHADER_TEXEL_OFFSET_MAX_POSITIVE;
+    m_Desc.other.clipDistanceMaxNum = D3D11_CLIP_OR_CULL_DISTANCE_COUNT;
+    m_Desc.other.cullDistanceMaxNum = D3D11_CLIP_OR_CULL_DISTANCE_COUNT;
+    m_Desc.other.combinedClipAndCullDistanceMaxNum = D3D11_CLIP_OR_CULL_DISTANCE_COUNT;
+
+    m_Desc.tiers.conservativeRaster = (uint8_t)options2.ConservativeRasterizationTier;
 
     bool isShaderAtomicsF16Supported = false;
     bool isShaderAtomicsF32Supported = false;
@@ -389,31 +454,30 @@ void DeviceD3D11::FillDesc() {
         REPORT_ERROR_ON_BAD_STATUS(this, NvAPI_D3D1x_GetGraphicsCapabilities(m_Device, NV_D3D1x_GRAPHICS_CAPS_VER, &caps));
     }
 
-    m_Desc.sampleLocationsTier = rasterizerFeatures.ProgrammableSamplePositions ? 2 : 0;
+    m_Desc.tiers.sampleLocations = rasterizerFeatures.ProgrammableSamplePositions ? 2 : 0;
 
-    m_Desc.shadingRateTier = caps.bVariablePixelRateShadingSupported ? 2 : 0;
-    m_Desc.shadingRateAttachmentTileSize = NV_VARIABLE_PIXEL_SHADING_TILE_WIDTH;
-    m_Desc.isAdditionalShadingRatesSupported = caps.bVariablePixelRateShadingSupported ? 1 : 0;
+    m_Desc.tiers.shadingRate = caps.bVariablePixelRateShadingSupported ? 2 : 0;
+    m_Desc.other.shadingRateAttachmentTileSize = NV_VARIABLE_PIXEL_SHADING_TILE_WIDTH;
+    m_Desc.features.additionalShadingRates = caps.bVariablePixelRateShadingSupported ? 1 : 0;
 #endif
 
-    m_Desc.isGetMemoryDesc2Supported = true;
+    m_Desc.features.getMemoryDesc2 = true;
+    m_Desc.features.swapChain = HasOutput();
+    m_Desc.features.lowLatency = HasNvExt();
 
-    m_Desc.isTextureFilterMinMaxSupported = options1.MinMaxFiltering != 0;
-    m_Desc.isLogicFuncSupported = options.OutputMergerLogicOp != 0;
-    m_Desc.isLineSmoothingSupported = true;
-    m_Desc.isEnchancedBarrierSupported = true; // don't care, but advertise support
-    m_Desc.isWaitableSwapChainSupported = true; // TODO: swap chain version >= 2?
+    m_Desc.features.textureFilterMinMax = options1.MinMaxFiltering != 0;
+    m_Desc.features.logicFunc = options.OutputMergerLogicOp != 0;
+    m_Desc.features.lineSmoothing = true;
+    m_Desc.features.enchancedBarrier = true;  // don't care, but advertise support
+    m_Desc.features.waitableSwapChain = true; // TODO: swap chain version >= 2?
 
-    m_Desc.isShaderNativeF64Supported = options.ExtendedDoublesShaderInstructions;
-    m_Desc.isShaderAtomicsF16Supported = isShaderAtomicsF16Supported;
-    m_Desc.isShaderAtomicsF32Supported = isShaderAtomicsF32Supported;
-    m_Desc.isShaderViewportIndexSupported = options3.VPAndRTArrayIndexFromAnyShaderFeedingRasterizer;
-    m_Desc.isShaderLayerSupported = options3.VPAndRTArrayIndexFromAnyShaderFeedingRasterizer;
-    m_Desc.isShaderClockSupported = isGetSpecialSupported;
-    m_Desc.isRasterizedOrderedViewSupported = options2.ROVsSupported != 0;
-
-    m_Desc.isSwapChainSupported = HasOutput();
-    m_Desc.isLowLatencySupported = HasNvExt();
+    m_Desc.shaderFeatures.nativeF64 = options.ExtendedDoublesShaderInstructions;
+    m_Desc.shaderFeatures.atomicsF16 = isShaderAtomicsF16Supported;
+    m_Desc.shaderFeatures.atomicsF32 = isShaderAtomicsF32Supported;
+    m_Desc.shaderFeatures.viewportIndex = options3.VPAndRTArrayIndexFromAnyShaderFeedingRasterizer;
+    m_Desc.shaderFeatures.layerIndex = options3.VPAndRTArrayIndexFromAnyShaderFeedingRasterizer;
+    m_Desc.shaderFeatures.clock = isGetSpecialSupported;
+    m_Desc.shaderFeatures.rasterizedOrderedView = options2.ROVsSupported != 0;
 }
 
 void DeviceD3D11::InitializeNvExt(bool isNVAPILoadedInApp, bool isImported) {
@@ -429,7 +493,7 @@ void DeviceD3D11::InitializeNvExt(bool isNVAPILoadedInApp, bool isImported) {
     else {
         NvAPI_Status status = NvAPI_Initialize();
         if (status != NVAPI_OK)
-            REPORT_ERROR(this, "Failed to initialize NVAPI: %d", (int32_t)status);
+            REPORT_ERROR(this, "NvAPI_Initialize(): failed, result = %d!", (int32_t)status);
         m_NvExt.available = (status == NVAPI_OK);
     }
 #endif

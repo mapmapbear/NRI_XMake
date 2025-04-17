@@ -1,5 +1,6 @@
 #pragma once
 #include "commonRenderPass.h"
+#include <vector>
 
 
 
@@ -52,7 +53,7 @@ private:
 	uint32_t m_IndexCount = 0;
 	uint32_t m_NumMeshes = 32 * 1024;
 
-	std::vector<Vertex> m_positions;
+	std::vector<std::vector<Vertex>> m_positions;
 	std::vector<uint32_t> m_indices;
 
 	uint64_t m_indexDataAlignedTotalSize = 0;

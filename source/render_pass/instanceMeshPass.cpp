@@ -15,12 +15,7 @@ InstanceMeshPass::InstanceMeshPass(Renderer *renderer) :
 void InstanceMeshPass::AllocGPUMemory() {
 	auto NRI = *m_NRI;
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
-
-	// Load Scene Mesh
-	// const aiScene *scene =
-	// 		aiImportFile("data/rubber_duck/scene.gltf",
-	// 				aiProcess_Triangulate | aiProcess_MakeLeftHanded);
-
+	
 	const aiScene *scene = aiImportFile("data/DamagedHelmet/glTF/DamagedHelmet.gltf",
 			aiProcess_Triangulate | aiProcess_MakeLeftHanded);
 	if (!scene || !scene->HasMeshes()) {
@@ -58,7 +53,7 @@ void InstanceMeshPass::AllocGPUMemory() {
 
 	// GPU Resource
 	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
-			deviceDesc.constantBufferOffsetAlignment);
+			deviceDesc.memoryAlignment.constantBufferOffset);
 
 	const aiMesh *mesh = scene->mMeshes[0];
 
@@ -263,7 +258,7 @@ void InstanceMeshPass::BindMemory() {
 
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
 	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
-			deviceDesc.constantBufferOffsetAlignment);
+			deviceDesc.memoryAlignment.constantBufferOffset);
 
 	{
 		nri::BufferViewDesc bufferViewDesc = {};
@@ -449,7 +444,7 @@ void InstanceMeshPass::BuildPipeline() {
 
 		nri::VertexStreamDesc vertexStreamDesc = {};
 		vertexStreamDesc.bindingSlot = 0;
-		vertexStreamDesc.stride = sizeof(Vertex);
+		// vertexStreamDesc.stepRate = sizeof(Vertex);
 
 		nri::VertexAttributeDesc vertexAttributeDesc[3] = {};
 		{
@@ -590,8 +585,12 @@ void InstanceMeshPass::Render(RenderInfo &info, Camera &camera) {
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &cameraPos, sizeof(glm::vec4));
 		NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer, 0,
 				nri::IndexType::UINT32);
-		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, 1, &m_GeometryBuffer,
-				&m_GeometryOffset);
+				
+		nri::VertexBufferDesc vertexBufferDesc = {};
+		vertexBufferDesc.buffer = m_GeometryBuffer;
+		vertexBufferDesc.offset = m_GeometryOffset;
+		vertexBufferDesc.stride = sizeof(Vertex);
+		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
 		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
 				*m_ConstantBufferDescriptorSet, nullptr);
 		NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_TextureDescriptorSet,
