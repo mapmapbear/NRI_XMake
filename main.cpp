@@ -8,7 +8,6 @@
 // STB
 #include "stb_image.h"
 
-
 #define INSTANCE
 
 constexpr uint32_t VIEW_MASK = 0b11;
@@ -134,12 +133,14 @@ Sample::~Sample() {
 	NRI.DestroyPipelineLayout(*m_ComputePipelineLayout);
 	NRI.DestroyDescriptor(*m_TextureShaderResource);
 	NRI.DestroyDescriptor(*m_DepthAttachment);
+	NRI.DestroyDescriptor(*m_ColorAttachment);
 	NRI.DestroyDescriptor(*m_Sampler);
 	NRI.DestroyDescriptor(*m_CubeSampler);
 	NRI.DestroyBuffer(*m_ConstantBuffer);
 	NRI.DestroyBuffer(*m_GeometryBuffer);
 	NRI.DestroyTexture(*m_Texture);
 	NRI.DestroyTexture(*m_DepthTexture);
+	NRI.DestroyTexture(*m_ColorTexture);
 	NRI.DestroyDescriptorPool(*m_DescriptorPool);
 	NRI.DestroyFence(*m_FrameFence);
 	NRI.DestroySwapChain(*m_SwapChain);
@@ -172,7 +173,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	deviceCreationDesc.queueFamilies = queueFamilies;
 	deviceCreationDesc.queueFamilyNum = helper::GetCountOf(queueFamilies);
 	deviceCreationDesc.enableGraphicsAPIValidation = true;
-	deviceCreationDesc.enableNRIValidation = m_DebugNRI;
+	deviceCreationDesc.enableNRIValidation = true;
 	deviceCreationDesc.enableD3D11CommandBufferEmulation =
 			D3D11_COMMANDBUFFER_EMULATION;
 	deviceCreationDesc.vkBindingOffsets = VK_BINDING_OFFSETS;
@@ -209,11 +210,9 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 
 	NRI_ABORT_ON_FAILURE(NRI.GetQueue(*m_Device, nri::QueueType::COMPUTE, 0, m_ComputeQueue));
 	NRI.SetDebugName(m_ComputeQueue, "ComputeQueue");
-
 	testRenderPtr = new Renderer(NRI, m_Device);
 	// Fences
 	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_FrameFence));
-	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_ComputeFence));
 	// Swap chain
 	nri::Format swapChainFormat;
 	{
@@ -260,39 +259,9 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateCommandBuffer(*frame.commandAllocatorCompute, frame.commandBufferCompute));
 	}
-	testRenderPtr->OnStart(nullptr);
+
 	utils::ShaderCodeStorage shaderCodeStorage;
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_Device);
-
-	// // Compute pipeline
-	// {
-	// 	nri::DescriptorRangeDesc descriptorRangeComp[2];
-	// 	descriptorRangeComp[0] = { 0, 1, nri::DescriptorType::STRUCTURED_BUFFER,
-	// 		nri::StageBits::COMPUTE_SHADER };
-	// 	descriptorRangeComp[1] = { 0, 1, nri::DescriptorType::STORAGE_BUFFER,
-	// 		nri::StageBits::COMPUTE_SHADER };
-
-	// 	nri::DescriptorSetDesc descriptorSetDesc = { 0, descriptorRangeComp, 2 };
-
-	// 	struct bindRoot {
-	// 		vec4 a;
-	// 	};
-	// 	nri::RootConstantDesc rootConstant = { 0, sizeof(bindRoot),
-	// 		nri::StageBits::COMPUTE_SHADER };
-
-	// 	nri::PipelineLayoutDesc pipelineLayoutDesc = {};
-	// 	pipelineLayoutDesc.descriptorSetNum = 1;
-	// 	pipelineLayoutDesc.descriptorSets = &descriptorSetDesc;
-	// 	pipelineLayoutDesc.rootConstantNum = 1;
-	// 	pipelineLayoutDesc.rootConstants = &rootConstant;
-	// 	pipelineLayoutDesc.shaderStages = nri::StageBits::COMPUTE_SHADER;
-	// 	NRI_ABORT_ON_FAILURE(NRI.CreatePipelineLayout(*m_Device, pipelineLayoutDesc, m_ComputePipelineLayout));
-	// 	NRI.SetDebugName(m_ComputePipelineLayout, "Compute Pipeline Layout");
-	// 	nri::ComputePipelineDesc computePipelineDesc = {};
-	// 	computePipelineDesc.pipelineLayout = m_ComputePipelineLayout;
-	// 	computePipelineDesc.shader = utils::LoadShader(nri::GraphicsAPI::D3D12, "instanceGenBuffer.cs", shaderCodeStorage);
-	// 	NRI_ABORT_ON_FAILURE(NRI.CreateComputePipeline(*m_Device, computePipelineDesc, m_ComputePipeline));
-	// }
 
 	m_DescriptorPool = &testRenderPtr->GetDescriptorPool();
 
@@ -306,6 +275,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		textureDesc.mipNum = 1;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture(*m_Device, textureDesc, m_ColorTexture));
+		NRI.SetDebugName(m_ColorTexture, "m_ColorTexture");
 	}
 
 	{
@@ -318,6 +288,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		textureDesc.mipNum = 1;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture(*m_Device, textureDesc, m_DepthTexture));
+		NRI.SetDebugName(m_DepthTexture, "m_DepthTexture");
 	}
 
 	nri::ResourceGroupDesc resourceGroupDesc = {};
@@ -331,24 +302,6 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(
 			*m_Device, resourceGroupDesc, m_MemoryAllocations.data()));
 
-	nri::TextureUploadDesc textureData;
-	textureData.subresources = nullptr;
-	textureData.texture = m_DepthTexture;
-	textureData.after = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT };
-	textureData.planes = nri::PlaneBits::ALL;
-
-	nri::TextureUploadDesc textureData1;
-	textureData1.subresources = nullptr;
-	textureData1.texture = m_ColorTexture;
-	textureData1.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT };
-	textureData1.planes = nri::PlaneBits::ALL;
-
-	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData, textureData1 };
-
-	NRI_ABORT_ON_FAILURE(NRI.UploadData(*m_GraphicsQueue, texUploadDescArray.data(), texUploadDescArray.size(),
-			nullptr,
-			0));
-
 	{
 		nri::Texture2DViewDesc textureViewDesc = { .texture = m_DepthTexture, .viewType = nri::Texture2DViewType::DEPTH_STENCIL_ATTACHMENT, .format = nri::Format::D16_UNORM };
 		NRI_ABORT_ON_FAILURE(
@@ -361,6 +314,96 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 				NRI.CreateTexture2DView(textureViewDesc, m_ColorAttachment));
 	}
 
+	// nri::AttachmentsDesc attachmentsDesc = {};
+	// attachmentsDesc.colorNum = 1;
+	// attachmentsDesc.colors = &m_ColorAttachment;
+	// attachmentsDesc.depthStencil = m_DepthAttachment;
+	// attachmentsDesc.viewMask = 0;
+	// nri::CommandBuffer *commandBuffer = m_Frames[0].commandBuffer;
+	// NRI.BeginCommandBuffer(*commandBuffer, m_DescriptorPool);
+	// {
+	// 	NRI.CmdBeginRendering(*commandBuffer, attachmentsDesc);
+	// 	{
+	// 		nri::TextureBarrierDesc textureBarrierDescs = {};
+	// 		textureBarrierDescs.texture = m_ColorTexture;
+	// 		textureBarrierDescs.before = { nri::AccessBits::UNKNOWN, nri::Layout::UNKNOWN };
+	// 		textureBarrierDescs.after = { nri::AccessBits::COLOR_ATTACHMENT,
+	// 			nri::Layout::COLOR_ATTACHMENT };
+
+	// 		nri::TextureBarrierDesc depthBarrierDesc = {};
+	// 		depthBarrierDesc.texture = m_DepthTexture;
+	// 		depthBarrierDesc.after = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT };
+
+	// 		std::array<nri::TextureBarrierDesc, 2> texBarrierArray = { textureBarrierDescs, depthBarrierDesc };
+	// 		nri::BarrierGroupDesc barrierGroupDesc = {};
+	// 		barrierGroupDesc.textureNum = 2;
+	// 		barrierGroupDesc.textures = texBarrierArray.data();
+
+	// 		NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
+
+	// 		{
+	// 			helper::Annotation annotation(NRI, *commandBuffer, "Clears");
+
+	// 			nri::ClearDesc clearDesc = {};
+	// 			clearDesc.planes = nri::PlaneBits::COLOR;
+	// 			clearDesc.value.color.f = COLOR_0;
+
+	// 			NRI.CmdClearAttachments(*commandBuffer, &clearDesc, 1, nullptr, 0);
+	// 			clearDesc = {};
+	// 			clearDesc.planes = nri::PlaneBits::DEPTH;
+	// 			clearDesc.value.depthStencil.depth = 1.0;
+	// 			NRI.CmdClearAttachments(*commandBuffer, &clearDesc, 1, nullptr, 0);
+	// 		}
+	// 	}
+	// 	NRI.CmdEndRendering(*commandBuffer);
+	// }
+	// NRI.EndCommandBuffer(*commandBuffer);
+
+	// { // Submit
+	// 	nri::QueueSubmitDesc queueSubmitDesc = {};
+	// 	queueSubmitDesc.commandBuffers = &commandBuffer;
+	// 	queueSubmitDesc.commandBufferNum = 1;
+
+	// 	NRI.QueueSubmit(*m_GraphicsQueue, queueSubmitDesc);
+	// }
+	// NRI.WaitForIdle(*m_GraphicsQueue);
+
+	nri::TextureSubresourceUploadDesc colorSubRes = {};
+	colorSubRes.rowPitch = GetWindowResolution().first * 4;
+	colorSubRes.slicePitch = colorSubRes.rowPitch * GetWindowResolution().second;
+	std::vector<uint8_t> data(colorSubRes.slicePitch, 0);
+	colorSubRes.slices = data.data();
+	colorSubRes.sliceNum = 1;
+
+	uint32_t width = GetWindowResolution().first;
+	uint32_t height = GetWindowResolution().second;
+	nri::TextureSubresourceUploadDesc depthSubRes = {};
+	size_t dataSize = width * height * 2;
+	depthSubRes.rowPitch = width * 2;
+	depthSubRes.slicePitch = dataSize;
+	std::vector<uint8_t> data1(colorSubRes.slicePitch, 1.0);
+	depthSubRes.sliceNum = 1;
+	depthSubRes.slices = data1.data();
+
+	nri::TextureUploadDesc textureData;
+	textureData.subresources = nullptr; // &depthSubRes;
+	textureData.texture = m_DepthTexture;
+	textureData.after = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT };
+	textureData.planes = nri::PlaneBits::DEPTH;
+
+	nri::TextureUploadDesc textureData1;
+	textureData1.subresources = nullptr; // &colorSubRes;
+	textureData1.texture = m_ColorTexture;
+	textureData1.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT };
+	textureData1.planes = nri::PlaneBits::COLOR;
+
+	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData, textureData1 };
+
+	NRI_ABORT_ON_FAILURE(NRI.UploadData(*m_GraphicsQueue, texUploadDescArray.data(), texUploadDescArray.size(),
+			nullptr,
+			0));
+
+	testRenderPtr->OnStart(nullptr);
 	testRenderPtr->InitPresentPass(m_ColorTexture, m_SwapChain);
 
 	// User interface
@@ -379,11 +422,6 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 		ImGui::SliderFloat("Transparency", &m_Transparency, 0.0f, 1.0f);
 		ImGui::SliderFloat("Scale", &m_Scale, 0.75f, 1.25f);
 		ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f, "%.0f");
-
-		const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_Device);
-		ImGui::BeginDisabled(!deviceDesc.isFlexibleMultiviewSupported);
-		ImGui::Checkbox("Multiview", &m_Multiview);
-		ImGui::EndDisabled();
 	}
 	ImGui::End();
 
@@ -443,6 +481,7 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		nri::AttachmentsDesc attachmentsDesc = {};
 		attachmentsDesc.colorNum = 1;
 		attachmentsDesc.colors = &m_ColorAttachment;
+		// attachmentsDesc.colors = &currentBackBuffer.colorAttachment;
 		attachmentsDesc.depthStencil = m_DepthAttachment;
 		attachmentsDesc.viewMask = 0;
 
@@ -477,7 +516,6 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 			RenderInfo presentinfo = { .desc = presentDesc, .cmdBuffer = *commandBuffer };
 			NRI.CmdSetDescriptorPool(*commandBuffer, *m_DescriptorPool);
 			testRenderPtr->OnPresent(presentinfo);
-
 			helper::Annotation annotation(NRI, *commandBuffer, "UI");
 			RenderUI(NRI, NRI, *m_Streamer, *commandBuffer, 1.0f, true);
 		}
@@ -491,36 +529,8 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 	}
 	NRI.EndCommandBuffer(*commandBuffer);
 
-	nri::FenceSubmitDesc computeFinishedFence = {};
-	computeFinishedFence.fence = m_ComputeFence;
-	computeFinishedFence.value = 1 + frameIndex;
-
-	// Submit Compute CommandBuffer
-	{
-		nri::FenceSubmitDesc waitFence = {};
-		waitFence.fence = m_FrameFence;
-		waitFence.value = frameIndex;
-
-		nri::QueueSubmitDesc computeTask = {};
-		computeTask.waitFences = &waitFence; // Wait for the previous frame completion before execution
-		computeTask.waitFenceNum = 1;
-		computeTask.commandBuffers = &frame.commandBufferCompute;
-		computeTask.commandBufferNum = 1;
-		computeTask.signalFences = &computeFinishedFence;
-		computeTask.signalFenceNum = 1;
-
-		NRI.QueueSubmit(*m_ComputeQueue, computeTask);
-	}
-
-	// Submit Graphics CommandBuffer
-	{
-		nri::FenceSubmitDesc graphicsWaitFence = {};
-		graphicsWaitFence.fence = m_ComputeFence;
-		graphicsWaitFence.value = frameIndex + 1;
-
+	{ // Submit
 		nri::QueueSubmitDesc queueSubmitDesc = {};
-		queueSubmitDesc.waitFences = &graphicsWaitFence;
-		queueSubmitDesc.waitFenceNum = 1;
 		queueSubmitDesc.commandBuffers = &frame.commandBuffer;
 		queueSubmitDesc.commandBufferNum = 1;
 

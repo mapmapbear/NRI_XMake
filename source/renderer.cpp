@@ -28,7 +28,7 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	NRI.SetDebugName(m_DescriptorPool, "m_DescriptorPool");
 
 	std::string sceneFile = utils::GetFullPath("Camera/Camera.gltf", utils::DataFolder::ROOT);
-	sceneFile = utils::GetFullPath("test.glb", utils::DataFolder::ROOT);
+	// sceneFile = utils::GetFullPath("test.glb", utils::DataFolder::ROOT);
 	NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene, false));
 }
 
@@ -44,7 +44,7 @@ void Renderer::InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain
 void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	skyPass->Render(info, camera);
 	gridPass->Render(info, camera);
-	meshPass->Render(info, camera);
+	// meshPass->Render(info, camera);
 	simplePass->Render(info, camera);
 }
 

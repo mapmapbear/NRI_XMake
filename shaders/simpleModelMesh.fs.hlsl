@@ -30,5 +30,6 @@ float4 main(InputPS input) : SV_Target
     float4 color = 0.0;
     float3 n = normalize(input.normal);
 	float3 v = normalize(g_PushConstants.camPos.xyz - input.posWS);
+    color = float4(n, 1.0);
     return color;
 }
