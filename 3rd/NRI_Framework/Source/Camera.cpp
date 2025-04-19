@@ -1,11 +1,24 @@
 // © 2021 NVIDIA Corporation
 
 #include "NRIFramework.h"
-#include "glm/ext/matrix_clip_space.hpp"
-#include "glm/ext/matrix_projection.hpp"
-#include "glm/ext/matrix_transform.hpp"
-#include "glm/matrix.hpp"
-#include <math.h>
+
+// to get a perspective matrix with reversed z, simply swap the near and far plane
+glm::mat4 perspectiveFovReverseZLH_ZO(float fov, float width, float height, float zNear, float zFar) {
+	return glm::perspectiveFovLH_ZO(fov, width, height, zFar, zNear);
+}
+
+// now let zFar go towards infinity
+glm::mat4 infinitePerspectiveFovReverseZLH_ZO(float fov, float width, float height, float zNear) {
+	const float h = 1.0f / glm::tan(0.5f * fov);
+	const float w = h * height / width;
+	glm::mat4 result = glm::zero<glm::mat4>();
+	result[0][0] = w;
+	result[1][1] = h;
+	result[2][2] = 0.0f;
+	result[2][3] = 1.0f;
+	result[3][2] = zNear;
+	return result;
+}
 
 void Camera::Initialize(const vec3 &position, const vec3 &lookAt,
 		bool isRelative) {
@@ -91,7 +104,6 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 		state.mWorldToView = state.mWorldToView * state.mViewToWorld;
 	}
 
-
 	// Projection
 	if (desc.orthoRange > 0.0f) {
 		float x = desc.orthoRange;
@@ -99,7 +111,14 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 		state.mViewToClip = glm::orthoLH_ZO(-x, x, -y, y, desc.nearZ,
 				desc.farZ);
 	} else {
-		glm::mat4 projMat = glm::perspectiveLH_ZO(glm::radians(desc.horizontalFov), desc.aspectRatio, desc.nearZ, desc.farZ);
+		glm::mat4 projMat = glm::mat4(1.0);
+		if (desc.isReversedZ) {
+			// projMat = glm::perspectiveLH_ZO(glm::radians(desc.horizontalFov), desc.aspectRatio, desc.farZ, desc.nearZ);
+			projMat = infinitePerspectiveFovReverseZLH_ZO(desc.horizontalFov, 900, 600, desc.nearZ);
+		} else {
+			projMat = glm::perspectiveLH_ZO(glm::radians(desc.horizontalFov), desc.aspectRatio, desc.nearZ, desc.farZ);
+		}
+
 		state.mViewToClip = projMat;
 	}
 

@@ -11,7 +11,7 @@
 #define INSTANCE
 
 constexpr uint32_t VIEW_MASK = 0b11;
-constexpr nri::Color32f COLOR_0 = { 1.0f, 1.0f, 0.0f, 1.0f };
+constexpr nri::Color32f COLOR_0 = { 0.0f, 0.0f, 0.0f, 0.0f };
 constexpr nri::Color32f COLOR_1 = { 0.46f, 0.72f, 0.0f, 1.0f };
 struct ConstantBufferLayout {
 	glm::mat4 modelMat;
@@ -268,7 +268,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	{
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
-		textureDesc.usage = nri::TextureUsageBits::COLOR_ATTACHMENT;
+		textureDesc.usage = nri::TextureUsageBits::COLOR_ATTACHMENT | nri::TextureUsageBits::SHADER_RESOURCE;
 		textureDesc.format = nri::Format::RGBA8_UNORM;
 		textureDesc.width = (uint16_t)GetWindowResolution().first;
 		textureDesc.height = (uint16_t)GetWindowResolution().second;
@@ -433,8 +433,8 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	CameraDesc desc = {};
 	desc.aspectRatio = float(GetWindowResolution().first) / float(GetWindowResolution().second);
 	desc.horizontalFov = 90.0f;
-	desc.nearZ = 0.1f;
-	desc.isReversedZ = false;
+	desc.nearZ = 0.01f;
+	desc.isReversedZ = true;
 	desc.timeScale = 1.0;
 	GetCameraDescFromInputDevices(desc);
 
@@ -481,7 +481,6 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		nri::AttachmentsDesc attachmentsDesc = {};
 		attachmentsDesc.colorNum = 1;
 		attachmentsDesc.colors = &m_ColorAttachment;
-		// attachmentsDesc.colors = &currentBackBuffer.colorAttachment;
 		attachmentsDesc.depthStencil = m_DepthAttachment;
 		attachmentsDesc.viewMask = 0;
 
@@ -500,7 +499,7 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 				NRI.CmdClearAttachments(*commandBuffer, &clearDesc, 1, nullptr, 0);
 				clearDesc = {};
 				clearDesc.planes = nri::PlaneBits::DEPTH;
-				clearDesc.value.depthStencil.depth = 1.0;
+				clearDesc.value.depthStencil.depth = 0.0;
 				NRI.CmdClearAttachments(*commandBuffer, &clearDesc, 1, nullptr, 0);
 			}
 			RenderInfo info = { .desc = attachmentsDesc, .cmdBuffer = *commandBuffer };
@@ -508,8 +507,17 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		}
 		NRI.CmdEndRendering(*commandBuffer);
 
-		// Singleview
-		attachmentsDesc.viewMask = 0;
+		
+		nri::TextureBarrierDesc textureBarrierDescs1 = {};
+		textureBarrierDescs1.texture = m_ColorTexture;
+		textureBarrierDescs1.before = { nri::AccessBits::COLOR_ATTACHMENT,
+			nri::Layout::COLOR_ATTACHMENT };
+		textureBarrierDescs1.after = { nri::AccessBits::SHADER_RESOURCE,
+			nri::Layout::SHADER_RESOURCE };
+		nri::BarrierGroupDesc barrierGroupDesc1 = {};
+		barrierGroupDesc1.textureNum = 1;
+		barrierGroupDesc1.textures = &textureBarrierDescs1;
+		NRI.CmdBarrier(*commandBuffer, barrierGroupDesc1);
 
 		NRI.CmdBeginRendering(*commandBuffer, presentDesc);
 		{
@@ -520,6 +528,16 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 			RenderUI(NRI, NRI, *m_Streamer, *commandBuffer, 1.0f, true);
 		}
 		NRI.CmdEndRendering(*commandBuffer);
+
+		nri::TextureBarrierDesc textureBarrierDescs2 = {};
+		textureBarrierDescs2.texture = m_ColorTexture;
+		textureBarrierDescs2.before = { nri::AccessBits::SHADER_RESOURCE,
+			nri::Layout::SHADER_RESOURCE };
+		textureBarrierDescs2.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT };
+		nri::BarrierGroupDesc barrierGroupDesc2 = {};
+		barrierGroupDesc2.textureNum = 1;
+		barrierGroupDesc2.textures = &textureBarrierDescs2;
+		NRI.CmdBarrier(*commandBuffer, barrierGroupDesc2);
 
 		textureBarrierDescs.before = textureBarrierDescs.after;
 		textureBarrierDescs.after = { nri::AccessBits::UNKNOWN,

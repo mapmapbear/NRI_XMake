@@ -2,6 +2,7 @@
 #include "../renderer.h"
 #include "NRIDescs.h"
 #include "assimp/scene.h"
+#include "glm/ext/matrix_transform.hpp"
 #include <stddef.h>
 #include <vector>
 
@@ -457,14 +458,14 @@ void CommonMeshPass::BuildPipeline() {
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 		colorAttachmentDesc.format = nri::Format::RGBA8_UNORM;
 		colorAttachmentDesc.colorWriteMask = nri::ColorWriteBits::RGBA;
-		colorAttachmentDesc.blendEnabled = true;
+		colorAttachmentDesc.blendEnabled = false;
 		colorAttachmentDesc.colorBlend = { nri::BlendFactor::SRC_ALPHA,
 			nri::BlendFactor::ONE_MINUS_SRC_ALPHA,
 			nri::BlendFunc::ADD };
 
 		nri::DepthAttachmentDesc depthAttachmentDesc = {};
 		depthAttachmentDesc.write = true;
-		depthAttachmentDesc.compareFunc = nri::CompareFunc::LESS_EQUAL;
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
 		depthAttachmentDesc.boundsTest = false;
 
 		nri::OutputMergerDesc outputMergerDesc = {};
@@ -536,7 +537,8 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			glm::vec3(1.0f, 0.f, 0.f));
 	const glm::mat4 m2 = glm::rotate(glm::mat4(1.0f), (float)glfwGetTime(),
 			glm::vec3(0.0f, 1.f, 0.f));
-	glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 0.0f)) * m2 * m1;
+	const glm::mat4 m3 = glm::scale(glm::mat4(1.0), vec3(15.0));
+	glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 0.0f)) * m2 * m3;
 	// const glm::mat4 p = glm::perspectiveLH_ZO(glm::radians(m_Fov), 900.f / 600.f, 0.1f, 100.0f);
 	const glm::mat4 p = camera.state.mViewToClip;
 	const glm::vec3 cameraPos = camera.state.globalPosition;
