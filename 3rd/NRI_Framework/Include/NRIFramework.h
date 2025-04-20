@@ -55,7 +55,11 @@
 #include <assimp/version.h>
 #include <vector>
 
+// TinyddsLoader
 #include "tinyddsloader.h"
+
+// Spdlog
+#include "spdlog/spdlog.h"
 
 // Settings
 constexpr nri::VKBindingOffsets VK_BINDING_OFFSETS = { 100, 200, 300, 400 }; // just ShaderMake defaults for simplicity

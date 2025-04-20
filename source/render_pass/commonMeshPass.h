@@ -1,8 +1,7 @@
 #pragma once
+#include "NRIDescs.h"
 #include "commonRenderPass.h"
 #include <vector>
-
-
 
 class Renderer;
 class CommonMeshPass : public CommonRenderPass {
@@ -12,6 +11,10 @@ public:
 	void BuildPipeline() override;
 	void AllocGPUMemory() override;
 	void BindMemory() override;
+
+public:
+	int testIndex = 0;
+	void SetTestIndex(int index) { testIndex = index; }
 
 private:
 	nri::PipelineLayout *m_PipelineLayout = nullptr;
@@ -29,6 +32,19 @@ private:
 	utils::Texture m_texture_mr_data;
 	utils::Texture m_texture_ao_data;
 	utils::Texture m_texture_emissive_data;
+
+	std::vector<utils::Texture> m_texureDatas;
+	std::vector<nri::Texture *> m_textures;
+	std::vector<nri::Descriptor *> m_textureViews;
+
+	struct MaterialIndexBlock {
+		uint32_t textureIndex = 0;
+		uint32_t samplerIndex = 0;
+		uint32_t tempIndex0 = 0;
+		uint32_t tempIndex1 = 0;
+	};
+
+	std::vector<MaterialIndexBlock> m_materialIndexBlocks;
 
 	nri::Descriptor *m_texture_albedo_view = nullptr;
 	nri::Descriptor *m_texture_normal_view = nullptr;

@@ -2,6 +2,7 @@
 #include "../renderer.h"
 #include "NRIDescs.h"
 #include "assimp/scene.h"
+#include <format>
 
 InstanceMeshPass::InstanceMeshPass(Renderer *renderer) :
 		CommonRenderPass(renderer) {
@@ -15,7 +16,7 @@ InstanceMeshPass::InstanceMeshPass(Renderer *renderer) :
 void InstanceMeshPass::AllocGPUMemory() {
 	auto NRI = *m_NRI;
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
-	
+
 	const aiScene *scene = aiImportFile("data/DamagedHelmet/glTF/DamagedHelmet.gltf",
 			aiProcess_Triangulate | aiProcess_MakeLeftHanded);
 	if (!scene || !scene->HasMeshes()) {
@@ -206,6 +207,7 @@ void InstanceMeshPass::BindMemory() {
 		};
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(texture2DViewDesc, m_texture_albedo_view));
+		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
 	{ // Read-only texture
@@ -215,6 +217,7 @@ void InstanceMeshPass::BindMemory() {
 		};
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(texture2DViewDesc, m_texture_normal_view));
+		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
 	{ // Read-only texture
@@ -224,6 +227,7 @@ void InstanceMeshPass::BindMemory() {
 		};
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(texture2DViewDesc, m_texture_mr_view));
+		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
 	{ // Read-only texture
@@ -233,6 +237,7 @@ void InstanceMeshPass::BindMemory() {
 		};
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(texture2DViewDesc, m_texture_ao_view));
+		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
 	{ // Read-only texture
@@ -242,6 +247,7 @@ void InstanceMeshPass::BindMemory() {
 		};
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(texture2DViewDesc, m_texture_emissive_view));
+		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
 	{ // Sampler
@@ -268,6 +274,7 @@ void InstanceMeshPass::BindMemory() {
 		bufferViewDesc.size = constantBufferSize;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateBufferView(bufferViewDesc, m_ConstantBufferView));
+		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
 	// Upload data
@@ -427,7 +434,7 @@ void InstanceMeshPass::BuildPipeline() {
 			{ 1, descriptorRangeTexture, helper::GetCountOf(descriptorRangeTexture) },
 		};
 
-		nri::RootConstantDesc rootConstant = { 1, sizeof(glm::vec4),
+		nri::RootConstantDesc rootConstant = { 1, sizeof(glm::vec4) + sizeof(uint32_t),
 			nri::StageBits::FRAGMENT_SHADER };
 
 		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
@@ -484,14 +491,14 @@ void InstanceMeshPass::BuildPipeline() {
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 		colorAttachmentDesc.format = nri::Format::RGBA8_UNORM;
 		colorAttachmentDesc.colorWriteMask = nri::ColorWriteBits::RGBA;
-		colorAttachmentDesc.blendEnabled = true;
+		colorAttachmentDesc.blendEnabled = false;
 		colorAttachmentDesc.colorBlend = { nri::BlendFactor::SRC_ALPHA,
 			nri::BlendFactor::ONE_MINUS_SRC_ALPHA,
 			nri::BlendFunc::ADD };
 
 		nri::DepthAttachmentDesc depthAttachmentDesc = {};
 		depthAttachmentDesc.write = true;
-		depthAttachmentDesc.compareFunc = nri::CompareFunc::LESS_EQUAL;
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
 		depthAttachmentDesc.boundsTest = false;
 
 		nri::OutputMergerDesc outputMergerDesc = {};
@@ -582,10 +589,16 @@ void InstanceMeshPass::Render(RenderInfo &info, Camera &camera) {
 
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
-		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &cameraPos, sizeof(glm::vec4));
+		struct {
+			vec4 camPos;
+			uint32_t index;
+		} matBlock;
+		matBlock.camPos = vec4(cameraPos, 1.0);
+		matBlock.index = m_renderer->testIndex;
+		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &matBlock, sizeof(glm::vec4) + sizeof(uint32_t));
 		NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer, 0,
 				nri::IndexType::UINT32);
-				
+
 		nri::VertexBufferDesc vertexBufferDesc = {};
 		vertexBufferDesc.buffer = m_GeometryBuffer;
 		vertexBufferDesc.offset = m_GeometryOffset;

@@ -1,5 +1,7 @@
 #include "skyRenderPass.h"
 #include "../renderer.h"
+#include "spdlog/spdlog.h"
+#include <format>
 
 SkyRenderPass::SkyRenderPass(Renderer *renderer) :
 		CommonRenderPass(renderer) {
@@ -156,6 +158,7 @@ void SkyRenderPass::BindMemory() {
 		nri::Texture2DViewDesc textureViewDesc = { .texture = m_HDRTexture, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = nri::Format::BC7_RGBA_UNORM };
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(textureViewDesc, m_HDRTextureShaderResource));
+		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
 	// Upload data

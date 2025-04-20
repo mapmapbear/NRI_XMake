@@ -8,21 +8,22 @@ struct InputPS
     float3 normal : NORMAL;
 };
 
-NRI_RESOURCE(Texture2D, g_AlbedoTexture, t, 0, 1);
+// NRI_RESOURCE(Texture2D, g_AlbedoTexture, t, 0, 1);
 // NRI_RESOURCE(Texture2D, g_NormalTexture, t, 1, 1);
 // NRI_RESOURCE(Texture2D, g_MRTexture, t, 2, 1);
 // NRI_RESOURCE(Texture2D, g_AOTexture, t, 3, 1);
 // NRI_RESOURCE(Texture2D, g_EmissiveTexture, t, 4, 1);
-NRI_RESOURCE(SamplerState, g_Sampler, s, 0, 1 );
+// NRI_RESOURCE(SamplerState, g_Sampler, s, 0, 1 );
 
 
 struct PushConstants
 {
     float4 camPos;
+    uint indexGroup;
 };
 NRI_ROOT_CONSTANTS( PushConstants, g_PushConstants, 1, 0 );
 
-
+// [earlydepthstencil]
 float4 main(InputPS input) : SV_Target
 {
     float2 newUV = input.uv;
@@ -30,7 +31,9 @@ float4 main(InputPS input) : SV_Target
     float4 color = 0.0;
     float3 n = normalize(input.normal);
 	float3 v = normalize(g_PushConstants.camPos.xyz - input.posWS);
-    // color = float4(n, 1.0);
+    Texture2D g_AlbedoTexture = ResourceDescriptorHeap[g_PushConstants.indexGroup];
+    SamplerState g_Sampler = SamplerDescriptorHeap[0];
     color = g_AlbedoTexture.Sample(g_Sampler, newUV);
+    // color.xyz = g_PushConstants.camPos.xyz;
     return color;
 }

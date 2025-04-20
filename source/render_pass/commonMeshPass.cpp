@@ -4,7 +4,15 @@
 #include "assimp/scene.h"
 #include "glm/ext/matrix_transform.hpp"
 #include <stddef.h>
+#include <cstddef>
+#include <cstdint>
+#include <format>
 #include <vector>
+
+struct CBlock {
+	glm::vec4 camPos;
+	uint32_t index;
+};
 
 CommonMeshPass::CommonMeshPass(Renderer *renderer, utils::Scene &scene) :
 		CommonRenderPass(renderer), m_Scene(scene) {
@@ -22,7 +30,7 @@ void CommonMeshPass::AllocGPUMemory() {
 
 	// Load texture
 	std::string path =
-			utils::GetFullPath("Camera/Textures/Camera_01_body_diff.dds", utils::DataFolder::ROOT);
+			utils::GetFullPath("Textures/UV.dds", utils::DataFolder::ROOT);
 	if (!utils::LoadTexture(path, m_texture_albedo_data, true)) {
 		printf("Can not found this texture %s", path.c_str());
 	}
@@ -31,30 +39,45 @@ void CommonMeshPass::AllocGPUMemory() {
 	if (!utils::LoadTexture(path, m_texture_normal_data, true)) {
 		printf("Can not found this texture %s", path.c_str());
 	}
-#if 0
-	std::string path =
-			utils::GetFullPath("DamagedHelmet/glTF/Default_albedo.dds", utils::DataFolder::ROOT);
-	if (!utils::LoadTexture(path, m_texture_albedo_data, true)) {
-		printf("Can not found this texture %s", path.c_str());
-	}
+	uint32_t texSize = m_Scene.materialDatas.size();
+	// texSize = 3;
+	m_texureDatas.resize(texSize);
+	m_textures.resize(texSize);
+	uint32_t texCount = 0;
+	for (size_t i = 0; i < texSize; ++i) {
+		std::string path = m_Scene.materialDatas.at(i).diffuseTexture;
+		if (!path.empty()) {
+			if (!utils::LoadTexture(path, m_texureDatas[i], true)) {
+				printf("Can not found this texture %s", path.c_str());
+			}
+		} else {
+			if (!utils::LoadTexture("data/Textures/white.dds", m_texureDatas[i], true)) {
+				printf("Can not found this texture %s", path.c_str());
+			}
+		}
+		uint32_t texOffset = 0;
+		if (m_texureDatas[i].data.GetFormat() != tinyddsloader::DDSFile::DXGIFormat::Unknown) {
+			nri::TextureDesc textureDesc = {};
+			textureDesc.type = nri::TextureType::TEXTURE_2D;
+			textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
+			textureDesc.format = m_texureDatas[i].GetFormat(true);
+			textureDesc.width = m_texureDatas[i].GetWidth();
+			textureDesc.height = m_texureDatas[i].GetHeight();
+			textureDesc.mipNum = 1; //m_texureDatas[i].GetMipNum();
+			textureDesc.depth = m_texureDatas[i].GetDepth();
+			texOffset = 7 + texCount++;
+			NRI_ABORT_ON_FAILURE(
+					NRI.CreateTexture(*m_renderer->GetRenderDevice(), textureDesc, m_textures[i]));
+		}
 
-	
-
-	path = utils::GetFullPath("DamagedHelmet/glTF/Default_metalRoughness.dds", utils::DataFolder::ROOT);
-	if (!utils::LoadTexture(path, m_texture_mr_data, true)) {
-		printf("Can not found this texture %s", path.c_str());
+		m_texureDatas[i].name = path;
+		m_materialIndexBlocks.push_back({ texOffset, 0, 0, 0 });
 	}
+	//std::erase_if(m_textures, [](nri::Texture *tex) { return tex == nullptr; });
+	//std::erase_if(m_texureDatas, [](utils::Texture tex) { return tex.data.GetFormat() == tinyddsloader::DDSFile::DXGIFormat::Unknown; });
 
-	path = utils::GetFullPath("DamagedHelmet/glTF/Default_AO.dds", utils::DataFolder::ROOT);
-	if (!utils::LoadTexture(path, m_texture_ao_data, true)) {
-		printf("Can not found this texture %s", path.c_str());
-	}
+	std::cout << std::format("texSize={}, texDataSize={}", m_textures.size(), m_texureDatas.size()) << std::endl;
 
-	path = utils::GetFullPath("DamagedHelmet/glTF/Default_emissive.dds", utils::DataFolder::ROOT);
-	if (!utils::LoadTexture(path, m_texture_emissive_data, true)) {
-		printf("Can not found this texture %s", path.c_str());
-	}
-#endif
 	// GPU Resource
 	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
 			deviceDesc.memoryAlignment.constantBufferOffset);
@@ -135,48 +158,6 @@ void CommonMeshPass::AllocGPUMemory() {
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture(*m_renderer->GetRenderDevice(), textureDesc, m_texture_normal));
 	}
-
-	// {
-	// 	nri::TextureDesc textureDesc = {};
-	// 	textureDesc.type = nri::TextureType::TEXTURE_2D;
-	// 	textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-	// 	textureDesc.format = m_texture_mr_data.GetFormat(true);
-	// 	textureDesc.width = m_texture_mr_data.GetWidth();
-	// 	textureDesc.height = m_texture_mr_data.GetHeight();
-	// 	textureDesc.mipNum = 1;
-	// 	textureDesc.depth = m_texture_mr_data.GetDepth();
-
-	// 	NRI_ABORT_ON_FAILURE(
-	// 			NRI.CreateTexture(*m_renderer->GetRenderDevice(), textureDesc, m_texture_mr));
-	// }
-
-	// {
-	// 	nri::TextureDesc textureDesc = {};
-	// 	textureDesc.type = nri::TextureType::TEXTURE_2D;
-	// 	textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-	// 	textureDesc.format = m_texture_ao_data.GetFormat(true);
-	// 	textureDesc.width = m_texture_ao_data.GetWidth();
-	// 	textureDesc.height = m_texture_ao_data.GetHeight();
-	// 	textureDesc.mipNum = 1;
-	// 	textureDesc.depth = m_texture_ao_data.GetDepth();
-
-	// 	NRI_ABORT_ON_FAILURE(
-	// 			NRI.CreateTexture(*m_renderer->GetRenderDevice(), textureDesc, m_texture_ao));
-	// }
-
-	// {
-	// 	nri::TextureDesc textureDesc = {};
-	// 	textureDesc.type = nri::TextureType::TEXTURE_2D;
-	// 	textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-	// 	textureDesc.format = m_texture_emissive_data.GetFormat(true);
-	// 	textureDesc.width = m_texture_emissive_data.GetWidth();
-	// 	textureDesc.height = m_texture_emissive_data.GetHeight();
-	// 	textureDesc.mipNum = 1;
-	// 	textureDesc.depth = m_texture_emissive_data.GetDepth();
-
-	// 	NRI_ABORT_ON_FAILURE(
-	// 			NRI.CreateTexture(*m_renderer->GetRenderDevice(), textureDesc, m_texture_emissive));
-	// }
 }
 
 void CommonMeshPass::BindMemory() {
@@ -209,7 +190,39 @@ void CommonMeshPass::BindMemory() {
 	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(
 			*m_renderer->GetRenderDevice(), resourceGroupDesc, m_MemoryAllocations.data() + 1));
 
+	resourceGroupDesc = {};
+	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
+	resourceGroupDesc.textureNum = m_textures.size();
+	resourceGroupDesc.textures = m_textures.data();
+
+	m_MemoryAllocations.resize(
+			m_MemoryAllocations.size() + NRI.CalculateAllocationNumber(*m_renderer->GetRenderDevice(), resourceGroupDesc), nullptr);
+	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(
+			*m_renderer->GetRenderDevice(), resourceGroupDesc, m_MemoryAllocations.data() + 1));
 	// Descriptors
+
+	m_textureViews.resize(m_textures.size());
+	for (size_t i = 0; i < m_textureViews.size(); ++i) {
+		nri::Texture2DViewDesc texture2DViewDesc = {
+			m_textures[i], nri::Texture2DViewType::SHADER_RESOURCE_2D,
+			m_texureDatas[i].GetFormat()
+		};
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateTexture2DView(texture2DViewDesc, m_textureViews[i]));
+		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
+	}
+
+	{ // Sampler
+		nri::SamplerDesc samplerDesc = {};
+		samplerDesc.addressModes = { nri::AddressMode::REPEAT,
+			nri::AddressMode::REPEAT, nri::AddressMode::REPEAT };
+		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
+			nri::Filter::LINEAR };
+		samplerDesc.anisotropy = 4;
+		samplerDesc.mipMax = 16.0f;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
+	}
 
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
 	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
@@ -223,27 +236,7 @@ void CommonMeshPass::BindMemory() {
 		bufferViewDesc.size = constantBufferSize;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateBufferView(bufferViewDesc, m_ConstantBufferView));
-	}
-
-	{ // Read-only texture
-		nri::Texture2DViewDesc texture2DViewDesc = {
-			m_texture_albedo, nri::Texture2DViewType::SHADER_RESOURCE_2D,
-			m_texture_albedo_data.GetFormat()
-		};
-		NRI_ABORT_ON_FAILURE(
-				NRI.CreateTexture2DView(texture2DViewDesc, m_texture_albedo_view));
-	}
-
-	{ // Sampler
-		nri::SamplerDesc samplerDesc = {};
-		samplerDesc.addressModes = { nri::AddressMode::REPEAT,
-			nri::AddressMode::REPEAT, nri::AddressMode::REPEAT };
-		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
-			nri::Filter::LINEAR };
-		samplerDesc.anisotropy = 4;
-		samplerDesc.mipMax = 16.0f;
-		NRI_ABORT_ON_FAILURE(
-				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
+		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
 	// Upload data
@@ -291,91 +284,30 @@ void CommonMeshPass::BindMemory() {
 		NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), texUploadDescArray.data(), texUploadDescArray.size(),
 				uploadDescArray.data(),
 				uploadDescArray.size()));
+		uint32_t texSize = m_textures.size();
+		std::vector<nri::TextureUploadDesc> texUploadDescArray1(texSize);
+		std::vector<nri::TextureSubresourceUploadDesc> subDataArr1(texSize);
 
-		// {
-		// 	auto imgData = m_texture_albedo_data.data.GetImageData(0, 0);
-		// 	nri::TextureSubresourceUploadDesc sub_resource_desc = {};
-		// 	sub_resource_desc.slices = imgData->m_mem;
-		// 	sub_resource_desc.sliceNum = 1;
-		// 	sub_resource_desc.rowPitch = imgData->m_memPitch;
-		// 	sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
+		for (size_t i = 0; i < m_texureDatas.size(); i++) {
+			auto &tex_data = m_texureDatas[i];
 
-		// 	nri::TextureUploadDesc textureData;
-		// 	textureData.subresources = &sub_resource_desc;
-		// 	textureData.texture = m_texture_albedo;
-		// 	textureData.after = { nri::AccessBits::SHADER_RESOURCE,
-		// 		nri::Layout::SHADER_RESOURCE };
-		// 	textureData.planes = nri::PlaneBits::ALL;
-		// 	texUploadDescArray.push_back(textureData);
-		// }
+			for (uint32_t mip = 0; mip < 1; mip++) {
+				auto imgData = tex_data.data.GetImageData(mip, 0);
+				subDataArr1[i].slices = imgData->m_mem;
+				subDataArr1[i].sliceNum = 1;
+				subDataArr1[i].rowPitch = imgData->m_memPitch;
+				subDataArr1[i].slicePitch = imgData->m_memSlicePitch;
+			}
 
-		// {
-		// 	auto imgData = m_texture_normal_data.data.GetImageData(0, 0);
-		// 	nri::TextureSubresourceUploadDesc sub_resource_desc = {};
-		// 	sub_resource_desc.slices = imgData->m_mem;
-		// 	sub_resource_desc.sliceNum = 1;
-		// 	sub_resource_desc.rowPitch = imgData->m_memPitch;
-		// 	sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
-
-		// 	nri::TextureUploadDesc textureData;
-		// 	textureData.subresources = &sub_resource_desc;
-		// 	textureData.texture = m_texture_normal;
-		// 	textureData.after = { nri::AccessBits::SHADER_RESOURCE,
-		// 		nri::Layout::SHADER_RESOURCE };
-		// 	textureData.planes = nri::PlaneBits::ALL;
-		// 	texUploadDescArray.push_back(textureData);
-		// }
-
-		// {
-		// 	auto imgData = m_texture_mr_data.data.GetImageData(0, 0);
-		// 	nri::TextureSubresourceUploadDesc sub_resource_desc = {};
-		// 	sub_resource_desc.slices = imgData->m_mem;
-		// 	sub_resource_desc.sliceNum = 1;
-		// 	sub_resource_desc.rowPitch = imgData->m_memPitch;
-		// 	sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
-
-		// 	nri::TextureUploadDesc textureData;
-		// 	textureData.subresources = &sub_resource_desc;
-		// 	textureData.texture = m_texture_mr;
-		// 	textureData.after = { nri::AccessBits::SHADER_RESOURCE,
-		// 		nri::Layout::SHADER_RESOURCE };
-		// 	textureData.planes = nri::PlaneBits::ALL;
-		// 	texUploadDescArray.push_back(textureData);
-		// }
-
-		// {
-		// 	auto imgData = m_texture_ao_data.data.GetImageData(0, 0);
-		// 	nri::TextureSubresourceUploadDesc sub_resource_desc = {};
-		// 	sub_resource_desc.slices = imgData->m_mem;
-		// 	sub_resource_desc.sliceNum = 1;
-		// 	sub_resource_desc.rowPitch = imgData->m_memPitch;
-		// 	sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
-
-		// 	nri::TextureUploadDesc textureData;
-		// 	textureData.subresources = &sub_resource_desc;
-		// 	textureData.texture = m_texture_ao;
-		// 	textureData.after = { nri::AccessBits::SHADER_RESOURCE,
-		// 		nri::Layout::SHADER_RESOURCE };
-		// 	textureData.planes = nri::PlaneBits::ALL;
-		// 	texUploadDescArray.push_back(textureData);
-		// }
-
-		// {
-		// 	auto imgData = m_texture_emissive_data.data.GetImageData(0, 0);
-		// 	nri::TextureSubresourceUploadDesc sub_resource_desc = {};
-		// 	sub_resource_desc.slices = imgData->m_mem;
-		// 	sub_resource_desc.sliceNum = 1;
-		// 	sub_resource_desc.rowPitch = imgData->m_memPitch;
-		// 	sub_resource_desc.slicePitch = imgData->m_memSlicePitch;
-
-		// 	nri::TextureUploadDesc textureData;
-		// 	textureData.subresources = &sub_resource_desc;
-		// 	textureData.texture = m_texture_emissive;
-		// 	textureData.after = { nri::AccessBits::SHADER_RESOURCE,
-		// 		nri::Layout::SHADER_RESOURCE };
-		// 	textureData.planes = nri::PlaneBits::ALL;
-		// 	texUploadDescArray.push_back(textureData);
-		// }
+			texUploadDescArray1[i].subresources = &subDataArr1[i];
+			texUploadDescArray1[i].texture = m_textures[i];
+			texUploadDescArray1[i].after = { nri::AccessBits::SHADER_RESOURCE,
+				nri::Layout::SHADER_RESOURCE };
+			texUploadDescArray1[i].planes = nri::PlaneBits::ALL;
+		}
+		NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), texUploadDescArray1.data(), texUploadDescArray1.size(),
+				nullptr,
+				0));
 	}
 }
 
@@ -391,7 +323,7 @@ void CommonMeshPass::BuildPipeline() {
 			nri::StageBits::ALL };
 
 		nri::DescriptorRangeDesc descriptorRangeTexture[2];
-		descriptorRangeTexture[0] = { 0, 1, nri::DescriptorType::TEXTURE,
+		descriptorRangeTexture[0] = { 0, (uint32_t)m_textureViews.size(), nri::DescriptorType::TEXTURE,
 			nri::StageBits::FRAGMENT_SHADER };
 		descriptorRangeTexture[1] = { 0, 1, nri::DescriptorType::SAMPLER,
 			nri::StageBits::FRAGMENT_SHADER };
@@ -402,7 +334,7 @@ void CommonMeshPass::BuildPipeline() {
 			{ 1, descriptorRangeTexture, helper::GetCountOf(descriptorRangeTexture) },
 		};
 
-		nri::RootConstantDesc rootConstant = { 1, sizeof(glm::vec4),
+		nri::RootConstantDesc rootConstant = { 1, sizeof(CBlock),
 			nri::StageBits::FRAGMENT_SHADER };
 
 		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
@@ -501,11 +433,11 @@ void CommonMeshPass::BuildPipeline() {
 				NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_PipelineLayout, 1,
 						&m_TextureDescriptorSet, 1, 0));
 
-		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_texture_albedo_view }; //, m_texture_normal_view, m_texture_mr_view, m_texture_ao_view, m_texture_emissive_view }; //, m_CubemapTextureShaderResource };
+		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_textureViews[0] }; //, m_texture_normal_view, m_texture_mr_view, m_texture_ao_view, m_texture_emissive_view }; //, m_CubemapTextureShaderResource };
 
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
-		descriptorRangeUpdateDescs[0].descriptorNum = shaderResoruceViewArray.size();
-		descriptorRangeUpdateDescs[0].descriptors = shaderResoruceViewArray.data();
+		descriptorRangeUpdateDescs[0].descriptorNum = m_textureViews.size();
+		descriptorRangeUpdateDescs[0].descriptors = m_textureViews.data();
 
 		descriptorRangeUpdateDescs[1].descriptorNum = 1;
 		descriptorRangeUpdateDescs[1].descriptors = &m_Sampler;
@@ -557,8 +489,13 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
-		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &cameraPos, sizeof(glm::vec4));
 		for (size_t i = 0; i < m_Scene.meshDatas.size(); ++i) {
+			CBlock block = {};
+			block.camPos = vec4(cameraPos, 1.0);
+			uint32_t index = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex;
+			block.index = index; //m_renderer->testIndex;
+			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+
 			uint32_t indexOffset = m_sceneMeshOffsets.at(i).first;
 			uint32_t vertexOffset = m_sceneMeshOffsets.at(i).second;
 			uint32_t indexCount = m_Scene.meshDatas.at(i).indices.size();

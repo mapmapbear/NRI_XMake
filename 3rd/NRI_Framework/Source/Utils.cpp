@@ -657,7 +657,7 @@ static void PostProcessTexture(const std::string &name, Texture &texture, bool c
 	texture.layerNum = 1;
 	texture.depth = 1;
 
-	texture.alphaMode = AlphaMode::OPAQUE;
+	texture.alphaMode = AlphaMode::OPAQUEE;
 	if (computeAvgColorAndAlphaMode) {
 		// Alpha mode
 		if (texture.format == nri::Format::BC1_RGBA_UNORM || texture.format == nri::Format::BC1_RGBA_SRGB) {
@@ -701,14 +701,14 @@ static void PostProcessTexture(const std::string &name, Texture &texture, bool c
 		//     avgColor += Packing::unorm_to_float4<8, 8, 8, 8>(*(uint32_t*)(rgba8 + i * 4));
 		// avgColor /= float(pixelNum);
 
-		if (texture.alphaMode != AlphaMode::PREMULTIPLIED && avgColor.w < 254.0f / 255.0f) {
-			texture.alphaMode = AlphaMode::TRANSPARENT;
-		}
+		// if (texture.alphaMode != AlphaMode::PREMULTIPLIED && avgColor.w < 254.0f / 255.0f) {
+		// 	// texture.alphaMode = AlphaMode::TRANSPARENT;
+		// }
 
-		if (texture.alphaMode == AlphaMode::TRANSPARENT && avgColor.w == 0.0f) {
-			printf("WARNING: Texture '%s' is fully transparent!\n", name.c_str());
-			texture.alphaMode = AlphaMode::OFF;
-		}
+		// if (texture.alphaMode == AlphaMode::TRANSPARENT && avgColor.w == 0.0f) {
+		// 	printf("WARNING: Texture '%s' is fully transparent!\n", name.c_str());
+		// 	texture.alphaMode = AlphaMode::OFF;
+		// }
 	}
 }
 } // namespace utils
@@ -746,13 +746,23 @@ bool utils::LoadTexture(const std::string &path, Texture &texture, bool isDDS, b
 	detexTexture **dTexture = nullptr;
 	int mipNum = 0;
 	if (isDDS) {
-		texture.data.Load(path.c_str());
+		auto changeExtension = [](const std::string &filename) -> std::string {
+			if (filename.length() >= 4 && filename.substr(filename.length() - 4) == ".png") {
+				return filename.substr(0, filename.length() - 4) + ".dds";
+			}
+			return filename;
+		};
+		std::string newPath = changeExtension(path);
+
+		texture.data.Load(newPath.c_str());
 		texture.width = texture.data.GetWidth();
 		texture.height = texture.data.GetHeight();
 		texture.depth = texture.data.GetDepth();
 		texture.mipNum = texture.data.GetMipCount();
 		texture.layerNum = texture.data.GetArraySize();
 		texture.format = utils::Texture::ConvertDXGIFormatToNRI(texture.data.GetFormat());
+		texture.initialized = true;
+
 		return true;
 	}
 
@@ -763,7 +773,7 @@ bool utils::LoadTexture(const std::string &path, Texture &texture, bool isDDS, b
 	}
 
 	PostProcessTexture(path, texture, computeAvgColorAndAlphaMode, dTexture, mipNum);
-
+	texture.initialized = true;
 	return true;
 }
 
@@ -777,7 +787,7 @@ void utils::LoadTextureFromMemory(nri::Format format, uint32_t width, uint32_t h
 	texture.layerNum = 1;
 	texture.depth = 1;
 	texture.format = format;
-	texture.alphaMode = AlphaMode::OPAQUE;
+	texture.alphaMode = AlphaMode::OPAQUEE;
 	texture.mips = (Mip *)dTexture;
 }
 

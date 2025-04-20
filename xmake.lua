@@ -1,7 +1,7 @@
 add_rules("mode.debug", "mode.release")
 set_languages("c++20")
 
-add_requires("glfw", "glm", "assimp")
+add_requires("glfw", "glm", "assimp", "spdlog")
 
 
 target("Detex")
@@ -94,7 +94,7 @@ target("NRIFramework")
     add_includedirs("3rd/", {public = true})
     add_files("3rd/NRI_Framework/Source/*.cpp")
     add_links("3rd/nvtt3/lib/x64-v142/nvtt30205.lib")
-    add_packages("glfw", "glm", "assimp")
+    add_packages("glfw", "glm", "assimp", "spdlog")
 
 target("DemoApp")
     set_kind("binary")
@@ -102,7 +102,7 @@ target("DemoApp")
     add_includedirs("3rd/NRI_Framework/Include", {public = true})
     add_includedirs("3rd/Detex", {public = true})
     add_includedirs("source/", {public = true})
-    add_packages("glfw", "glm", "assimp")
+    add_packages("glfw", "glm", "assimp", "spdlog")
     add_files("main.cpp", "source/**.cpp")
 
 target("ShaderCompiler")

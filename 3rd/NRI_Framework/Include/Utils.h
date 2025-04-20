@@ -38,7 +38,7 @@ enum StaticTexture : uint32_t {
 };
 
 enum class AlphaMode : uint32_t {
-	OPAQUE,
+	OPAQUEE,
 	PREMULTIPLIED,
 	TRANSPARENT,
 	OFF // alpha is 0 everywhere
@@ -77,13 +77,14 @@ struct Texture {
 	std::string name;
 	Mip *mips = nullptr;
 	tinyddsloader::DDSFile data;
-	AlphaMode alphaMode = AlphaMode::OPAQUE;
+	AlphaMode alphaMode = AlphaMode::OPAQUEE;
 	nri::Format format = nri::Format::UNKNOWN;
 	uint16_t width = 0;
 	uint16_t height = 0;
 	uint16_t depth = 0;
 	uint8_t mipNum = 0;
 	uint16_t layerNum = 0;
+	bool initialized = false;
 
 	~Texture();
 
@@ -118,11 +119,11 @@ struct Material {
 	uint32_t roughnessMetalnessTexIndex = StaticTexture::Black;
 	uint32_t normalTexIndex = StaticTexture::FlatNormal;
 	uint32_t emissiveTexIndex = StaticTexture::Black;
-	AlphaMode alphaMode = AlphaMode::OPAQUE;
+	AlphaMode alphaMode = AlphaMode::OPAQUEE;
 	bool isHair;
 	bool isLeaf;
 
-	inline bool IsOpaque() const { return alphaMode == AlphaMode::OPAQUE; }
+	inline bool IsOpaque() const { return alphaMode == AlphaMode::OPAQUEE; }
 
 	inline bool IsAlphaOpaque() const {
 		return alphaMode == AlphaMode::PREMULTIPLIED;

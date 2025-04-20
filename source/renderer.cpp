@@ -35,7 +35,7 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	skyPass = std::make_shared<SkyRenderPass>(this);
 	gridPass = std::make_shared<GridRenderPass>(this);
-	// meshPass = std::make_shared<InstanceMeshPass>(this);
+	meshPass = std::make_shared<InstanceMeshPass>(this);
 	simplePass = std::make_shared<CommonMeshPass>(this, m_Scene);
 }
 void Renderer::InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain) {
@@ -44,7 +44,8 @@ void Renderer::InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain
 void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	skyPass->Render(info, camera);
 	gridPass->Render(info, camera);
-	// meshPass->Render(info, camera);
+	meshPass->Render(info, camera);
+	simplePass->SetTestIndex(testIndex);
 	simplePass->Render(info, camera);
 }
 
