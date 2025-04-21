@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include <unordered_map>
 #undef OPAQUE
 #undef TRANSPARENT
 #include "tinyddsLoader/tinyddsloader.h"
@@ -181,11 +182,16 @@ struct MeshData {
 };
 
 struct MaterialData {
-	glm::vec3 diffuseColor; // 漫反射颜色
-	glm::vec3 specularColor; // 镜面反射颜色
-	float shininess; // 光泽度
-	std::string diffuseTexture; // 漫反射纹理路径（如果有）
-	// 可根据需要扩展其他属性（如法线贴图、金属度等）
+	glm::vec3 diffuseColor;
+	glm::vec3 specularColor;
+	float shininess;
+	// std::string baseColorTexPath; 
+	// std::string normalTexPath;
+	// std::string roughnessTexPath;
+	// std::string emissionTexPath;
+	// std::string metallicTexPath;
+	// std::string aoTexPath;
+	std::unordered_map<std::string, std::string> textureMap;
 };
 
 struct NodeData {

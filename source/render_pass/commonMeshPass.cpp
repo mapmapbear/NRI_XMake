@@ -45,7 +45,7 @@ void CommonMeshPass::AllocGPUMemory() {
 	m_textures.resize(texSize);
 	uint32_t texCount = 0;
 	for (size_t i = 0; i < texSize; ++i) {
-		std::string path = m_Scene.materialDatas.at(i).diffuseTexture;
+		std::string path = m_Scene.materialDatas.at(i).textureMap["BASE"];
 		if (!path.empty()) {
 			if (!utils::LoadTexture(path, m_texureDatas[i], true)) {
 				printf("Can not found this texture %s", path.c_str());
@@ -470,7 +470,8 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 	const glm::mat4 m2 = glm::rotate(glm::mat4(1.0f), (float)glfwGetTime(),
 			glm::vec3(0.0f, 1.f, 0.f));
 	const glm::mat4 m3 = glm::scale(glm::mat4(1.0), vec3(15.0));
-	glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 0.0f)) * m2 * m3;
+	const glm::mat4 m4 = glm::translate(glm::mat4(1.0), vec3(0.0, 0.2, 0.0));
+	glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 0.0f)) * m2 * m3 * m4;
 	// const glm::mat4 p = glm::perspectiveLH_ZO(glm::radians(m_Fov), 900.f / 600.f, 0.1f, 100.0f);
 	const glm::mat4 p = camera.state.mViewToClip;
 	const glm::vec3 cameraPos = camera.state.globalPosition;

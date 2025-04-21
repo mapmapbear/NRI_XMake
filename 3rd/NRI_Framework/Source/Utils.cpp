@@ -12,6 +12,7 @@
 
 #include "Detex/stb_image.h"
 
+#include "assimp/material.h"
 #include "tinyddsloader.h"
 
 struct Shader {
@@ -979,9 +980,32 @@ utils::MaterialData utils::ProcessMaterial(const aiMaterial *material, const std
 	matData.shininess = shininess;
 
 	aiString texturePath;
-	if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
-		matData.diffuseTexture = basePath + "/" + texturePath.C_Str();
+	SPDLOG_INFO("material Name:{}", material->GetName().C_Str());
+	if (material->GetTexture(aiTextureType_BASE_COLOR, 0, &texturePath) == AI_SUCCESS) {
+		matData.textureMap["BASE"] = basePath + "/" + texturePath.C_Str();
 	}
+
+	if (material->GetTexture(aiTextureType_NORMAL_CAMERA, 0, &texturePath) == AI_SUCCESS) {
+		matData.textureMap["NORMAL"] = basePath + "/" + texturePath.C_Str();
+	}
+
+	if (material->GetTexture(aiTextureType_EMISSION_COLOR, 0, &texturePath) == AI_SUCCESS) {
+		matData.textureMap["EMISSION"] = basePath + "/" + texturePath.C_Str();
+	}
+
+	if (material->GetTexture(aiTextureType_METALNESS, 0, &texturePath) == AI_SUCCESS) {
+		matData.textureMap["METALLIC"] = basePath + "/" + texturePath.C_Str();
+	}
+
+	if(material->GetTexture(aiTextureType_DIFFUSE_ROUGHNESS, 0, &texturePath) == AI_SUCCESS) {
+		matData.textureMap["ROUGHNESS"] = basePath + "/" + texturePath.C_Str();
+	} 
+
+	if (material->GetTexture(aiTextureType_AMBIENT_OCCLUSION, 0, &texturePath) == AI_SUCCESS) {
+		matData.textureMap["AO"] = basePath + "/" + texturePath.C_Str();
+	}
+
+	printf("\n\n");
 
 	return matData;
 }
@@ -1052,7 +1076,7 @@ bool utils::LoadScene(const std::string &path, Scene &scene, bool allowUpdate) {
 	compressionOptions.setFormat(nvtt::Format_BC7);
 	std::unique_ptr<nvtt::OutputOptions> outputOptions = std::make_unique<nvtt::OutputOptions>();
 	for (auto &mat : materials) {
-		std::string src_img = mat.diffuseTexture;
+		std::string src_img = mat.textureMap["BASE"];
 		if (!src_img.empty()) {
 			std::string dst_img = src_img.substr(0, src_img.find_last_of('.')) + ".dds";
 			if (!std::filesystem::exists(dst_img)) {
