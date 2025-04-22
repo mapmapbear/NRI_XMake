@@ -39,9 +39,9 @@ private:
 
 	struct MaterialIndexBlock {
 		uint32_t textureIndex = 0;
-		uint32_t samplerIndex = 0;
-		uint32_t tempIndex0 = 0;
-		uint32_t tempIndex1 = 0;
+		uint32_t textureIndex1 = 0;
+		uint32_t textureIndex2 = 0;
+		uint32_t textureIndex3 = 0;
 	};
 
 	std::vector<MaterialIndexBlock> m_materialIndexBlocks;

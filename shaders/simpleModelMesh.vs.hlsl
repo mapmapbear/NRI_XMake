@@ -24,7 +24,6 @@ struct outputVS
     float3 positionWS : TEXCOORD1;
     float3 normalWS : NORMAL;
     float3 tangentWS : TANGENT;
-    float4x4 tbnMat : TEXCOORD2;
 };
 
 float4x4 inverse(float4x4 m) {
@@ -76,10 +75,8 @@ outputVS main(inputVS input)
     output.texCoord = input.in_texcoord;
     float4x4 normalMatrix = transpose(inverse(modelMat));
     // output.normalWS  = mul(normalMatrix, float4(input.in_normal, 1.0)).xyz;
-    output.normalWS  = mul(testMat, float4(input.in_normal, 1.0)).xyz;
+    output.normalWS  = mul(normalMatrix, float4(input.in_normal, 1.0)).xyz;
     output.positionWS = mul(testMat, float4(input.in_position, 1.0)).xyz; 
-    output.tangentWS = mul(testMat, float4(input.in_tangent, 1.0)).xyz; 
-    float4x4 tbn = float4x4(float4(output.normalWS, 0.0), float4(output.tangentWS, 0.0), float4(cross(output.normalWS, output.tangentWS), 0.0), float4(0.0, 0.0, 0.0, 1.0));
-    output.tbnMat = ( tbn);
+    output.tangentWS = mul(normalMatrix, float4(input.in_tangent, 1.0)).xyz; 
     return output;
 }

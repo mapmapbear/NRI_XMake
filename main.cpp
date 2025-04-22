@@ -433,7 +433,7 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 
 	CameraDesc desc = {};
 	desc.aspectRatio = float(GetWindowResolution().first) / float(GetWindowResolution().second);
-	desc.horizontalFov = 90.0f;
+	desc.horizontalFov = glm::radians(m_Fov);
 	desc.nearZ = 0.01f;
 	desc.isReversedZ = true;
 	desc.timeScale = 1.0;

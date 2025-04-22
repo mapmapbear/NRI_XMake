@@ -11,7 +11,7 @@
 
 struct CBlock {
 	glm::vec4 camPos;
-	uint32_t index[2];
+	uint32_t index[4];
 };
 
 CommonMeshPass::CommonMeshPass(Renderer *renderer, utils::Scene &scene) :
@@ -29,14 +29,15 @@ void CommonMeshPass::AllocGPUMemory() {
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
 
 	uint32_t texSize = m_Scene.materialDatas.size();
-	// texSize *= 2;
-	m_texureDatas.resize(texSize * 2);
-	m_textures.resize(texSize * 2);
+	uint32_t matTexCount = 3;
+	m_texureDatas.resize(texSize * matTexCount);
+	m_textures.resize(texSize * matTexCount);
 	uint32_t texCount = 0;
 	size_t texIndex = 0;
 
 	uint32_t texOffset = 0;
 	uint32_t texOffset1 = 0;
+	uint32_t texOffset2 = 0;
 
 	for (size_t i = 0; i < texSize; i++) {
 		{
@@ -66,9 +67,7 @@ void CommonMeshPass::AllocGPUMemory() {
 				NRI.SetDebugName(m_textures[texIndex], path.c_str());
 			}
 			m_texureDatas[texIndex].name = path;
-			// m_materialIndexBlocks.push_back({ texOffset, 0, 0, 0 });
 		}
-
 		texIndex++;
 
 		{
@@ -102,8 +101,39 @@ void CommonMeshPass::AllocGPUMemory() {
 
 			m_texureDatas[texIndex].name = path;
 		}
-		m_materialIndexBlocks.push_back({ texOffset, texOffset1, 0, 0 });
 		texIndex++;
+
+		{
+			std::string path = {};
+			if (m_Scene.materialDatas.at(i).textureMap.find("METALLIC") != m_Scene.materialDatas.at(i).textureMap.end()) {
+				path = m_Scene.materialDatas.at(i).textureMap["METALLIC"];
+			}
+			if (!path.empty()) {
+				if (!utils::LoadTexture(path, m_texureDatas[texIndex], true)) {
+					printf("Can not found this texture %s", path.c_str());
+				}
+			} else {
+				m_texureDatas[texIndex] = m_renderer->GetDefaultWhiteTex();
+			}
+			if (m_texureDatas[texIndex].GetFormat() != nri::Format::UNKNOWN) {
+				nri::TextureDesc textureDesc = {};
+				textureDesc.type = nri::TextureType::TEXTURE_2D;
+				textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
+				textureDesc.format = m_texureDatas[texIndex].GetFormat(true);
+				textureDesc.width = m_texureDatas[texIndex].GetWidth();
+				textureDesc.height = m_texureDatas[texIndex].GetHeight();
+				textureDesc.mipNum = 1; //m_texureDatas[i].GetMipNum();
+				textureDesc.depth = m_texureDatas[texIndex].GetDepth();
+				texOffset2 = 7 + texCount++;
+				NRI_ABORT_ON_FAILURE(
+						NRI.CreateTexture(*m_renderer->GetRenderDevice(), textureDesc, m_textures[texIndex]));
+				NRI.SetDebugName(m_textures[texIndex], path.c_str());
+			}
+			m_texureDatas[texIndex].name = path;
+		}
+		texIndex++;
+
+		m_materialIndexBlocks.push_back({ texOffset, texOffset1, texOffset2, 0 });
 	}
 
 	std::cout << std::format("texSize={}, texDataSize={}", m_textures.size(), m_texureDatas.size()) << std::endl;
@@ -408,8 +438,6 @@ void CommonMeshPass::BuildPipeline() {
 				NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_PipelineLayout, 1,
 						&m_TextureDescriptorSet, 1, 0));
 
-		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_textureViews[0] }; //, m_texture_normal_view, m_texture_mr_view, m_texture_ao_view, m_texture_emissive_view }; //, m_CubemapTextureShaderResource };
-
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
 		descriptorRangeUpdateDescs[0].descriptorNum = m_textureViews.size();
 		descriptorRangeUpdateDescs[0].descriptors = m_textureViews.data();
@@ -446,7 +474,7 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			glm::vec3(0.0f, 1.f, 0.f));
 	const glm::mat4 m3 = glm::scale(glm::mat4(1.0), vec3(15.0));
 	const glm::mat4 m4 = glm::translate(glm::mat4(1.0), vec3(0.0, 0.2, 0.0));
-	glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 0.0f)) * m2 * m3 * m4;
+	glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 0.0f)) * m2 * m3;
 	// const glm::mat4 p = glm::perspectiveLH_ZO(glm::radians(m_Fov), 900.f / 600.f, 0.1f, 100.0f);
 	const glm::mat4 p = camera.state.mViewToClip;
 	const glm::vec3 cameraPos = camera.state.globalPosition;
@@ -469,9 +497,12 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			CBlock block = {};
 			block.camPos = vec4(cameraPos, 1.0);
 			uint32_t index = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex;
-			uint32_t index1 = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).samplerIndex;
+			uint32_t index1 = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex1;
+			uint32_t index2 = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex2;
 			block.index[0] = index; //m_renderer->testIndex;
 			block.index[1] = index1;
+			block.index[2] = index2;
+			block.index[3] = 0;
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
 
 			uint32_t indexOffset = m_sceneMeshOffsets.at(i).first;

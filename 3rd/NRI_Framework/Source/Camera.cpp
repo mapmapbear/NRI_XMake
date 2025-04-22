@@ -116,7 +116,7 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 			// projMat = glm::perspectiveLH_ZO(glm::radians(desc.horizontalFov), desc.aspectRatio, desc.farZ, desc.nearZ);
 			projMat = infinitePerspectiveFovReverseZLH_ZO(desc.horizontalFov, 900, 600, desc.nearZ);
 		} else {
-			projMat = glm::perspectiveLH_ZO(glm::radians(desc.horizontalFov), desc.aspectRatio, desc.nearZ, desc.farZ);
+			projMat = glm::perspectiveLH_ZO(desc.horizontalFov, desc.aspectRatio, desc.nearZ, desc.farZ);
 		}
 
 		state.mViewToClip = projMat;

@@ -7,26 +7,16 @@ struct InputPS
     float3 positionWS : TEXCOORD1;
     float3 normalWS : NORMAL;
     float3 tangentWS : TANGENT;
-    float4x4 tbnMat : TEXCOORD2;
 };
-
-// NRI_RESOURCE(Texture2D, g_AlbedoTexture, t, 0, 1);
-// NRI_RESOURCE(Texture2D, g_NormalTexture, t, 1, 1);
-// NRI_RESOURCE(Texture2D, g_MRTexture, t, 2, 1);
-// NRI_RESOURCE(Texture2D, g_AOTexture, t, 3, 1);
-// NRI_RESOURCE(Texture2D, g_EmissiveTexture, t, 4, 1);
-// NRI_RESOURCE(SamplerState, g_Sampler, s, 0, 1 );
-
 
 struct PushConstants
 {
     float4 camPos;
-    uint2 indexGroup;
+    uint4 indexGroup;
 };
 NRI_ROOT_CONSTANTS( PushConstants, g_PushConstants, 1, 0 );
 
-const float3 ligDir = normalize(float3(0, -1, 0));
-// [earlydepthstencil]
+[earlydepthstencil]
 float4 main(InputPS input) : SV_Target
 {
     float2 newUV = input.uv;
@@ -36,6 +26,7 @@ float4 main(InputPS input) : SV_Target
 	float3 v = normalize(g_PushConstants.camPos.xyz - input.positionWS);
     Texture2D g_AlbedoTexture = ResourceDescriptorHeap[g_PushConstants.indexGroup.x];
     Texture2D g_NormalTexture = ResourceDescriptorHeap[g_PushConstants.indexGroup.y];
+    Texture2D g_MetallicTexture = ResourceDescriptorHeap[g_PushConstants.indexGroup.z];
     SamplerState g_Sampler = SamplerDescriptorHeap[0];
     color = g_AlbedoTexture.Sample(g_Sampler, newUV) * 0.5;
     float4 normalTS = g_NormalTexture.Sample(g_Sampler, newUV);
@@ -45,8 +36,14 @@ float4 main(InputPS input) : SV_Target
     float3 normal = input.normalWS;
     float3 bitangent = cross(normal, tangent);
     float3 worldNormal = normalize( normalTS.x * tangent + normalTS.y * bitangent + normalTS.z * normal );
-    // color.xyz = worldNormal.xyz;
+    const float3 ligDir = float3(0.0, 1.0, 0.0);
     float NdotL = max(dot(worldNormal, ligDir), 0.0);
-    color.xyz = color.xyz * NdotL;
+    color.xyz += NdotL * 0.5;
+
+    float4 materialData = g_MetallicTexture.Sample(g_Sampler, newUV);
+    float roughness = materialData.g;
+    float metallic = materialData.b;
+
+    color.xyz = materialData.xyz;
     return color;
 }
