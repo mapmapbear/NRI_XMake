@@ -136,6 +136,8 @@ void SkyRenderPass::AllocGPUMemory() {
 			1 + NRI.CalculateAllocationNumber(*m_renderer->GetRenderDevice(), resourceGroupDesc), nullptr);
 	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(
 			*m_renderer->GetRenderDevice(), resourceGroupDesc, m_MemoryAllocations.data() + 1));
+
+	NRI.SetDebugName(m_HDRTexture, "m_HDRTexture");
 }
 
 void SkyRenderPass::BindMemory() {

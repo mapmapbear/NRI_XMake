@@ -13,6 +13,9 @@
 #include "Detex/stb_image.h"
 
 #include "assimp/material.h"
+#include "assimp/postprocess.h"
+#include "glm/gtc/type_ptr.hpp"
+#include "glm/vector_relational.hpp"
 #include "tinyddsloader.h"
 
 struct Shader {
@@ -763,6 +766,7 @@ bool utils::LoadTexture(const std::string &path, Texture &texture, bool isDDS, b
 		texture.layerNum = texture.data.GetArraySize();
 		texture.format = utils::Texture::ConvertDXGIFormatToNRI(texture.data.GetFormat());
 		texture.initialized = true;
+		texture.isDDS = true;
 
 		return true;
 	}
@@ -931,21 +935,39 @@ utils::MeshData utils::ProcessMesh(const aiMesh *mesh) {
 	meshData.meshIndex = 0;
 	meshData.materialIndex = mesh->mMaterialIndex;
 	for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
-		glm::vec3 vertex = { mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z };
+		// glm::vec3 vertex = { mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z };
+		glm::vec3 vertex = glm::make_vec3(reinterpret_cast<float *>(&mesh->mVertices[i]));
 		meshData.vertices.push_back(vertex);
 
 		if (mesh->HasNormals()) {
-			glm::vec3 normal = { mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z };
+			// glm::vec3 normal = { mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z };
+			glm::vec3 normal = glm::make_vec3(reinterpret_cast<float *>(&mesh->mNormals[i]));
 			meshData.normals.push_back(normal);
 		} else {
 			meshData.normals.push_back({ 0, 0, 0 });
 		}
 
 		if (mesh->HasTextureCoords(0)) {
-			glm::vec2 texCoord = { mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y };
+			// glm::vec2 texCoord = { mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y };
+			glm::vec2 texCoord = glm::make_vec2(reinterpret_cast<float *>(&mesh->mTextureCoords[0][i]));
 			meshData.texCoords.push_back(texCoord);
 		} else {
 			meshData.texCoords.push_back({ 0, 0 });
+		}
+
+		if (mesh->HasTangentsAndBitangents()) {
+			glm::vec3 tangent = glm::make_vec3(reinterpret_cast<float *>(&mesh->mTangents[i]));
+			// glm::vec3 tangent1 = { mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z };
+			// float epsilon = 0.001f;
+			// glm::bvec3 result = glm::equal(tangent, tangent1, epsilon);
+			// bool allEqual = glm::all(result);
+			// std::cout << "All equal: " << allEqual << std::endl;
+			// glm::vec3 bitangent = { mesh->mBitangents[i].x, mesh->mBitangents[i].y, mesh->mBitangents[i].z };
+			glm::vec3 bitangent = glm::make_vec3(reinterpret_cast<float *>(&mesh->mBitangents[i]));
+			meshData.tangents.push_back(tangent);
+			meshData.bitangents.push_back(bitangent);
+		} else {
+			meshData.tangents.push_back({ 0, 0, 0 });
 		}
 	}
 	for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
@@ -997,9 +1019,9 @@ utils::MaterialData utils::ProcessMaterial(const aiMaterial *material, const std
 		matData.textureMap["METALLIC"] = basePath + "/" + texturePath.C_Str();
 	}
 
-	if(material->GetTexture(aiTextureType_DIFFUSE_ROUGHNESS, 0, &texturePath) == AI_SUCCESS) {
+	if (material->GetTexture(aiTextureType_DIFFUSE_ROUGHNESS, 0, &texturePath) == AI_SUCCESS) {
 		matData.textureMap["ROUGHNESS"] = basePath + "/" + texturePath.C_Str();
-	} 
+	}
 
 	if (material->GetTexture(aiTextureType_AMBIENT_OCCLUSION, 0, &texturePath) == AI_SUCCESS) {
 		matData.textureMap["AO"] = basePath + "/" + texturePath.C_Str();
@@ -1053,7 +1075,7 @@ bool utils::LoadScene(const std::string &path, Scene &scene, bool allowUpdate) {
 	printf("Loading scene '%s'...\n", GetFileName(path));
 
 	const aiScene *ai_Scene = aiImportFile(path.c_str(),
-			aiProcess_Triangulate | aiProcess_MakeLeftHanded);
+			aiProcess_Triangulate | aiProcess_MakeLeftHanded | aiProcess_CalcTangentSpace);
 	NodeData rootNode;
 	std::vector<MeshData> &meshes = scene.meshDatas;
 	std::vector<MaterialData> &materials = scene.materialDatas;

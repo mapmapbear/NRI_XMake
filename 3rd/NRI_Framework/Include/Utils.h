@@ -72,7 +72,7 @@ bool LoadScene(const std::string &path, Scene &scene, bool allowUpdate);
 
 MeshData ProcessMesh(const aiMesh *mesh);
 MaterialData ProcessMaterial(const aiMaterial *material, const std::string &basePath);
-NodeData ProcessNode(const aiNode *node, const aiScene *scene, Scene& outScene, NodeData *parentNode = nullptr);
+NodeData ProcessNode(const aiNode *node, const aiScene *scene, Scene &outScene, NodeData *parentNode = nullptr);
 
 struct Texture {
 	std::string name;
@@ -86,6 +86,7 @@ struct Texture {
 	uint8_t mipNum = 0;
 	uint16_t layerNum = 0;
 	bool initialized = false;
+	bool isDDS = false;
 
 	~Texture();
 
@@ -173,19 +174,21 @@ struct Mesh {
 };
 
 struct MeshData {
-	unsigned int meshIndex; // 在 aiScene 中的索引
-	std::vector<glm::vec3> vertices; // 顶点位置
-	std::vector<glm::vec3> normals; // 法线
-	std::vector<glm::vec2> texCoords; // 纹理坐标
-	std::vector<unsigned int> indices; // 索引
-	unsigned int materialIndex; // 关联的材质索引
+	unsigned int meshIndex;
+	std::vector<glm::vec3> vertices;
+	std::vector<glm::vec3> normals;
+	std::vector<glm::vec2> texCoords;
+	std::vector<glm::vec3> tangents;
+	std::vector<glm::vec3> bitangents;
+	std::vector<unsigned int> indices;
+	uint32_t materialIndex;
 };
 
 struct MaterialData {
 	glm::vec3 diffuseColor;
 	glm::vec3 specularColor;
 	float shininess;
-	// std::string baseColorTexPath; 
+	// std::string baseColorTexPath;
 	// std::string normalTexPath;
 	// std::string roughnessTexPath;
 	// std::string emissionTexPath;

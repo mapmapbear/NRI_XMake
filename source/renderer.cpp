@@ -27,6 +27,12 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 			m_DescriptorPool));
 	NRI.SetDebugName(m_DescriptorPool, "m_DescriptorPool");
 
+	// Init Defalut Resource
+	utils::LoadTexture(utils::GetFullPath("black.png", utils::DataFolder::TEXTURES), defaultBlackTex);
+	utils::LoadTexture(utils::GetFullPath("white.png", utils::DataFolder::TEXTURES), deaflutWhiteTex);
+	utils::LoadTexture(utils::GetFullPath("normal.png", utils::DataFolder::TEXTURES), defaultNormalTex);
+	
+
 	std::string sceneFile = utils::GetFullPath("Camera/Camera.gltf", utils::DataFolder::ROOT);
 	// sceneFile = utils::GetFullPath("test.glb", utils::DataFolder::ROOT);
 	NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene, false));

@@ -2,6 +2,7 @@
 #include "../renderer.h"
 #include "NRIDescs.h"
 #include "assimp/scene.h"
+#include "assimp/vector3.h"
 #include <format>
 
 InstanceMeshPass::InstanceMeshPass(Renderer *renderer) :
@@ -62,7 +63,9 @@ void InstanceMeshPass::AllocGPUMemory() {
 		const aiVector3D v = mesh->mVertices[i];
 		const aiVector3D uv0 = mesh->mTextureCoords[0][i];
 		const aiVector3D n = mesh->mNormals[i];
-		m_positions.push_back({ vec3(v.x, v.y, v.z), vec2(uv0.x, uv0.y), vec3(n.x, n.y, n.z) });
+		// const aiVector3D t = mesh->mTangents[i];
+		// const aiVector3D bt = mesh->mBitangents[i];
+		m_positions.push_back({ vec3(v.x, v.y, v.z), vec2(uv0.x, uv0.y), vec3(n.x, n.y, n.z), vec3(0.0), vec3(0.0) });
 	}
 
 	for (unsigned int i = 0; i != mesh->mNumFaces; i++) {

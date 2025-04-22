@@ -30,6 +30,11 @@ public:
 	void OnPresent(RenderInfo &info);
 	void OnPostRender();
 	void InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain);
+
+	utils::Texture& GetDefaultBlackTex() { return defaultBlackTex; }
+	utils::Texture& GetDefaultWhiteTex() { return deaflutWhiteTex; }
+	utils::Texture& GetDefaultNormalTex() { return defaultNormalTex; }
+	
 public:
 	int testIndex = 0;
 	int texViewOffset = 0;
@@ -43,6 +48,10 @@ private:
 
 	nri::DescriptorSet *m_GloablFrameDescriptorSet = nullptr;
 	utils::Scene m_Scene;
+
+	utils::Texture defaultBlackTex;
+	utils::Texture deaflutWhiteTex;
+	utils::Texture defaultNormalTex;
 
 private:
 	std::shared_ptr<SkyRenderPass> skyPass = nullptr;
