@@ -1,5 +1,6 @@
 #include "renderer.h"
 #include "Camera.h"
+#include "Utils.h"
 #include "render_pass/commonMeshPass.h"
 #include "render_pass/gridRenderPass.h"
 #include "render_pass/instanceMeshPass.h"
@@ -32,6 +33,8 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	utils::LoadTexture(utils::GetFullPath("white.png", utils::DataFolder::TEXTURES), deaflutWhiteTex);
 	utils::LoadTexture(utils::GetFullPath("normal.png", utils::DataFolder::TEXTURES), defaultNormalTex);
 
+	utils::LoadTexture(utils::GetFullPath("brdf.png", utils::DataFolder::TEXTURES), BRDFTex);
+
 	std::string sceneFile = utils::GetFullPath("Camera/Camera.gltf", utils::DataFolder::ROOT);
 	// sceneFile = utils::GetFullPath("test.glb", utils::DataFolder::ROOT);
 	NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene, false));
@@ -42,11 +45,9 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	}
 
 	std::string specularIrrTex = "data/Textures/specularIrradiance.dds";
-	if (!utils::LoadTexture(diffuseIrrTex, specularIrradianceTex, true)) {
+	if (!utils::LoadTexture(specularIrrTex, specularIrradianceTex, true)) {
 		printf("Can not found this texture %s", specularIrrTex.c_str());
 	}
-
-	
 }
 
 void Renderer::OnStart(nri::DescriptorSet *globalSet) {
@@ -69,7 +70,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	{
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
-		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE; 
+		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
 		textureDesc.format = specularIrradianceTex.GetFormat();
 		textureDesc.width = specularIrradianceTex.GetWidth();
 		textureDesc.height = specularIrradianceTex.GetHeight();
@@ -80,7 +81,20 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 				NRI.CreateTexture(*m_Device, textureDesc, m_SpecularIrradianceTex));
 	}
 
-	std::vector<nri::Texture *> textureArray = { m_DiffuseIrradianceTex, m_SpecularIrradianceTex };
+	{
+		nri::TextureDesc textureDesc = {};
+		textureDesc.type = nri::TextureType::TEXTURE_2D;
+		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
+		textureDesc.format = BRDFTex.GetFormat();
+		textureDesc.width = BRDFTex.GetWidth();
+		textureDesc.height = BRDFTex.GetHeight();
+		textureDesc.mipNum = 1;
+
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateTexture(*m_Device, textureDesc, m_BRDFTex));
+	}
+
+	std::vector<nri::Texture *> textureArray = { m_DiffuseIrradianceTex, m_SpecularIrradianceTex, m_BRDFTex };
 	nri::ResourceGroupDesc resourceGroupDesc = {};
 	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
 	resourceGroupDesc.textureNum = textureArray.size();
@@ -93,6 +107,9 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 
 	NRI.SetDebugName(m_DiffuseIrradianceTex, "m_DiffuseIrradianceTex");
 	NRI.SetDebugName(m_SpecularIrradianceTex, "m_SpecularIrradianceTex");
+	NRI.SetDebugName(m_BRDFTex, "m_BRDFTex");
+
+	// Diffuse Irrandiance Texture
 
 	std::vector<nri::TextureSubresourceUploadDesc> subResArray;
 	subResArray.resize(diffuseIrradianceTex.GetMipNum() * diffuseIrradianceTex.GetArraySize());
@@ -114,6 +131,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	textureData.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
 	textureData.planes = nri::PlaneBits::ALL;
 
+	// Specular Irrandiance Texture
+
 	std::vector<nri::TextureSubresourceUploadDesc> subResArray1;
 	subResArray1.resize(specularIrradianceTex.GetMipNum() * specularIrradianceTex.GetArraySize());
 	subResCount = 0;
@@ -134,7 +153,17 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	textureData1.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
 	textureData1.planes = nri::PlaneBits::ALL;
 
-	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData };
+	// BRDF Texture
+	nri::TextureSubresourceUploadDesc subResArray3;
+	BRDFTex.GetSubresource(subResArray3, 0);
+
+	nri::TextureUploadDesc textureData2;
+	textureData2.subresources = &subResArray3;
+	textureData2.texture = m_BRDFTex;
+	textureData2.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
+	textureData2.planes = nri::PlaneBits::ALL;
+
+	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData, textureData1, textureData2 };
 	NRI_ABORT_ON_FAILURE(NRI.UploadData(*m_GraphicsQueue, texUploadDescArray.data(), texUploadDescArray.size(),
 			nullptr,
 			0));

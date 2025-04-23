@@ -223,7 +223,7 @@ void CommonMeshPass::BindMemory() {
 			*m_renderer->GetRenderDevice(), resourceGroupDesc, m_MemoryAllocations.data() + 1));
 	// Descriptors
 
-	m_textureViews.resize(m_textures.size() + 2);
+	m_textureViews.resize(m_textures.size() + 3);
 	for (size_t i = 0; i < m_textures.size(); ++i) {
 		nri::Texture2DViewDesc texture2DViewDesc = {
 			m_textures[i], nri::Texture2DViewType::SHADER_RESOURCE_2D,
@@ -234,19 +234,19 @@ void CommonMeshPass::BindMemory() {
 		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
-	nri::Texture2DViewDesc texture2DViewDesc1 = {
-		m_renderer->m_DiffuseIrradianceTex, nri::Texture2DViewType::SHADER_RESOURCE_CUBE,
-		m_renderer->diffuseIrradianceTex.GetFormat()
-	};
+	nri::Texture2DViewDesc texture2DViewDesc1 = { .texture = m_renderer->m_DiffuseIrradianceTex, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_CUBE, .format = m_renderer->diffuseIrradianceTex.GetFormat(), .mipOffset = 0, .mipNum = m_renderer->diffuseIrradianceTex.GetMipNum(), .layerOffset = 0, .layerNum = 6 };
+
 	NRI_ABORT_ON_FAILURE(
 			NRI.CreateTexture2DView(texture2DViewDesc1, m_textureViews[m_textures.size()]));
 
-	nri::Texture2DViewDesc texture2DViewDesc2 = {
-		m_renderer->m_SpecularIrradianceTex, nri::Texture2DViewType::SHADER_RESOURCE_CUBE,
-		m_renderer->specularIrradianceTex.GetFormat()
-	};
+	nri::Texture2DViewDesc texture2DViewDesc2 = { .texture = m_renderer->m_SpecularIrradianceTex, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_CUBE, .format = m_renderer->specularIrradianceTex.GetFormat(), .mipOffset = 0, .mipNum = m_renderer->specularIrradianceTex.GetMipNum(), .layerOffset = 0, .layerNum = 6 };
+
 	NRI_ABORT_ON_FAILURE(
 			NRI.CreateTexture2DView(texture2DViewDesc2, m_textureViews[m_textures.size() + 1]));
+
+	nri::Texture2DViewDesc texture2DViewDes3 = {.texture = m_renderer->m_BRDFTex, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = m_renderer->BRDFTex.GetFormat()};
+	NRI_ABORT_ON_FAILURE(
+		NRI.CreateTexture2DView(texture2DViewDes3, m_textureViews[m_textures.size() + 2]));
 
 	{ // Sampler
 		nri::SamplerDesc samplerDesc = {};
@@ -254,11 +254,13 @@ void CommonMeshPass::BindMemory() {
 			nri::AddressMode::REPEAT, nri::AddressMode::REPEAT };
 		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
 			nri::Filter::LINEAR };
-		samplerDesc.anisotropy = 4;
-		samplerDesc.mipMax = 16.0f;
+		samplerDesc.anisotropy = 1;
+		samplerDesc.mipMax = 1024;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
 	}
+
+	NRI.SetDebugName(m_Sampler, "m_cubeSampler");
 
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
 	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),

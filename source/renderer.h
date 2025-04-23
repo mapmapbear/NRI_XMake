@@ -58,6 +58,7 @@ public:
 
 	nri::Texture *m_DiffuseIrradianceTex = nullptr;
 	nri::Texture *m_SpecularIrradianceTex = nullptr;
+	nri::Texture *m_BRDFTex = nullptr;
 
 	std::vector<nri::Memory *> m_MemoryAllocations;
 private:
