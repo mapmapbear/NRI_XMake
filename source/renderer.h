@@ -34,7 +34,7 @@ public:
 	utils::Texture& GetDefaultBlackTex() { return defaultBlackTex; }
 	utils::Texture& GetDefaultWhiteTex() { return deaflutWhiteTex; }
 	utils::Texture& GetDefaultNormalTex() { return defaultNormalTex; }
-	
+
 public:
 	int testIndex = 0;
 	int texViewOffset = 0;
@@ -48,11 +48,18 @@ private:
 
 	nri::DescriptorSet *m_GloablFrameDescriptorSet = nullptr;
 	utils::Scene m_Scene;
-
+public:
 	utils::Texture defaultBlackTex;
 	utils::Texture deaflutWhiteTex;
 	utils::Texture defaultNormalTex;
+	utils::Texture diffuseIrradianceTex;
+	utils::Texture specularIrradianceTex;
+	utils::Texture BRDFTex;
 
+	nri::Texture *m_DiffuseIrradianceTex = nullptr;
+	nri::Texture *m_SpecularIrradianceTex = nullptr;
+
+	std::vector<nri::Memory *> m_MemoryAllocations;
 private:
 	std::shared_ptr<SkyRenderPass> skyPass = nullptr;
 	std::shared_ptr<GridRenderPass> gridPass = nullptr;

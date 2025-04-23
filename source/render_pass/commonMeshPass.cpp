@@ -223,8 +223,8 @@ void CommonMeshPass::BindMemory() {
 			*m_renderer->GetRenderDevice(), resourceGroupDesc, m_MemoryAllocations.data() + 1));
 	// Descriptors
 
-	m_textureViews.resize(m_textures.size());
-	for (size_t i = 0; i < m_textureViews.size(); ++i) {
+	m_textureViews.resize(m_textures.size() + 2);
+	for (size_t i = 0; i < m_textures.size(); ++i) {
 		nri::Texture2DViewDesc texture2DViewDesc = {
 			m_textures[i], nri::Texture2DViewType::SHADER_RESOURCE_2D,
 			m_texureDatas[i].GetFormat()
@@ -233,6 +233,20 @@ void CommonMeshPass::BindMemory() {
 				NRI.CreateTexture2DView(texture2DViewDesc, m_textureViews[i]));
 		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
+
+	nri::Texture2DViewDesc texture2DViewDesc1 = {
+		m_renderer->m_DiffuseIrradianceTex, nri::Texture2DViewType::SHADER_RESOURCE_CUBE,
+		m_renderer->diffuseIrradianceTex.GetFormat()
+	};
+	NRI_ABORT_ON_FAILURE(
+			NRI.CreateTexture2DView(texture2DViewDesc1, m_textureViews[m_textures.size()]));
+
+	nri::Texture2DViewDesc texture2DViewDesc2 = {
+		m_renderer->m_SpecularIrradianceTex, nri::Texture2DViewType::SHADER_RESOURCE_CUBE,
+		m_renderer->specularIrradianceTex.GetFormat()
+	};
+	NRI_ABORT_ON_FAILURE(
+			NRI.CreateTexture2DView(texture2DViewDesc2, m_textureViews[m_textures.size() + 1]));
 
 	{ // Sampler
 		nri::SamplerDesc samplerDesc = {};

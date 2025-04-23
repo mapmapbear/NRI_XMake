@@ -1,4 +1,5 @@
 #include "NRICompatibility.hlsli"
+#include "pbrCommon.hlsli"
 
 struct InputPS
 {
@@ -28,7 +29,7 @@ float4 main(InputPS input) : SV_Target
     Texture2D g_NormalTexture = ResourceDescriptorHeap[g_PushConstants.indexGroup.y];
     Texture2D g_MetallicTexture = ResourceDescriptorHeap[g_PushConstants.indexGroup.z];
     SamplerState g_Sampler = SamplerDescriptorHeap[0];
-    color = g_AlbedoTexture.Sample(g_Sampler, newUV) * 0.5;
+    float4 baseColor = g_AlbedoTexture.Sample(g_Sampler, newUV);
     float4 normalTS = g_NormalTexture.Sample(g_Sampler, newUV);
     normalTS = normalTS * 2.0 - 1.0;
     normalTS = normalize(normalTS);
@@ -44,6 +45,14 @@ float4 main(InputPS input) : SV_Target
     float roughness = materialData.g;
     float metallic = materialData.b;
 
-    color.xyz = materialData.xyz;
+    //part of PBR
+    // color = BRDF(n, v, ligDir, data);
+    color.xyz = DirectionalLight(input.positionWS, worldNormal, v, ligDir, float3(1.0, 1.0, 1.0), baseColor.xyz, metallic, roughness, c_F0);
+    float3 dir = -v;;
+    float3 R = reflect(dir, worldNormal);
+    TextureCube<float4> diffuseIBL = ResourceDescriptorHeap[22];
+    TextureCube<float4> specularIBL = ResourceDescriptorHeap[23];
+    color.xyz += IBL1(worldNormal, v, R, baseColor.xyz, metallic, roughness, c_F0, diffuseIBL, specularIBL, g_Sampler);
+    // color.xyz = materialData.xyz;
     return color;
 }
