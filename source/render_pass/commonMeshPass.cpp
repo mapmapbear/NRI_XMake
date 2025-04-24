@@ -11,6 +11,7 @@
 
 struct CBlock {
 	glm::vec4 camPos;
+	glm::vec4 testVec;
 	uint32_t index[4];
 };
 
@@ -244,9 +245,9 @@ void CommonMeshPass::BindMemory() {
 	NRI_ABORT_ON_FAILURE(
 			NRI.CreateTexture2DView(texture2DViewDesc2, m_textureViews[m_textures.size() + 1]));
 
-	nri::Texture2DViewDesc texture2DViewDes3 = {.texture = m_renderer->m_BRDFTex, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = m_renderer->BRDFTex.GetFormat()};
+	nri::Texture2DViewDesc texture2DViewDes3 = { .texture = m_renderer->m_BRDFTex, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = m_renderer->BRDFTex.GetFormat() };
 	NRI_ABORT_ON_FAILURE(
-		NRI.CreateTexture2DView(texture2DViewDes3, m_textureViews[m_textures.size() + 2]));
+			NRI.CreateTexture2DView(texture2DViewDes3, m_textureViews[m_textures.size() + 2]));
 
 	{ // Sampler
 		nri::SamplerDesc samplerDesc = {};
@@ -486,7 +487,7 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 
 	const glm::mat4 m1 = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f),
 			glm::vec3(1.0f, 0.f, 0.f));
-	const glm::mat4 m2 = glm::rotate(glm::mat4(1.0f), (float)glfwGetTime(),
+	const glm::mat4 m2 = glm::rotate(glm::mat4(1.0f), 0.0f,//(float)glfwGetTime(),
 			glm::vec3(0.0f, 1.f, 0.f));
 	const glm::mat4 m3 = glm::scale(glm::mat4(1.0), vec3(15.0));
 	const glm::mat4 m4 = glm::translate(glm::mat4(1.0), vec3(0.0, 0.2, 0.0));
@@ -519,6 +520,7 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			block.index[1] = index1;
 			block.index[2] = index2;
 			block.index[3] = 0;
+			block.testVec = { m_renderer->testVec.x, m_renderer->testVec.y, 0.0, 0.0 };
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
 
 			uint32_t indexOffset = m_sceneMeshOffsets.at(i).first;

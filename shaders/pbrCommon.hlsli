@@ -122,6 +122,7 @@ float3 IBL (float3 N, float3 V, float3 R, float3 albedo, float metallic, float r
     // diffuse IBL
     float3 irradiance = DiffuseIBL.SampleLevel(LinearWrap, N, 0).rgb;
     float3 diffuse    = irradiance * albedo;
+    irradiance = pow(irradiance, 1.0 / 2.2);
 
     // specular IBL
     const float MAX_REFLECTION_LOD = 4.0;
@@ -159,11 +160,12 @@ float3 IBL (float3 N, float3 V, float3 R, float3 albedo, float metallic, float r
     }
 
     float3 prefilteredColor = lerp(spec0, spec1, frac(specularLevel));
-
+    
+    // float lodLevel = roughness * 4; // * numEnvLevels;
+    // prefilteredColor = SpecularIBL.SampleLevel(LinearWrap, R, lodLevel).rgb;
     float2 brdf = SplitSum.SampleLevel(LinearWrap, float2(max(dot(N, V), 0.0), roughness), 0).rg;
     float3 specular = prefilteredColor * (F * brdf.x + brdf.y);
-
-    float3 ambient    = (kD * diffuse + specular);
+    float3 ambient = (kD * diffuse + specular);
     return ambient;
 }
 
@@ -219,7 +221,7 @@ float3 IBL1(float3 N, float3 V, float3 R, float3 albedo, float metallic, float r
 
     float3 prefilteredColor = lerp(spec0, spec1, frac(specularLevel));
 
-    float2 brdf = SplitSum.SampleLevel(LinearWrap, float2(max(dot(N, V), 0.0), roughness), 0).rg;
+    float2 brdf = 0.0;//SplitSum.SampleLevel(LinearWrap, float2(max(dot(N, V), 0.0), roughness), 0).rg;
     float3 specular = prefilteredColor * (F * brdf.x + brdf.y);
 
     float3 ambient    = (kD * diffuse + specular);

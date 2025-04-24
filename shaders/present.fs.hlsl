@@ -13,5 +13,6 @@ float4 main(PSInput input) : SV_Target {
 	float2 uv_interp = input.dir.xy;
 	uv_interp.y = 1.0 - uv_interp.y;
 	float4 color = g_DiffuseTexture.Sample(g_Sampler, uv_interp);
+	// color = pow(color, 2.2);
 	return color;
 }

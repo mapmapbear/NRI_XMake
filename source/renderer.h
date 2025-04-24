@@ -38,6 +38,7 @@ public:
 public:
 	int testIndex = 0;
 	int texViewOffset = 0;
+	glm::vec4 testVec = glm::vec4{0.0};
 	void SetTestIndex(int index) { testIndex = index; }
 private:
 	nri::Device *m_Device = nullptr;

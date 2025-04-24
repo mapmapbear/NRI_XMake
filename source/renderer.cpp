@@ -38,16 +38,28 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	std::string sceneFile = utils::GetFullPath("Camera/Camera.gltf", utils::DataFolder::ROOT);
 	// sceneFile = utils::GetFullPath("test.glb", utils::DataFolder::ROOT);
 	NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene, false));
-
 	std::string diffuseIrrTex = "data/Textures/diffuseIrradiance.dds";
+	std::string specularIrrTex = "data/Textures/specularIrradiance.dds";
+#if 1
+	diffuseIrrTex = "data/Textures/PBRTest/GrayDiffuse.dds";
+	specularIrrTex = "data/Textures/PBRTest/GraySpecular.dds";	
 	if (!utils::LoadTexture(diffuseIrrTex, diffuseIrradianceTex, true)) {
 		printf("Can not found this texture %s", diffuseIrrTex.c_str());
 	}
 
-	std::string specularIrrTex = "data/Textures/specularIrradiance.dds";
 	if (!utils::LoadTexture(specularIrrTex, specularIrradianceTex, true)) {
 		printf("Can not found this texture %s", specularIrrTex.c_str());
 	}
+#else
+
+	if (!utils::LoadTexture(diffuseIrrTex, diffuseIrradianceTex, true)) {
+		printf("Can not found this texture %s", diffuseIrrTex.c_str());
+	}
+
+	if (!utils::LoadTexture(specularIrrTex, specularIrradianceTex, true)) {
+		printf("Can not found this texture %s", specularIrrTex.c_str());
+	}
+#endif
 }
 
 void Renderer::OnStart(nri::DescriptorSet *globalSet) {

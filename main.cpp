@@ -423,6 +423,7 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 		ImGui::SliderFloat("Scale", &m_Scale, 0.75f, 1.25f);
 		ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f, "%.0f");
 		ImGui::SliderInt("Tex Index", &testRenderPtr->testIndex, 0, 10);
+		ImGui::SliderFloat4("Mat Debug", &testRenderPtr->testVec.x, 0.0, 1.0);
 	}
 	ImGui::End();
 

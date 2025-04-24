@@ -108,7 +108,8 @@ void SkyRenderPass::BuildPipeline() {
 
 void SkyRenderPass::AllocGPUMemory() {
 	auto NRI = *m_NRI;
-	std::string path = utils::GetFullPath("barcelona.dds", utils::DataFolder::TEXTURES);
+	// std::string path = utils::GetFullPath("barcelona.dds", utils::DataFolder::TEXTURES);
+	std::string path = utils::GetFullPath("PBRTest/GrayHDR.dds", utils::DataFolder::TEXTURES);
 	if (!utils::LoadTexture(path, m_texture, true)) {
 		printf("Can not found this texture %s", path.c_str());
 	}
@@ -117,7 +118,7 @@ void SkyRenderPass::AllocGPUMemory() {
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
 		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-		textureDesc.format = nri::Format::BC7_RGBA_UNORM;
+		textureDesc.format = m_texture.GetFormat();
 		textureDesc.width = m_texture.GetWidth();
 		textureDesc.height = m_texture.GetHeight();
 		textureDesc.mipNum = 1;
@@ -157,7 +158,7 @@ void SkyRenderPass::BindMemory() {
 	}
 
 	{
-		nri::Texture2DViewDesc textureViewDesc = { .texture = m_HDRTexture, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = nri::Format::BC7_RGBA_UNORM };
+		nri::Texture2DViewDesc textureViewDesc = { .texture = m_HDRTexture, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = m_texture.GetFormat() };
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(textureViewDesc, m_HDRTextureShaderResource));
 		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
