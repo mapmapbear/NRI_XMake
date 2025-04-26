@@ -1,4 +1,5 @@
 #pragma once
+#include "Camera.h"
 #include "NRIDescs.h"
 #include "NRIFramework.h"
 #include <future>
@@ -31,15 +32,16 @@ public:
 	void OnPostRender();
 	void InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain);
 
-	utils::Texture& GetDefaultBlackTex() { return defaultBlackTex; }
-	utils::Texture& GetDefaultWhiteTex() { return deaflutWhiteTex; }
-	utils::Texture& GetDefaultNormalTex() { return defaultNormalTex; }
+	utils::Texture &GetDefaultBlackTex() { return defaultBlackTex; }
+	utils::Texture &GetDefaultWhiteTex() { return deaflutWhiteTex; }
+	utils::Texture &GetDefaultNormalTex() { return defaultNormalTex; }
 
 public:
 	int testIndex = 0;
 	int texViewOffset = 0;
-	glm::vec4 testVec = glm::vec4{0.0};
+	glm::vec4 testVec = glm::vec4{ 0.0 };
 	void SetTestIndex(int index) { testIndex = index; }
+
 private:
 	nri::Device *m_Device = nullptr;
 	NRIInterface &m_NRI;
@@ -48,7 +50,10 @@ private:
 	nri::Queue *m_ComputeQueue = nullptr;
 
 	nri::DescriptorSet *m_GloablFrameDescriptorSet = nullptr;
+
+public:
 	utils::Scene m_Scene;
+
 public:
 	utils::Texture defaultBlackTex;
 	utils::Texture deaflutWhiteTex;
@@ -62,6 +67,7 @@ public:
 	nri::Texture *m_BRDFTex = nullptr;
 
 	std::vector<nri::Memory *> m_MemoryAllocations;
+
 private:
 	std::shared_ptr<SkyRenderPass> skyPass = nullptr;
 	std::shared_ptr<GridRenderPass> gridPass = nullptr;

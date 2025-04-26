@@ -1089,9 +1089,9 @@ bool utils::LoadScene(const std::string &path, Scene &scene, bool allowUpdate) {
 	for (unsigned int i = 0; i < ai_Scene->mNumMaterials; ++i) {
 		materials[i] = utils::ProcessMaterial(ai_Scene->mMaterials[i], basePath);
 	}
-
+	rootNode.isRoot = true;
 	rootNode = ProcessNode(ai_Scene->mRootNode, ai_Scene, scene);
-
+	scene.rootNode = rootNode;
 	// Compress All Tex
 	nvtt::Context context(true);
 	nvtt::CompressionOptions compressionOptions;

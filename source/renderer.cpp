@@ -33,7 +33,7 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	utils::LoadTexture(utils::GetFullPath("white.png", utils::DataFolder::TEXTURES), deaflutWhiteTex);
 	utils::LoadTexture(utils::GetFullPath("normal.png", utils::DataFolder::TEXTURES), defaultNormalTex);
 
-	utils::LoadTexture(utils::GetFullPath("brdf.png", utils::DataFolder::TEXTURES), BRDFTex);
+	utils::LoadTexture(utils::GetFullPath("brdf.dds", utils::DataFolder::TEXTURES), BRDFTex, true);
 
 	std::string sceneFile = utils::GetFullPath("Camera/Camera.gltf", utils::DataFolder::ROOT);
 	// sceneFile = utils::GetFullPath("test.glb", utils::DataFolder::ROOT);
@@ -167,7 +167,11 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 
 	// BRDF Texture
 	nri::TextureSubresourceUploadDesc subResArray3;
-	BRDFTex.GetSubresource(subResArray3, 0);
+	auto imgData = BRDFTex.data.GetImageData(0, 0);
+	subResArray3.slices = imgData->m_mem;
+	subResArray3.sliceNum = 1;
+	subResArray3.rowPitch = imgData->m_memPitch;
+	subResArray3.slicePitch = imgData->m_memSlicePitch;
 
 	nri::TextureUploadDesc textureData2;
 	textureData2.subresources = &subResArray3;

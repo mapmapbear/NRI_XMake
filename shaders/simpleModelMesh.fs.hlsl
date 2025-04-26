@@ -31,13 +31,13 @@ float4 main(InputPS input) : SV_Target
     Texture2D g_MetallicTexture = ResourceDescriptorHeap[g_PushConstants.indexGroup.z];
     SamplerState g_Sampler = SamplerDescriptorHeap[0];
     float4 baseColor = g_AlbedoTexture.Sample(g_Sampler, newUV);
-    baseColor = 1.0;
+    
     float4 normalTS = g_NormalTexture.Sample(g_Sampler, newUV);
     normalTS = normalTS * 2.0 - 1.0;
     normalTS = normalize(normalTS);
     float3 tangent = input.tangentWS;
     float3 normal = input.normalWS;
-    float3 bitangent = cross(normal, tangent);
+    float3 bitangent = -1.0 * cross(normal, tangent);
     float3 worldNormal = normalize( normalTS.x * tangent + normalTS.y * bitangent + normalTS.z * normal );
     const float3 ligDir = float3(0.5, 0.5, 0.0);
     float roughness = g_PushConstants.testVec.x;
@@ -61,6 +61,8 @@ float4 main(InputPS input) : SV_Target
     TextureCube<float4> diffuseIBL = ResourceDescriptorHeap[22];
     TextureCube<float4> specularIBL = ResourceDescriptorHeap[23];
     Texture2D<float4> BRDFTex = ResourceDescriptorHeap[24];
-    color.xyz += IBL(worldNormal, v, R, baseColor.xyz, metallic, roughness, c_F0, BRDFTex, diffuseIBL, specularIBL, g_Sampler);
+
+    SamplerState g_SamplerBRDF = SamplerDescriptorHeap[2];
+    color.xyz += IBL(worldNormal, v, R, baseColor.xyz, metallic, roughness, c_F0, BRDFTex, diffuseIBL, specularIBL, g_Sampler, g_SamplerBRDF);
     return color;
 }

@@ -6,7 +6,10 @@
 #include "renderer.h"
 
 // STB
+#include "spdlog/spdlog.h"
 #include "stb_image.h"
+#include <string>
+#include <unordered_map>
 
 #define INSTANCE
 
@@ -48,6 +51,7 @@ public:
 	bool Initialize(nri::GraphicsAPI graphicsAPI) override;
 	void PrepareFrame(uint32_t frameIndex) override;
 	void RenderFrame(uint32_t frameIndex) override;
+	utils::Scene m_Scene1;
 
 private:
 	NRIInterface NRI = {};
@@ -367,20 +371,19 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	// 	NRI.QueueSubmit(*m_GraphicsQueue, queueSubmitDesc);
 	// }
 	// NRI.WaitForIdle(*m_GraphicsQueue);
+	uint32_t width = GetWindowResolution().first;
+	uint32_t height = GetWindowResolution().second;
 
 	nri::TextureSubresourceUploadDesc colorSubRes = {};
-	colorSubRes.rowPitch = GetWindowResolution().first * 4;
-	colorSubRes.slicePitch = colorSubRes.rowPitch * GetWindowResolution().second;
+	colorSubRes.rowPitch = width * 4;
+	colorSubRes.slicePitch = colorSubRes.rowPitch * height;
 	std::vector<uint8_t> data(colorSubRes.slicePitch, 0);
 	colorSubRes.slices = data.data();
 	colorSubRes.sliceNum = 1;
 
-	uint32_t width = GetWindowResolution().first;
-	uint32_t height = GetWindowResolution().second;
 	nri::TextureSubresourceUploadDesc depthSubRes = {};
-	size_t dataSize = width * height * 2;
 	depthSubRes.rowPitch = width * 2;
-	depthSubRes.slicePitch = dataSize;
+	depthSubRes.slicePitch = depthSubRes.rowPitch * height;
 	std::vector<uint8_t> data1(colorSubRes.slicePitch, 1.0);
 	depthSubRes.sliceNum = 1;
 	depthSubRes.slices = data1.data();
@@ -403,6 +406,10 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 			nullptr,
 			0));
 
+	std::string sceneFile = utils::GetFullPath("meshes/orrery/scene.gltf", utils::DataFolder::ROOT);
+	// sceneFile = utils::GetFullPath("test.glb", utils::DataFolder::ROOT);
+	NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene1, false));
+
 	testRenderPtr->OnStart(nullptr);
 	testRenderPtr->InitPresentPass(m_ColorTexture, m_SwapChain);
 
@@ -412,9 +419,24 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	return initialized;
 }
 
+void ShowNode(utils::NodeData node) {
+	if (node.children.size() > 0) {
+		if (ImGui::TreeNodeEx(node.name.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+			for (auto &child : node.children) {
+				ShowNode(child);
+			}
+			ImGui::TreePop();
+		}
+	} else {
+		ImGuiTreeNodeFlags_ flag = node.isRoot ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_Leaf;
+		if (ImGui::TreeNodeEx(node.name.c_str(), flag)) {
+			ImGui::TreePop();
+		}
+	}
+}
+
 void Sample::PrepareFrame(uint32_t frameIndex) {
 	BeginUI();
-
 	ImGui::SetNextWindowPos(ImVec2(30, 30), ImGuiCond_Once);
 	ImGui::SetNextWindowSize(ImVec2(0, 0));
 	ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_NoResize);
@@ -424,6 +446,22 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 		ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f, "%.0f");
 		ImGui::SliderInt("Tex Index", &testRenderPtr->testIndex, 0, 10);
 		ImGui::SliderFloat4("Mat Debug", &testRenderPtr->testVec.x, 0.0, 1.0);
+	}
+	ImGui::End();
+
+	std::unordered_map<std::string, utils::NodeData> nodeNameMap;
+
+	ImGui::Begin("Scene Hierarchy");
+	{
+		ShowNode(m_Scene1.rootNode);
+		// ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+		// ImGui::Text("Frame: %u", frameIndex);
+		// ImGui::Text("Window Size: %u x %u",
+		// 		GetWindowResolution().first, GetWindowResolution().second);
+		// ImGui::Text("SwapChain Size: %u x %u",
+		// 		NRI.GetTextureDesc(*m_SwapChainBuffers[0].texture).width,
+		// 		NRI.GetTextureDesc(*m_SwapChainBuffers[0].texture).height);
+		// ImGui::Text("SwapChain Format: BT709_G22_8BIT");
 	}
 	ImGui::End();
 
@@ -439,7 +477,6 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	desc.isReversedZ = true;
 	desc.timeScale = 1.0;
 	GetCameraDescFromInputDevices(desc);
-
 	m_Camera.Update(desc, frameIndex);
 }
 

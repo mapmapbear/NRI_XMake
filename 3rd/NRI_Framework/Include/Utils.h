@@ -204,6 +204,7 @@ struct NodeData {
 	NodeData *parent;
 	std::vector<NodeData> children;
 	std::vector<unsigned int> meshIndices;
+	bool isRoot = false;
 };
 
 // per mesh instance data
@@ -325,6 +326,7 @@ struct Scene {
 	std::vector<MaterialData> materialDatas;
 	std::vector<MeshData> meshDatas;
 	std::vector<NodeData> nodeDatas;
+	NodeData rootNode;
 
 	uint32_t totalInstancedPrimitivesNum = 0;
 	uint32_t morphMeshTotalIndicesNum = 0;

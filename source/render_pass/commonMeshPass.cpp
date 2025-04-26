@@ -251,12 +251,10 @@ void CommonMeshPass::BindMemory() {
 
 	{ // Sampler
 		nri::SamplerDesc samplerDesc = {};
-		samplerDesc.addressModes = { nri::AddressMode::REPEAT,
-			nri::AddressMode::REPEAT, nri::AddressMode::REPEAT };
+		samplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE,
+			nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
 		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
 			nri::Filter::LINEAR };
-		samplerDesc.anisotropy = 1;
-		samplerDesc.mipMax = 1024;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
 	}
@@ -487,7 +485,7 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 
 	const glm::mat4 m1 = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f),
 			glm::vec3(1.0f, 0.f, 0.f));
-	const glm::mat4 m2 = glm::rotate(glm::mat4(1.0f), 0.0f,//(float)glfwGetTime(),
+	const glm::mat4 m2 = glm::rotate(glm::mat4(1.0f), 0.0f, //(float)glfwGetTime(),
 			glm::vec3(0.0f, 1.f, 0.f));
 	const glm::mat4 m3 = glm::scale(glm::mat4(1.0), vec3(15.0));
 	const glm::mat4 m4 = glm::translate(glm::mat4(1.0), vec3(0.0, 0.2, 0.0));
