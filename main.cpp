@@ -223,7 +223,11 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		nri::SwapChainDesc swapChainDesc = {};
 		swapChainDesc.window = GetWindow();
 		swapChainDesc.queue = m_GraphicsQueue;
+#ifdef HDR_ENABLE
+		swapChainDesc.format = nri::SwapChainFormat::BT709_G22_10BIT;
+#else
 		swapChainDesc.format = nri::SwapChainFormat::BT709_G22_8BIT;
+#endif
 		swapChainDesc.verticalSyncInterval = m_VsyncInterval;
 		swapChainDesc.width = (uint16_t)GetWindowResolution().first;
 		swapChainDesc.height = (uint16_t)GetWindowResolution().second;
@@ -273,7 +277,11 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
 		textureDesc.usage = nri::TextureUsageBits::COLOR_ATTACHMENT | nri::TextureUsageBits::SHADER_RESOURCE;
+#ifdef HDR_ENABLE
+		textureDesc.format = nri::Format::R10_G10_B10_A2_UNORM;
+#else
 		textureDesc.format = nri::Format::RGBA8_UNORM;
+#endif
 		textureDesc.width = (uint16_t)GetWindowResolution().first;
 		textureDesc.height = (uint16_t)GetWindowResolution().second;
 		textureDesc.mipNum = 1;
@@ -314,63 +322,13 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 
 	{
 		nri::Texture2DViewDesc textureViewDesc = { .texture = m_ColorTexture, .viewType = nri::Texture2DViewType::COLOR_ATTACHMENT, .format = nri::Format::RGBA8_UNORM };
+#ifdef HDR_ENABLE
+		textureViewDesc.format = nri::Format::R10_G10_B10_A2_UNORM;
+#endif
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(textureViewDesc, m_ColorAttachment));
 	}
 
-	// nri::AttachmentsDesc attachmentsDesc = {};
-	// attachmentsDesc.colorNum = 1;
-	// attachmentsDesc.colors = &m_ColorAttachment;
-	// attachmentsDesc.depthStencil = m_DepthAttachment;
-	// attachmentsDesc.viewMask = 0;
-	// nri::CommandBuffer *commandBuffer = m_Frames[0].commandBuffer;
-	// NRI.BeginCommandBuffer(*commandBuffer, m_DescriptorPool);
-	// {
-	// 	NRI.CmdBeginRendering(*commandBuffer, attachmentsDesc);
-	// 	{
-	// 		nri::TextureBarrierDesc textureBarrierDescs = {};
-	// 		textureBarrierDescs.texture = m_ColorTexture;
-	// 		textureBarrierDescs.before = { nri::AccessBits::UNKNOWN, nri::Layout::UNKNOWN };
-	// 		textureBarrierDescs.after = { nri::AccessBits::COLOR_ATTACHMENT,
-	// 			nri::Layout::COLOR_ATTACHMENT };
-
-	// 		nri::TextureBarrierDesc depthBarrierDesc = {};
-	// 		depthBarrierDesc.texture = m_DepthTexture;
-	// 		depthBarrierDesc.after = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT };
-
-	// 		std::array<nri::TextureBarrierDesc, 2> texBarrierArray = { textureBarrierDescs, depthBarrierDesc };
-	// 		nri::BarrierGroupDesc barrierGroupDesc = {};
-	// 		barrierGroupDesc.textureNum = 2;
-	// 		barrierGroupDesc.textures = texBarrierArray.data();
-
-	// 		NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
-
-	// 		{
-	// 			helper::Annotation annotation(NRI, *commandBuffer, "Clears");
-
-	// 			nri::ClearDesc clearDesc = {};
-	// 			clearDesc.planes = nri::PlaneBits::COLOR;
-	// 			clearDesc.value.color.f = COLOR_0;
-
-	// 			NRI.CmdClearAttachments(*commandBuffer, &clearDesc, 1, nullptr, 0);
-	// 			clearDesc = {};
-	// 			clearDesc.planes = nri::PlaneBits::DEPTH;
-	// 			clearDesc.value.depthStencil.depth = 1.0;
-	// 			NRI.CmdClearAttachments(*commandBuffer, &clearDesc, 1, nullptr, 0);
-	// 		}
-	// 	}
-	// 	NRI.CmdEndRendering(*commandBuffer);
-	// }
-	// NRI.EndCommandBuffer(*commandBuffer);
-
-	// { // Submit
-	// 	nri::QueueSubmitDesc queueSubmitDesc = {};
-	// 	queueSubmitDesc.commandBuffers = &commandBuffer;
-	// 	queueSubmitDesc.commandBufferNum = 1;
-
-	// 	NRI.QueueSubmit(*m_GraphicsQueue, queueSubmitDesc);
-	// }
-	// NRI.WaitForIdle(*m_GraphicsQueue);
 	uint32_t width = GetWindowResolution().first;
 	uint32_t height = GetWindowResolution().second;
 
@@ -445,7 +403,9 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 		ImGui::SliderFloat("Scale", &m_Scale, 0.75f, 1.25f);
 		ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f, "%.0f");
 		ImGui::SliderInt("Tex Index", &testRenderPtr->testIndex, 0, 10);
-		ImGui::SliderFloat4("Mat Debug", &testRenderPtr->testVec.x, 0.0, 1.0);
+		ImGui::SliderFloat("Metallic", &testRenderPtr->testMaterial, 0.0, 1.0);
+		ImGui::SliderFloat("Roughness", &testRenderPtr->testRoughness, 0.0, 1.0);
+		// ImGui::SliderFloat4("Mat Debug", &testRenderPtr->testVec.x, 0.0, 1.0);
 	}
 	ImGui::End();
 
@@ -546,7 +506,6 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		}
 		NRI.CmdEndRendering(*commandBuffer);
 
-		
 		nri::TextureBarrierDesc textureBarrierDescs1 = {};
 		textureBarrierDescs1.texture = m_ColorTexture;
 		textureBarrierDescs1.before = { nri::AccessBits::COLOR_ATTACHMENT,

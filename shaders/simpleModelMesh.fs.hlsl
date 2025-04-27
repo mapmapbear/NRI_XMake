@@ -49,20 +49,20 @@ float4 main(InputPS input) : SV_Target
     if(width > 2)
     {
         float4 materialData = g_MetallicTexture.Sample(g_Sampler, newUV);
-        // roughness = materialData.g;
-        // metallic = materialData.b;
+        roughness = materialData.g;
+        metallic = materialData.b;
     }
 
 
     //part of PBR
     // color.xyz = DirectionalLight(input.positionWS, worldNormal, v, ligDir, float3(1.0, 0.0, 1.0), baseColor.xyz, metallic, roughness, c_F0);
-    float3 dir = -v;;
+    float3 dir = -v;
     float3 R = reflect(dir, worldNormal);
     TextureCube<float4> diffuseIBL = ResourceDescriptorHeap[22];
     TextureCube<float4> specularIBL = ResourceDescriptorHeap[23];
     Texture2D<float4> BRDFTex = ResourceDescriptorHeap[24];
-
     SamplerState g_SamplerBRDF = SamplerDescriptorHeap[2];
+
     color.xyz += IBL(worldNormal, v, R, baseColor.xyz, metallic, roughness, c_F0, BRDFTex, diffuseIBL, specularIBL, g_Sampler, g_SamplerBRDF);
     return color;
 }

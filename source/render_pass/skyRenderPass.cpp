@@ -47,7 +47,11 @@ void SkyRenderPass::BuildPipeline() {
 		rasterizationDesc.cullMode = nri::CullMode::NONE;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
+#ifdef HDR_ENABLE
+		colorAttachmentDesc.format = nri::Format::R10_G10_B10_A2_UNORM;
+#else
 		colorAttachmentDesc.format = nri::Format::RGBA8_UNORM;
+#endif
 		colorAttachmentDesc.colorWriteMask = nri::ColorWriteBits::RGBA;
 		colorAttachmentDesc.blendEnabled = false;
 		colorAttachmentDesc.colorBlend = { nri::BlendFactor::SRC_ALPHA,
@@ -108,8 +112,10 @@ void SkyRenderPass::BuildPipeline() {
 
 void SkyRenderPass::AllocGPUMemory() {
 	auto NRI = *m_NRI;
-	// std::string path = utils::GetFullPath("barcelona.dds", utils::DataFolder::TEXTURES);
-	std::string path = utils::GetFullPath("PBRTest/GrayHDR.dds", utils::DataFolder::TEXTURES);
+	std::string path = utils::GetFullPath("barcelona.dds", utils::DataFolder::TEXTURES);
+#ifdef PBR_TEST
+	path = utils::GetFullPath("PBRTest/GrayHDR.dds", utils::DataFolder::TEXTURES);
+#endif
 	if (!utils::LoadTexture(path, m_texture, true)) {
 		printf("Can not found this texture %s", path.c_str());
 	}
@@ -151,7 +157,7 @@ void SkyRenderPass::BindMemory() {
 			nri::AddressMode::REPEAT, nri::AddressMode::REPEAT };
 		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
 			nri::Filter::LINEAR };
-		samplerDesc.anisotropy = 4;
+		// samplerDesc.anisotropy = 4;
 		samplerDesc.mipMax = 16.0f;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));

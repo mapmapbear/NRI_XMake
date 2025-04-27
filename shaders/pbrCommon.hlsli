@@ -109,90 +109,34 @@ float3 DirectionalLight (float3 worldPos, float3 N, float3 V, float3 lightDir, f
 }
 
 
-float3 IBL (float3 N, float3 V, float3 R, float3 albedo, float metallic, float roughness, float scalarF0, in Texture2D<float4> SplitSum, in TextureCube<float4> DiffuseIBL, in TextureCube<float4> SpecularIBL, SamplerState LinearWrap, SamplerState LinearClamp)
+float3 IBL (float3 N, float3 V, float3 R, float3 albedo, float metallic, float roughness, float scalarF0, in Texture2D<float4> SplitSum, in TextureCube<float4> DiffuseIBL, in TextureCube<float4> SpecularIBL, in SamplerState LinearWrap, in SamplerState LinearClamp)
 {
     roughness = clamp(roughness, 0.01f, 0.99f);
-    float3 ambient = 0.0;
     
-#if 0
+    float3 ambient = 0.0;
     float3 F0 = float3(scalarF0.xxx);
     F0 = lerp(F0, albedo, metallic);
-    float3 F = fresnelSchlickRoughness(saturate(dot(N, V)), F0, roughness);
-    float3 kS = F;
-    // return kS;//max(dot(N, V), 0.0f);
-    float3 kD = saturate(1.0 - kS);
-    kD *= saturate(1.0 - metallic);
-
-    // diffuse IBL
+    
     float3 irradiance = DiffuseIBL.SampleLevel(LinearWrap, N, 0).rgb;
-    float3 diffuse = irradiance * albedo;
-
-    // specular IBL
-    const float MAX_REFLECTION_LOD = 4.0;
-
-    // trilinear specular IBL
-    float specularLevel = clamp(roughness * MAX_REFLECTION_LOD, 0.0f, MAX_REFLECTION_LOD);
-    float3 spec0 = float3(0.0f, 0.0f, 0.0f);
-    float3 spec1 = float3(0.0f, 0.0f, 0.0f);
-    switch(int(specularLevel))
-    {
-        case 0:
-        {
-            spec0 = SpecularIBL.SampleLevel(LinearWrap, R, 0).rgb;
-            spec1 = SpecularIBL.SampleLevel(LinearWrap, R, 1).rgb;
-            break;
-        }
-        case 1:
-        {
-            spec0 = SpecularIBL.SampleLevel(LinearWrap, R, 1).rgb;
-            spec1 = SpecularIBL.SampleLevel(LinearWrap, R, 2).rgb;
-            break;
-        }
-        case 2:
-        {
-            spec0 = SpecularIBL.SampleLevel(LinearWrap, R, 2).rgb;
-            spec1 = SpecularIBL.SampleLevel(LinearWrap, R, 3).rgb;
-            break;
-        }
-        default:
-        {
-            spec0 = SpecularIBL.SampleLevel(LinearWrap, R, 3).rgb;
-            spec1 = SpecularIBL.SampleLevel(LinearWrap, R, 4).rgb;
-            break;
-        }
-    }
-
-    float3 prefilteredColor = lerp(spec0, spec1, frac(specularLevel));
-    prefilteredColor = SpecularIBL.SampleLevel(LinearClamp, R, specularLevel).rgb;
-    float2 brdfSamplerPoint = float2(max(dot(N, V), 0.0), roughness);
-    float2 brdf = SplitSum.Sample(LinearWrap, brdfSamplerPoint).rg;
-    return float3(brdf, 0.0);
-    float3 specular = prefilteredColor * (F * brdf.x + brdf.y);
-    specular = (F * brdf.x + brdf.y);
-    ambient = (kD * diffuse + specular);
-#else
-    float3 F0 = float3(scalarF0.xxx);
-    F0 = lerp(F0, albedo, metallic);
-    float3 irradiance = DiffuseIBL.Sample(LinearClamp, N).rgb;
+    irradiance = pow(irradiance, 1.0 / 2.2);
     float2 f_ab = SplitSum.Sample(LinearClamp, float2(max(dot(N, V), 0.0), roughness)).rg;
+    f_ab = pow(f_ab, 1.0 / 2.2);
 
     uint width, height, specularTextureLevels;
 	SpecularIBL.GetDimensions(0, width, height, specularTextureLevels);
-    float cosLo = max(0.0, dot(N, V));
-    float3 Lr = 2.0 * cosLo * N - V;
-    float3 radiance = SpecularIBL.SampleLevel(LinearClamp, Lr, roughness * specularTextureLevels).rgb;
+
+    float3 radiance = SpecularIBL.SampleLevel(LinearWrap, R, round(roughness * specularTextureLevels)).rgb;
+    radiance = pow(radiance, 1.0/2.2);
     float3 kS = F0;
     float3 FssEss = kS * f_ab.x + f_ab.y;
-
-    float3 c_diff = 1.0;
-    c_diff = albedo;
+    
+    float3 c_diff = albedo;
     // Multiple scattering, from Fdez-Aguera
     float Ems = (1.0 - (f_ab.x + f_ab.y));
     float3 F_avg = F0 + (1.0 - F0) / 21.0;
     float3 FmsEms = Ems * FssEss * F_avg / (1.0 - F_avg * Ems);
     float3 k_D = c_diff * (1.0 - FssEss - FmsEms);
     ambient = FssEss * radiance + (FmsEms + k_D) * irradiance;
-#endif
 
     return ambient;
 }

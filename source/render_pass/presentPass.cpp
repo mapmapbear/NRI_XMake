@@ -27,7 +27,7 @@ void PresentPass::BindMemory() {
 		nri::SamplerDesc samplerDesc = {};
 		samplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_BORDER,
 			nri::AddressMode::CLAMP_TO_BORDER, nri::AddressMode::CLAMP_TO_BORDER };
-		
+
 		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
 			nri::Filter::LINEAR };
 		samplerDesc.anisotropy = 4;
@@ -69,7 +69,11 @@ void PresentPass::BuildPipeline() {
 		rasterizationDesc.cullMode = nri::CullMode::NONE;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
+#ifdef HDR_ENABLE
+		colorAttachmentDesc.format = nri::Format::R10_G10_B10_A2_UNORM;
+#else
 		colorAttachmentDesc.format = nri::Format::RGBA8_UNORM;
+#endif
 		colorAttachmentDesc.colorWriteMask = nri::ColorWriteBits::RGBA;
 		colorAttachmentDesc.blendEnabled = false;
 		colorAttachmentDesc.colorBlend = { nri::BlendFactor::SRC_ALPHA,

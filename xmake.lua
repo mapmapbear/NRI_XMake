@@ -98,6 +98,7 @@ target("NRIFramework")
 
 target("DemoApp")
     set_kind("binary")
+    add_defines("HDR_ENABLE")
     add_deps("NRIFramework", "Detex", "NRI", "ImGUI")
     add_includedirs("3rd/NRI_Framework/Include", {public = true})
     add_includedirs("3rd/Detex", {public = true})

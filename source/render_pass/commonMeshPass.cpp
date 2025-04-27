@@ -255,6 +255,7 @@ void CommonMeshPass::BindMemory() {
 			nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
 		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
 			nri::Filter::LINEAR };
+		samplerDesc.mipMax = 16;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
 	}
@@ -408,7 +409,11 @@ void CommonMeshPass::BuildPipeline() {
 		rasterizationDesc.cullMode = nri::CullMode::NONE;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
+#ifdef HDR_ENABLE
+		colorAttachmentDesc.format = nri::Format::R10_G10_B10_A2_UNORM;
+#else
 		colorAttachmentDesc.format = nri::Format::RGBA8_UNORM;
+#endif
 		colorAttachmentDesc.colorWriteMask = nri::ColorWriteBits::RGBA;
 		colorAttachmentDesc.blendEnabled = false;
 		colorAttachmentDesc.colorBlend = { nri::BlendFactor::SRC_ALPHA,
@@ -518,7 +523,7 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			block.index[1] = index1;
 			block.index[2] = index2;
 			block.index[3] = 0;
-			block.testVec = { m_renderer->testVec.x, m_renderer->testVec.y, 0.0, 0.0 };
+			block.testVec = { m_renderer->testRoughness, m_renderer->testMaterial, 0.0, 0.0 };
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
 
 			uint32_t indexOffset = m_sceneMeshOffsets.at(i).first;

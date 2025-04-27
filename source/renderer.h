@@ -40,6 +40,8 @@ public:
 	int testIndex = 0;
 	int texViewOffset = 0;
 	glm::vec4 testVec = glm::vec4{ 0.0 };
+	float testMaterial = 0.0;
+	float testRoughness = 0.0;
 	void SetTestIndex(int index) { testIndex = index; }
 
 private:

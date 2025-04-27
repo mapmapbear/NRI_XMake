@@ -40,26 +40,18 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene, false));
 	std::string diffuseIrrTex = "data/Textures/diffuseIrradiance.dds";
 	std::string specularIrrTex = "data/Textures/specularIrradiance.dds";
-#if 1
+#ifdef PBR_TEST
 	diffuseIrrTex = "data/Textures/PBRTest/GrayDiffuse.dds";
-	specularIrrTex = "data/Textures/PBRTest/GraySpecular.dds";	
-	if (!utils::LoadTexture(diffuseIrrTex, diffuseIrradianceTex, true)) {
-		printf("Can not found this texture %s", diffuseIrrTex.c_str());
-	}
-
-	if (!utils::LoadTexture(specularIrrTex, specularIrradianceTex, true)) {
-		printf("Can not found this texture %s", specularIrrTex.c_str());
-	}
-#else
-
-	if (!utils::LoadTexture(diffuseIrrTex, diffuseIrradianceTex, true)) {
-		printf("Can not found this texture %s", diffuseIrrTex.c_str());
-	}
-
-	if (!utils::LoadTexture(specularIrrTex, specularIrradianceTex, true)) {
-		printf("Can not found this texture %s", specularIrrTex.c_str());
-	}
+	specularIrrTex = "data/Textures/PBRTest/GraySpecular.dds";
 #endif
+
+	if (!utils::LoadTexture(diffuseIrrTex, diffuseIrradianceTex, true)) {
+		printf("Can not found this texture %s", diffuseIrrTex.c_str());
+	}
+
+	if (!utils::LoadTexture(specularIrrTex, specularIrradianceTex, true)) {
+		printf("Can not found this texture %s", specularIrrTex.c_str());
+	}
 }
 
 void Renderer::OnStart(nri::DescriptorSet *globalSet) {
@@ -195,7 +187,7 @@ void Renderer::InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain
 void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	skyPass->Render(info, camera);
 	gridPass->Render(info, camera);
-	meshPass->Render(info, camera);
+	// meshPass->Render(info, camera);
 	simplePass->SetTestIndex(testIndex);
 	simplePass->Render(info, camera);
 }
