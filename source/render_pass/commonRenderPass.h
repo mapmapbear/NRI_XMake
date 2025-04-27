@@ -2,15 +2,15 @@
 #include "NRIDescs.h"
 #include "NRIFramework.h"
 
-struct Vertex {
-	vec3 position;
-	vec2 uv;
-	vec3 normal;
-	vec3 tangent;
-	vec3 bitangent;
-	Vertex(vec3 pos, vec2 uv, vec3 nor, vec3 tan, vec3 bitan) :
-			position(pos), uv(uv), normal(nor), tangent(tan), bitangent(bitan) {}
-};
+// struct Vertex {
+// 	vec3 position;
+// 	vec2 uv;
+// 	vec3 normal;
+// 	vec3 tangent;
+// 	vec3 bitangent;
+// 	Vertex(vec3 pos, vec2 uv, vec3 nor, vec3 tan, vec3 bitan) :
+// 			position(pos), uv(uv), normal(nor), tangent(tan), bitangent(bitan) {}
+// };
 
 struct ConstantBufferLayout {
 	glm::mat4 modelMat;

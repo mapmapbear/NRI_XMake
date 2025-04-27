@@ -934,42 +934,28 @@ utils::MeshData utils::ProcessMesh(const aiMesh *mesh) {
 	utils::MeshData meshData;
 	meshData.meshIndex = 0;
 	meshData.materialIndex = mesh->mMaterialIndex;
+
 	for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
-		// glm::vec3 vertex = { mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z };
-		glm::vec3 vertex = glm::make_vec3(reinterpret_cast<float *>(&mesh->mVertices[i]));
-		meshData.vertices.push_back(vertex);
-
-		if (mesh->HasNormals()) {
-			// glm::vec3 normal = { mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z };
-			glm::vec3 normal = glm::make_vec3(reinterpret_cast<float *>(&mesh->mNormals[i]));
-			meshData.normals.push_back(normal);
-		} else {
-			meshData.normals.push_back({ 0, 0, 0 });
-		}
-
+		Vertex v_data = {};
+		v_data.position = glm::make_vec3(reinterpret_cast<float *>(&mesh->mVertices[i]));
 		if (mesh->HasTextureCoords(0)) {
-			// glm::vec2 texCoord = { mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y };
-			glm::vec2 texCoord = glm::make_vec2(reinterpret_cast<float *>(&mesh->mTextureCoords[0][i]));
-			meshData.texCoords.push_back(texCoord);
+			v_data.uv = glm::make_vec2(reinterpret_cast<float *>(&mesh->mTextureCoords[0][i]));
 		} else {
-			meshData.texCoords.push_back({ 0, 0 });
+			v_data.uv = { 0.0, 0.0 };
 		}
 
+		v_data.normal = glm::make_vec3(reinterpret_cast<float *>(&mesh->mNormals[i]));
 		if (mesh->HasTangentsAndBitangents()) {
-			glm::vec3 tangent = glm::make_vec3(reinterpret_cast<float *>(&mesh->mTangents[i]));
-			// glm::vec3 tangent1 = { mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z };
-			// float epsilon = 0.001f;
-			// glm::bvec3 result = glm::equal(tangent, tangent1, epsilon);
-			// bool allEqual = glm::all(result);
-			// std::cout << "All equal: " << allEqual << std::endl;
-			// glm::vec3 bitangent = { mesh->mBitangents[i].x, mesh->mBitangents[i].y, mesh->mBitangents[i].z };
-			glm::vec3 bitangent = glm::make_vec3(reinterpret_cast<float *>(&mesh->mBitangents[i]));
-			meshData.tangents.push_back(tangent);
-			meshData.bitangents.push_back(bitangent);
+			v_data.tangent = glm::make_vec3(reinterpret_cast<float *>(&mesh->mTangents[i]));
+			v_data.bitangent = glm::make_vec3(reinterpret_cast<float *>(&mesh->mBitangents[i]));
 		} else {
-			meshData.tangents.push_back({ 0, 0, 0 });
+			v_data.tangent = { 0.0, 0.0, 0.0 };
+			v_data.bitangent = { 0.0, 0.0, 0.0 };
 		}
+
+		meshData.m_vertexesData.push_back(v_data);
 	}
+
 	for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
 		const aiFace &face = mesh->mFaces[i];
 		for (unsigned int j = 0; j < face.mNumIndices; ++j) {
@@ -1074,13 +1060,18 @@ utils::NodeData utils::ProcessNode(const aiNode *node, const aiScene *scene, Sce
 bool utils::LoadScene(const std::string &path, Scene &scene, bool allowUpdate) {
 	printf("Loading scene '%s'...\n", GetFileName(path));
 
+	unsigned int flags = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_ConvertToLeftHanded | aiProcess_CalcTangentSpace | aiProcess_GenSmoothNormals | aiProcess_GenUVCoords | aiProcess_ValidateDataStructure;
+
+	unsigned int flags1 = aiProcess_Triangulate | aiProcess_MakeLeftHanded | aiProcess_CalcTangentSpace;
 	const aiScene *ai_Scene = aiImportFile(path.c_str(),
-			aiProcess_Triangulate | aiProcess_MakeLeftHanded | aiProcess_CalcTangentSpace);
+			flags1);
 	NodeData rootNode;
 	std::vector<MeshData> &meshes = scene.meshDatas;
 	std::vector<MaterialData> &materials = scene.materialDatas;
-	meshes.resize(ai_Scene->mNumMeshes);
-	for (unsigned int i = 0; i < ai_Scene->mNumMeshes; ++i) {
+	int meshNum = ai_Scene->mNumMeshes;
+	// meshNum = 1;
+	meshes.resize(meshNum);
+	for (unsigned int i = 0; i < meshNum; ++i) {
 		meshes[i] = utils::ProcessMesh(ai_Scene->mMeshes[i]);
 	}
 

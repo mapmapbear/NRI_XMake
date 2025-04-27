@@ -64,6 +64,6 @@ private:
 	uint32_t m_IndexCount = 0;
 	uint32_t m_NumMeshes = 32 * 1024;
 
-	std::vector<Vertex> m_positions;
+	std::vector<utils::Vertex> m_positions;
 	std::vector<uint32_t> m_indices;
 };

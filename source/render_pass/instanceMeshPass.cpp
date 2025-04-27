@@ -460,19 +460,19 @@ void InstanceMeshPass::BuildPipeline() {
 		{
 			vertexAttributeDesc[0].format = nri::Format::RGB32_SFLOAT;
 			vertexAttributeDesc[0].streamIndex = 0;
-			vertexAttributeDesc[0].offset = helper::GetOffsetOf(&Vertex::position);
+			vertexAttributeDesc[0].offset = helper::GetOffsetOf(&utils::Vertex::position);
 			vertexAttributeDesc[0].d3d = { "POSITION", 0 };
 			vertexAttributeDesc[0].vk.location = { 0 };
 
 			vertexAttributeDesc[1].format = nri::Format::RG32_SFLOAT;
 			vertexAttributeDesc[1].streamIndex = 0;
-			vertexAttributeDesc[1].offset = helper::GetOffsetOf(&Vertex::uv);
+			vertexAttributeDesc[1].offset = helper::GetOffsetOf(&utils::Vertex::uv);
 			vertexAttributeDesc[1].d3d = { "TEXCOORD", 0 };
 			vertexAttributeDesc[1].vk.location = { 1 };
 
 			vertexAttributeDesc[2].format = nri::Format::RGB32_SFLOAT;
 			vertexAttributeDesc[2].streamIndex = 0;
-			vertexAttributeDesc[2].offset = helper::GetOffsetOf(&Vertex::normal);
+			vertexAttributeDesc[2].offset = helper::GetOffsetOf(&utils::Vertex::normal);
 			vertexAttributeDesc[2].d3d = { "NORMAL", 0 };
 			vertexAttributeDesc[2].vk.location = { 2 };
 		}
@@ -608,7 +608,7 @@ void InstanceMeshPass::Render(RenderInfo &info, Camera &camera) {
 		nri::VertexBufferDesc vertexBufferDesc = {};
 		vertexBufferDesc.buffer = m_GeometryBuffer;
 		vertexBufferDesc.offset = m_GeometryOffset;
-		vertexBufferDesc.stride = sizeof(Vertex);
+		vertexBufferDesc.stride = sizeof(utils::Vertex);
 		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
 		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
 				*m_ConstantBufferDescriptorSet, nullptr);

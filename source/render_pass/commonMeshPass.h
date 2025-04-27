@@ -15,6 +15,15 @@ public:
 public:
 	int testIndex = 0;
 	void SetTestIndex(int index) { testIndex = index; }
+	void GetMeshNode(utils::NodeData &node) {
+		if (!node.meshIndices.empty()) {
+			m_meshNodes.push_back(node);
+		} else {
+			for (auto child : node.children) {
+				GetMeshNode(child);
+			}
+		}
+	}
 
 private:
 	nri::PipelineLayout *m_PipelineLayout = nullptr;
@@ -69,12 +78,12 @@ private:
 	uint32_t m_IndexCount = 0;
 	uint32_t m_NumMeshes = 32 * 1024;
 
-	std::vector<std::vector<Vertex>> m_positions;
+	std::vector<std::vector<utils::Vertex>> m_positions;
 	std::vector<uint32_t> m_indices;
 
 	uint64_t m_indexDataAlignedTotalSize = 0;
 	uint64_t m_vertexDataTotalSize = 0;
 	std::vector<std::pair<uint64_t, uint64_t>> m_sceneMeshOffsets;
-
+	std::vector<utils::NodeData> m_meshNodes = {};
 	utils::Scene &m_Scene;
 };

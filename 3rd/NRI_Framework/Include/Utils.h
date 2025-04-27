@@ -173,6 +173,17 @@ struct Mesh {
 	inline bool HasMorphTargets() const { return morphTargetNum != 0; }
 };
 
+struct Vertex {
+	glm::vec3 position;
+	glm::vec2 uv;
+	glm::vec3 normal;
+	glm::vec3 tangent;
+	glm::vec3 bitangent;
+	Vertex() = default;
+	Vertex(vec3 pos, vec2 uv, vec3 nor, vec3 tan, vec3 bitan) :
+			position(pos), uv(uv), normal(nor), tangent(tan), bitangent(bitan) {}
+};
+
 struct MeshData {
 	unsigned int meshIndex;
 	std::vector<glm::vec3> vertices;
@@ -181,6 +192,7 @@ struct MeshData {
 	std::vector<glm::vec3> tangents;
 	std::vector<glm::vec3> bitangents;
 	std::vector<unsigned int> indices;
+	std::vector<Vertex> m_vertexesData;
 	uint32_t materialIndex;
 };
 
@@ -217,12 +229,12 @@ struct MeshInstance {
 									   // user controlled array
 };
 
-struct Vertex {
-	float pos[3];
-	vec2 uv;
-	uint32_t N; // 10 10 10 2 unorm
-	uint32_t T; // 10 10 10 2 unorm (.w - handedness)
-};
+// struct Vertex {
+// 	float pos[3];
+// 	vec2 uv;
+// 	uint32_t N; // 10 10 10 2 unorm
+// 	uint32_t T; // 10 10 10 2 unorm (.w - handedness)
+// };
 
 struct MorphVertex {
 	vec4 pos;
