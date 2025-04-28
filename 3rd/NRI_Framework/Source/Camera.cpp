@@ -1,6 +1,7 @@
 // © 2021 NVIDIA Corporation
 
 #include "NRIFramework.h"
+#include "spdlog/spdlog.h"
 
 // to get a perspective matrix with reversed z, simply swap the near and far plane
 glm::mat4 perspectiveFovReverseZLH_ZO(float fov, float width, float height, float zNear, float zFar) {
@@ -85,14 +86,14 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 	}
 
 	// Rotation
-	float angularSpeed = 0.03f * clamp(desc.horizontalFov * 0.5f / 90.0f, 0.0f, 1.0f);
+	float angularSpeed = 10.0f * clamp(desc.horizontalFov * 0.5f / 90.0f, 0.0f, 1.0f);
 
 	state.rotation.x += desc.dYaw * angularSpeed;
 	state.rotation.y += desc.dPitch * angularSpeed;
 
 	state.rotation.x = fmodf(state.rotation.x, 360.0f);
 	state.rotation.y = clamp(state.rotation.y, -90.0f, 90.0f);
-
+	SPDLOG_INFO("camera Rot: X={}, Y={}", state.rotation.x, state.rotation.y);
 	if (desc.isCustomMatrixSet) {
 		state.mViewToWorld = desc.customMatrix;
 		state.rotation.z = 0.0f;
