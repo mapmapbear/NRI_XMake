@@ -431,7 +431,7 @@ void CommonMeshPass::BuildPipeline() {
 		outputMergerDesc.colors = &colorAttachmentDesc;
 		outputMergerDesc.colorNum = 1;
 		outputMergerDesc.depth = depthAttachmentDesc;
-		outputMergerDesc.depthStencilFormat = nri::Format::D16_UNORM;
+		outputMergerDesc.depthStencilFormat = nri::Format::D32_SFLOAT;
 
 		nri::ShaderDesc shaderStages[] = {
 			utils::LoadShader(deviceDesc.graphicsAPI,

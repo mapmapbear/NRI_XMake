@@ -982,7 +982,7 @@ utils::MaterialData utils::ProcessMaterial(const aiMaterial *material, const std
 	}
 
 	int roughness;
-	if(material->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == AI_SUCCESS) {
+	if (material->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == AI_SUCCESS) {
 		matData.roughness = roughness;
 	} else {
 		matData.roughness = 0.0;
@@ -1063,7 +1063,7 @@ bool utils::LoadScene(const std::string &path, Scene &scene, bool allowUpdate) {
 
 	unsigned int flags = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_ConvertToLeftHanded | aiProcess_CalcTangentSpace | aiProcess_GenSmoothNormals | aiProcess_GenUVCoords | aiProcess_ValidateDataStructure;
 
-	unsigned int flags1 = aiProcess_Triangulate | aiProcess_MakeLeftHanded | aiProcess_FlipUVs | aiProcess_CalcTangentSpace; //| aiProcess_FlipWindingOrder;
+	unsigned int flags1 = aiProcess_Triangulate | aiProcess_MakeLeftHanded | aiProcess_FlipUVs | aiProcess_CalcTangentSpace | aiProcess_GenSmoothNormals;
 	const aiScene *ai_Scene = aiImportFile(path.c_str(),
 			flags1);
 	NodeData rootNode;

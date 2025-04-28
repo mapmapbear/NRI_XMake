@@ -93,7 +93,6 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 
 	state.rotation.x = fmodf(state.rotation.x, 360.0f);
 	state.rotation.y = clamp(state.rotation.y, -90.0f, 90.0f);
-	SPDLOG_INFO("camera Rot: X={}, Y={}", state.rotation.x, state.rotation.y);
 	if (desc.isCustomMatrixSet) {
 		state.mViewToWorld = desc.customMatrix;
 		state.rotation.z = 0.0f;
@@ -114,7 +113,7 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 	} else {
 		glm::mat4 projMat = glm::mat4(1.0);
 		if (desc.isReversedZ) {
-			// projMat = glm::perspectiveLH_ZO(glm::radians(desc.horizontalFov), desc.aspectRatio, desc.farZ, desc.nearZ);
+			// projMat = glm::perspectiveLH_ZO(desc.horizontalFov, desc.aspectRatio, desc.farZ, desc.nearZ);
 			projMat = infinitePerspectiveFovReverseZLH_ZO(desc.horizontalFov, 900, 600, desc.nearZ);
 		} else {
 			projMat = glm::perspectiveLH_ZO(desc.horizontalFov, desc.aspectRatio, desc.nearZ, desc.farZ);

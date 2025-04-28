@@ -294,7 +294,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
 		textureDesc.usage = nri::TextureUsageBits::DEPTH_STENCIL_ATTACHMENT;
-		textureDesc.format = nri::Format::D16_UNORM;
+		textureDesc.format = nri::Format::D32_SFLOAT;
 		textureDesc.width = (uint16_t)GetWindowResolution().first;
 		textureDesc.height = (uint16_t)GetWindowResolution().second;
 		textureDesc.mipNum = 1;
@@ -315,7 +315,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 			*m_Device, resourceGroupDesc, m_MemoryAllocations.data()));
 
 	{
-		nri::Texture2DViewDesc textureViewDesc = { .texture = m_DepthTexture, .viewType = nri::Texture2DViewType::DEPTH_STENCIL_ATTACHMENT, .format = nri::Format::D16_UNORM };
+		nri::Texture2DViewDesc textureViewDesc = { .texture = m_DepthTexture, .viewType = nri::Texture2DViewType::DEPTH_STENCIL_ATTACHMENT, .format = nri::Format::D32_SFLOAT };
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(textureViewDesc, m_DepthAttachment));
 	}
@@ -434,6 +434,7 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	desc.aspectRatio = float(GetWindowResolution().first) / float(GetWindowResolution().second);
 	desc.horizontalFov = glm::radians(m_Fov);
 	desc.nearZ = 0.01f;
+	desc.farZ = 100.0f;
 	desc.isReversedZ = true;
 	desc.timeScale = 1.0;
 	GetCameraDescFromInputDevices(desc);

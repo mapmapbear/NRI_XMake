@@ -25,9 +25,8 @@ NRI_ROOT_CONSTANTS( PushConstants, g_PushConstants, 1, 0 );
 float4 main(InputPS input) : SV_Target
 {
     float2 newUV = input.uv;
-    newUV.y = 1.0 - newUV.y;
     float4 color = 0.0;
-    float3 n = normalize(input.normalWS);
+    float3 n = input.normalWS;
 	float3 v = normalize(g_PushConstants.camPos.xyz - input.positionWS);
     Texture2D g_AlbedoTexture = ResourceDescriptorHeap[g_PushConstants.indexGroup.x];
     Texture2D g_NormalTexture = ResourceDescriptorHeap[g_PushConstants.indexGroup.y];
@@ -40,7 +39,7 @@ float4 main(InputPS input) : SV_Target
     normalTS = normalize(normalTS);
     float3 tangent = input.tangentWS;
     float3 normal = n;
-    float3 bitangent = -1.0 * cross(normal, tangent);
+    float3 bitangent = cross(normal, tangent);
     float3 worldNormal = normalize( normalTS.x * tangent + normalTS.y * bitangent + normalTS.z * normal );
     const float3 ligDir = float3(0.5, 0.5, 0.0);
     float metallic = g_PushConstants.pbrParams.x;
