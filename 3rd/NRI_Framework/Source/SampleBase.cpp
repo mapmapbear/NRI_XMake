@@ -389,10 +389,17 @@ void SampleBase::GetCameraDescFromInputDevices(CameraDesc &cameraDesc) {
 	cameraDesc.dYaw = -mouseDelta.x * m_MouseSensitivity;
 	cameraDesc.dPitch = -mouseDelta.y * m_MouseSensitivity;
 
-	if (IsKeyPressed(Key::Right)) {
+	// if (IsKeyPressed(Key::Right)) {
+	// 	cameraDesc.dYaw -= motionScale;
+	// }
+	// if (IsKeyPressed(Key::Left)) {
+	// 	cameraDesc.dYaw += motionScale;
+	// }
+
+	if (IsButtonPressed(Button::Right)) {
 		cameraDesc.dYaw -= motionScale;
 	}
-	if (IsKeyPressed(Key::Left)) {
+	if (IsButtonPressed(Button::Left)) {
 		cameraDesc.dYaw += motionScale;
 	}
 

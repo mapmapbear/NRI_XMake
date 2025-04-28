@@ -2,6 +2,7 @@
 
 #include "NRIFramework.h"
 
+#include <cstddef>
 #include <filesystem>
 #include <functional>
 
@@ -968,27 +969,27 @@ utils::MeshData utils::ProcessMesh(const aiMesh *mesh) {
 utils::MaterialData utils::ProcessMaterial(const aiMaterial *material, const std::string &basePath) {
 	utils::MaterialData matData;
 	aiColor3D diffuse;
-	if (material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse) == AI_SUCCESS) {
-		matData.diffuseColor = { diffuse.r, diffuse.g, diffuse.b };
+	if (material->Get(AI_MATKEY_BASE_COLOR, diffuse) == AI_SUCCESS) {
+		matData.baseColor = { diffuse.r, diffuse.g, diffuse.b, 1.0f };
 	} else {
-		matData.diffuseColor = { 1.0f, 1.0f, 1.0f }; // 默认白色
+		matData.baseColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 默认白色
+	}
+	int metallic;
+	if (material->Get(AI_MATKEY_METALLIC_FACTOR, metallic) == AI_SUCCESS) {
+		matData.metallic = metallic;
+	} else {
+		matData.metallic = 0.0;
 	}
 
-	aiColor3D specular;
-	if (material->Get(AI_MATKEY_COLOR_SPECULAR, specular) == AI_SUCCESS) {
-		matData.specularColor = { specular.r, specular.g, specular.b };
+	int roughness;
+	if(material->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == AI_SUCCESS) {
+		matData.roughness = roughness;
 	} else {
-		matData.specularColor = { 0.0f, 0.0f, 0.0f }; // 默认无镜面
+		matData.roughness = 0.0;
 	}
-
-	float shininess;
-	if (material->Get(AI_MATKEY_SHININESS, shininess) != AI_SUCCESS) {
-		shininess = 32.0f; // 默认值
-	}
-	matData.shininess = shininess;
 
 	aiString texturePath;
-	SPDLOG_INFO("material Name:{}", material->GetName().C_Str());
+	// SPDLOG_INFO("material Name:{}", material->GetName().C_Str());
 	if (material->GetTexture(aiTextureType_BASE_COLOR, 0, &texturePath) == AI_SUCCESS) {
 		matData.textureMap["BASE"] = basePath + "/" + texturePath.C_Str();
 	}
@@ -1062,7 +1063,7 @@ bool utils::LoadScene(const std::string &path, Scene &scene, bool allowUpdate) {
 
 	unsigned int flags = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_ConvertToLeftHanded | aiProcess_CalcTangentSpace | aiProcess_GenSmoothNormals | aiProcess_GenUVCoords | aiProcess_ValidateDataStructure;
 
-	unsigned int flags1 = aiProcess_Triangulate | aiProcess_MakeLeftHanded | aiProcess_CalcTangentSpace;
+	unsigned int flags1 = aiProcess_Triangulate | aiProcess_MakeLeftHanded | aiProcess_FlipUVs | aiProcess_CalcTangentSpace; //| aiProcess_FlipWindingOrder;
 	const aiScene *ai_Scene = aiImportFile(path.c_str(),
 			flags1);
 	NodeData rootNode;
@@ -1100,12 +1101,12 @@ bool utils::LoadScene(const std::string &path, Scene &scene, bool allowUpdate) {
 				outputOptions.setFileName(dst_img.c_str());
 				const int numMipmaps = image.countMipmaps();
 				if (!context.outputHeader(image, 1, compressionOptions, outputOptions)) {
-					std::cerr << std::format("Writing the DDS header failed!: {}\n", src_img);
+					SPDLOG_ERROR("Writing the DDS header failed!: {}\n", src_img);
 					return 1;
 				}
 
 				if (!context.compress(image, 0 /* face */, 0, compressionOptions, outputOptions)) {
-					std::cerr << "Compressing and writing the DDS file failed!";
+					SPDLOG_ERROR("Compressing and writing the DDS file failed!");
 					return 1;
 				}
 			}

@@ -197,15 +197,10 @@ struct MeshData {
 };
 
 struct MaterialData {
-	glm::vec3 diffuseColor;
-	glm::vec3 specularColor;
+	glm::vec4 baseColor;
+	float metallic;
+	float roughness;
 	float shininess;
-	// std::string baseColorTexPath;
-	// std::string normalTexPath;
-	// std::string roughnessTexPath;
-	// std::string emissionTexPath;
-	// std::string metallicTexPath;
-	// std::string aoTexPath;
 	std::unordered_map<std::string, std::string> textureMap;
 };
 

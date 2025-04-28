@@ -10,8 +10,11 @@
 #include <vector>
 
 struct CBlock {
+	glm::mat4 modelMat;
 	glm::vec4 camPos;
 	glm::vec4 testVec;
+	glm::vec4 baseColor;
+	glm::vec4 pbrParams;
 	uint32_t index[4];
 };
 
@@ -232,7 +235,7 @@ void CommonMeshPass::BindMemory() {
 				NRI.CreateTexture2DView(texture2DViewDesc, m_textureViews[i]));
 		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
-
+	m_brdfTexIndex = m_renderer->texViewOffset;
 	nri::Texture2DViewDesc texture2DViewDesc1 = { .texture = m_renderer->m_DiffuseIrradianceTex, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_CUBE, .format = m_renderer->diffuseIrradianceTex.GetFormat(), .mipOffset = 0, .mipNum = m_renderer->diffuseIrradianceTex.GetMipNum(), .layerOffset = 0, .layerNum = 6 };
 
 	NRI_ABORT_ON_FAILURE(
@@ -348,7 +351,7 @@ void CommonMeshPass::BuildPipeline() {
 		};
 
 		nri::RootConstantDesc rootConstant = { 1, sizeof(CBlock),
-			nri::StageBits::FRAGMENT_SHADER };
+			nri::StageBits::ALL };
 
 		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
 		pipelineLayoutDesc.descriptorSetNum =
@@ -487,55 +490,67 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			*m_ConstantBuffer, 0,
 			sizeof(ConstantBufferLayout));
 
-	glm::mat4 m1 = glm::mat4(1.0);
-	for (uint32_t meshIndex = 0; meshIndex < m_meshNodes.size(); ++meshIndex) {
-		m1 = m_meshNodes.at(meshIndex).globalTransform;
-		const glm::mat4 p = camera.state.mViewToClip;
-		const glm::vec3 cameraPos = camera.state.globalPosition;
-		if (commonConstants) {
-			commonConstants->modelMat = m1;
-			commonConstants->viewMat = camera.state.mWorldToView;
-			commonConstants->projectMat = p;
-			NRI.UnmapBuffer(*m_ConstantBuffer);
-		}
+	const glm::mat4 p = camera.state.mViewToClip;
+	const glm::vec3 cameraPos = camera.state.globalPosition;
+	if (commonConstants) {
+		commonConstants->modelMat = glm::mat4(1.0);
+		commonConstants->viewMat = camera.state.mWorldToView;
+		commonConstants->projectMat = p;
+		NRI.UnmapBuffer(*m_ConstantBuffer);
+	}
 
-		for (uint16_t i = 0; i < m_meshNodes[i].meshIndices.size(); ++i) {
-			CBlock block = {};
-			block.camPos = vec4(cameraPos, 1.0);
-			uint32_t index = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex;
-			uint32_t index1 = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex1;
-			uint32_t index2 = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex2;
-			block.index[0] = index; //m_renderer->testIndex;
-			block.index[1] = index1;
-			block.index[2] = index2;
-			block.index[3] = 0;
-			block.testVec = { m_renderer->testRoughness, m_renderer->testMaterial, 0.0, 0.0 };
-			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+	{
+		helper::Annotation annotation(NRI, info.cmdBuffer, "SimpleModelMesh");
 
-			uint32_t indexOffset = m_sceneMeshOffsets.at(i).first;
-			uint32_t vertexOffset = m_sceneMeshOffsets.at(i).second;
-			uint32_t indexCount = m_Scene.meshDatas.at(i).indices.size();
-			NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer, indexOffset,
-					nri::IndexType::UINT32);
-			nri::VertexBufferDesc vertexBufferDesc = {};
-			vertexBufferDesc.buffer = m_GeometryBuffer;
-			vertexBufferDesc.offset = vertexOffset;
-			vertexBufferDesc.stride = sizeof(utils::Vertex);
-			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
-			NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
-					*m_ConstantBufferDescriptorSet, nullptr);
-			NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_TextureDescriptorSet,
-					nullptr);
-			{
-				const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
-					600.f, 0.0f, 1.0f };
-				NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
+		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
+		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
+		glm::mat4 m1 = glm::mat4(1.0);
+		for (uint32_t meshIndex = 0; meshIndex < m_meshNodes.size(); ++meshIndex) {
+			m1 = m_meshNodes.at(meshIndex).globalTransform;
 
-				nri::Rect scissor = { 0, 0, 900, 600 };
-				NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
+			for (uint16_t i = 0; i < m_meshNodes[meshIndex].meshIndices.size(); ++i) {
+				CBlock block = {};
+				block.modelMat = m1;
+				block.camPos = vec4(cameraPos, 1.0);
+				uint32_t index = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex;
+				uint32_t index1 = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex1;
+				uint32_t index2 = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex2;
+				block.index[0] = index; //m_renderer->testIndex;
+				block.index[1] = index1;
+				block.index[2] = index2;
+				block.index[3] = m_brdfTexIndex;
+				utils::MaterialData matData = m_Scene.materialDatas.at(m_Scene.meshDatas.at(i).materialIndex);
+				block.baseColor = matData.baseColor;
+				block.pbrParams = { matData.metallic, matData.roughness, 0.0, 0.0 };
+				block.testVec = { m_renderer->testRoughness, m_renderer->testMaterial, 0.0, 0.0 };
+
+				NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+
+				uint32_t indexOffset = m_sceneMeshOffsets.at(m_meshNodes[meshIndex].meshIndices[i]).first;
+				uint32_t vertexOffset = m_sceneMeshOffsets.at(m_meshNodes[meshIndex].meshIndices[i]).second;
+				uint32_t indexCount = m_Scene.meshDatas.at(m_meshNodes[meshIndex].meshIndices[i]).indices.size();
+				NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer, indexOffset,
+						nri::IndexType::UINT32);
+				nri::VertexBufferDesc vertexBufferDesc = {};
+				vertexBufferDesc.buffer = m_GeometryBuffer;
+				vertexBufferDesc.offset = vertexOffset;
+				vertexBufferDesc.stride = sizeof(utils::Vertex);
+				NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+				NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
+						*m_ConstantBufferDescriptorSet, nullptr);
+				NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_TextureDescriptorSet,
+						nullptr);
+				{
+					const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
+						600.f, 0.0f, 1.0f };
+					NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
+
+					nri::Rect scissor = { 0, 0, 900, 600 };
+					NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
+				}
+				uint32_t instanceCount = 1;
+				NRI.CmdDrawIndexed(info.cmdBuffer, { indexCount, instanceCount, 0, 0, 0 });
 			}
-			uint32_t instanceCount = 1;
-			NRI.CmdDrawIndexed(info.cmdBuffer, { indexCount, instanceCount, 0, 0, 0 });
 		}
 	}
 

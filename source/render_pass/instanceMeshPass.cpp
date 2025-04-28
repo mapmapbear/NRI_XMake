@@ -489,7 +489,8 @@ void InstanceMeshPass::BuildPipeline() {
 
 		nri::RasterizationDesc rasterizationDesc = {};
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
-		rasterizationDesc.cullMode = nri::CullMode::NONE;
+		rasterizationDesc.cullMode = nri::CullMode::BACK;
+		rasterizationDesc.frontCounterClockwise = true;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 #ifdef HDR_ENABLE

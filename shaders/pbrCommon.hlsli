@@ -112,7 +112,7 @@ float3 DirectionalLight (float3 worldPos, float3 N, float3 V, float3 lightDir, f
 float3 IBL (float3 N, float3 V, float3 R, float3 albedo, float metallic, float roughness, float scalarF0, in Texture2D<float4> SplitSum, in TextureCube<float4> DiffuseIBL, in TextureCube<float4> SpecularIBL, in SamplerState LinearWrap, in SamplerState LinearClamp)
 {
     roughness = clamp(roughness, 0.01f, 0.99f);
-    
+    // albedo = 1.0;
     float3 ambient = 0.0;
     float3 F0 = float3(scalarF0.xxx);
     F0 = lerp(F0, albedo, metallic);
@@ -137,6 +137,7 @@ float3 IBL (float3 N, float3 V, float3 R, float3 albedo, float metallic, float r
     float3 FmsEms = Ems * FssEss * F_avg / (1.0 - F_avg * Ems);
     float3 k_D = c_diff * (1.0 - FssEss - FmsEms);
     ambient = FssEss * radiance + (FmsEms + k_D) * irradiance;
+    // ambient = radiance;
 
     return ambient;
 }

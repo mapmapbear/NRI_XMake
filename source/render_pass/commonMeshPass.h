@@ -86,4 +86,6 @@ private:
 	std::vector<std::pair<uint64_t, uint64_t>> m_sceneMeshOffsets;
 	std::vector<utils::NodeData> m_meshNodes = {};
 	utils::Scene &m_Scene;
+
+	uint32_t m_brdfTexIndex = 0;
 };

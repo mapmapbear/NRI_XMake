@@ -8,6 +8,15 @@ NRI_RESOURCE( cbuffer, CommonConstants, b, 0, 0 )
 	float4x4 projectMat;
 };
 
+struct PushConstants
+{
+    float4x4 modelMat;
+    float4 camPos;
+    float4 testVec;
+    uint4 indexGroup;
+};
+NRI_ROOT_CONSTANTS( PushConstants, g_PushConstants, 1, 0 );
+
 struct inputVS
 {
     float3 in_position : POSITION0;
@@ -68,12 +77,12 @@ float4x4 inverse(float4x4 m) {
 outputVS main(inputVS input)
 {
     outputVS output;
-    float4x4 testMat = modelMat;
+    float4x4 testMat = g_PushConstants.modelMat;
     float4x4 vpMat = mul(viewMat, testMat);
 	float4x4 mvpMat = mul(projectMat, vpMat);
 	output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));
     output.texCoord = input.in_texcoord;
-    float4x4 normalMatrix = transpose(inverse(modelMat));
+    float4x4 normalMatrix = transpose(inverse(g_PushConstants.modelMat));
     output.normalWS  = mul(normalMatrix, float4(input.in_normal, 1.0)).xyz;
     // output.normalWS  = input.in_normal;
     output.positionWS = mul(testMat, float4(input.in_position, 1.0)).xyz; 

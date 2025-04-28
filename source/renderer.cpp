@@ -21,7 +21,7 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	descriptorPoolDesc.constantBufferMaxNum = BUFFERED_FRAME_MAX_NUM;
 	descriptorPoolDesc.storageBufferMaxNum = 2;
 	descriptorPoolDesc.structuredBufferMaxNum = 2;
-	descriptorPoolDesc.textureMaxNum = 80;
+	descriptorPoolDesc.textureMaxNum = 100;
 	descriptorPoolDesc.samplerMaxNum = 10;
 
 	NRI_ABORT_ON_FAILURE(NRI.CreateDescriptorPool(*m_Device, descriptorPoolDesc,
@@ -36,7 +36,8 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	utils::LoadTexture(utils::GetFullPath("brdf.dds", utils::DataFolder::TEXTURES), BRDFTex, true);
 
 	std::string sceneFile = utils::GetFullPath("Camera/Camera.gltf", utils::DataFolder::ROOT);
-	sceneFile = utils::GetFullPath("meshes/orrery/scene.gltf", utils::DataFolder::ROOT);
+	//sceneFile = utils::GetFullPath("meshes/orrery/scene.gltf", utils::DataFolder::ROOT);
+	sceneFile = utils::GetFullPath("Sponza/sponza.gltf", utils::DataFolder::ROOT);
 	NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene, false));
 	std::string diffuseIrrTex = "data/Textures/diffuseIrradiance.dds";
 	std::string specularIrrTex = "data/Textures/specularIrradiance.dds";
