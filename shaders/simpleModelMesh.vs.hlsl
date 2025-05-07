@@ -85,6 +85,6 @@ outputVS main(inputVS input)
     float4x4 normalMatrix = transpose(inverse(g_PushConstants.modelMat));
     output.normalWS  = normalize(mul(normalMatrix, float4(input.in_normal, 0.0)).xyz);
     output.positionWS = mul(testMat, float4(input.in_position, 1.0)).xyz; 
-    output.tangentWS = mul(normalMatrix, float4(input.in_tangent, 1.0)).xyz; 
+    output.tangentWS = normalize(mul(normalMatrix, float4(input.in_tangent, 1.0))).xyz; 
     return output;
 }
