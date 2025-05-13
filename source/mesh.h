@@ -25,10 +25,11 @@ private:
 };
 
 class Material {
-	std::unique_ptr<Texture> m_BaseTexture;
-	std::unique_ptr<Texture> m_NormalTexture;
-	std::unique_ptr<Texture> m_MetallicTexture;
-	bool IsTransparent;
+public:
+	std::shared_ptr<Texture> m_BaseTexture;
+	std::shared_ptr<Texture> m_NormalTexture;
+	std::shared_ptr<Texture> m_MetallicTexture;
+	bool IsTransparent = false;
 };
 
 class Mesh {

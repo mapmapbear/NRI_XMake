@@ -2,6 +2,7 @@
 #include "Camera.h"
 #include "NRIDescs.h"
 #include "NRIFramework.h"
+#include "texture.h"
 #include <future>
 #include <memory>
 
@@ -33,8 +34,12 @@ public:
 	void InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain);
 
 	utils::Texture &GetDefaultBlackTex() { return defaultBlackTex; }
-	utils::Texture &GetDefaultWhiteTex() { return deaflutWhiteTex; }
+	utils::Texture &GetDefaultWhiteTex() { return defaultWhiteTex; }
 	utils::Texture &GetDefaultNormalTex() { return defaultNormalTex; }
+
+	std::shared_ptr<Texture> GetDefaultBlackTexPtr() { return m_DefaultBlackTex; }
+	std::shared_ptr<Texture> GetDefaultWhiteTexPtr() { return m_DefaultWhiteTex; }
+	std::shared_ptr<Texture> GetDefaultNormalTexPtr() { return m_DefaultNormalTex; }
 
 public:
 	int testIndex = 0;
@@ -58,7 +63,7 @@ public:
 
 public:
 	utils::Texture defaultBlackTex;
-	utils::Texture deaflutWhiteTex;
+	utils::Texture defaultWhiteTex;
 	utils::Texture defaultNormalTex;
 	utils::Texture diffuseIrradianceTex;
 	utils::Texture specularIrradianceTex;
@@ -67,6 +72,10 @@ public:
 	nri::Texture *m_DiffuseIrradianceTex = nullptr;
 	nri::Texture *m_SpecularIrradianceTex = nullptr;
 	nri::Texture *m_BRDFTex = nullptr;
+
+	std::shared_ptr<Texture> m_DefaultBlackTex = nullptr;
+	std::shared_ptr<Texture> m_DefaultWhiteTex = nullptr;
+	std::shared_ptr<Texture> m_DefaultNormalTex = nullptr;
 
 	std::vector<nri::Memory *> m_MemoryAllocations;
 

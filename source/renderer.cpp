@@ -1,6 +1,8 @@
 #include "renderer.h"
 #include "Camera.h"
 #include "Utils.h"
+#include "buffer.h"
+#include "mesh.h"
 #include "render_pass/commonMeshPass.h"
 #include "render_pass/gridRenderPass.h"
 #include "render_pass/instanceMeshPass.h"
@@ -30,7 +32,7 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 
 	// Init Defalut Resource
 	utils::LoadTexture(utils::GetFullPath("black.png", utils::DataFolder::TEXTURES), defaultBlackTex);
-	utils::LoadTexture(utils::GetFullPath("white.png", utils::DataFolder::TEXTURES), deaflutWhiteTex);
+	utils::LoadTexture(utils::GetFullPath("white.png", utils::DataFolder::TEXTURES), defaultWhiteTex);
 	utils::LoadTexture(utils::GetFullPath("normal.png", utils::DataFolder::TEXTURES), defaultNormalTex);
 
 	utils::LoadTexture(utils::GetFullPath("brdf.dds", utils::DataFolder::TEXTURES), BRDFTex, true);
@@ -97,6 +99,57 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture(*m_Device, textureDesc, m_BRDFTex));
+	}
+
+	{
+		nri::TextureDesc textureDesc = {};
+		textureDesc.type = nri::TextureType::TEXTURE_2D;
+		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
+		textureDesc.format = defaultBlackTex.GetFormat();
+		textureDesc.width = defaultBlackTex.GetWidth();
+		textureDesc.height = defaultBlackTex.GetHeight();
+		textureDesc.mipNum = 1;
+
+		nri::Texture2DViewDesc texViewDesc = {};
+		texViewDesc.viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D;
+		textureDesc.format = defaultBlackTex.GetFormat();
+
+		m_DefaultBlackTex = std::make_shared<Texture>();
+		m_DefaultBlackTex->Create(this, textureDesc, texViewDesc);
+	}
+
+	{
+		nri::TextureDesc textureDesc = {};
+		textureDesc.type = nri::TextureType::TEXTURE_2D;
+		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
+		textureDesc.format = defaultWhiteTex.GetFormat();
+		textureDesc.width = defaultWhiteTex.GetWidth();
+		textureDesc.height = defaultWhiteTex.GetHeight();
+		textureDesc.mipNum = 1;
+
+		nri::Texture2DViewDesc texViewDesc = {};
+		texViewDesc.viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D;
+		textureDesc.format = defaultWhiteTex.GetFormat();
+
+		m_DefaultWhiteTex = std::make_shared<Texture>();
+		m_DefaultWhiteTex->Create(this, textureDesc, texViewDesc);
+	}
+
+	{
+		nri::TextureDesc textureDesc = {};
+		textureDesc.type = nri::TextureType::TEXTURE_2D;
+		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
+		textureDesc.format = defaultNormalTex.GetFormat();
+		textureDesc.width = defaultNormalTex.GetWidth();
+		textureDesc.height = defaultNormalTex.GetHeight();
+		textureDesc.mipNum = 1;
+
+		nri::Texture2DViewDesc texViewDesc = {};
+		texViewDesc.viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D;
+		textureDesc.format = defaultNormalTex.GetFormat();
+
+		m_DefaultNormalTex = std::make_shared<Texture>();
+		m_DefaultNormalTex->Create(this, textureDesc, texViewDesc);
 	}
 
 	std::vector<nri::Texture *> textureArray = { m_DiffuseIrradianceTex, m_SpecularIrradianceTex, m_BRDFTex };
@@ -172,10 +225,39 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	textureData2.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
 	textureData2.planes = nri::PlaneBits::ALL;
 
-	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData, textureData1, textureData2 };
+	nri::TextureSubresourceUploadDesc subResArray4;
+	defaultBlackTex.GetSubresource(subResArray4, 0);
+	nri::TextureUploadDesc textureData3;
+	textureData3.subresources = &subResArray4;
+	textureData3.texture = m_DefaultBlackTex->GetTexture();
+	textureData3.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
+	textureData3.planes = nri::PlaneBits::ALL;
+
+	nri::TextureSubresourceUploadDesc subResArray5;
+	defaultWhiteTex.GetSubresource(subResArray5, 0);
+	nri::TextureUploadDesc textureData4;
+	textureData4.subresources = &subResArray5;
+	textureData4.texture = m_DefaultWhiteTex->GetTexture();
+	textureData4.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
+	textureData4.planes = nri::PlaneBits::ALL;
+
+	nri::TextureSubresourceUploadDesc subResArray6;
+	defaultNormalTex.GetSubresource(subResArray6, 0);
+	nri::TextureUploadDesc textureData5;
+	textureData5.subresources = &subResArray6;
+	textureData5.texture = m_DefaultNormalTex->GetTexture();
+	textureData5.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
+	textureData5.planes = nri::PlaneBits::ALL;
+
+	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData, textureData1, textureData2, textureData3, textureData4, textureData5 };
 	NRI_ABORT_ON_FAILURE(NRI.UploadData(*m_GraphicsQueue, texUploadDescArray.data(), texUploadDescArray.size(),
 			nullptr,
 			0));
+
+	std::unique_ptr<Mesh> mesh = std::make_unique<Mesh>();
+	std::string meshFile = utils::GetFullPath("USD_Sponza/sponza.usdc", utils::DataFolder::ROOT);
+	//meshFile = utils::GetFullPath("Sponza/sponza.gltf", utils::DataFolder::ROOT);
+	mesh->LoadFromUSD(meshFile, this);
 
 	skyPass = std::make_shared<SkyRenderPass>(this);
 	gridPass = std::make_shared<GridRenderPass>(this);

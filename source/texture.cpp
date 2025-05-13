@@ -1,10 +1,10 @@
 #include "texture.h"
 #include "renderer.h"
 
-void Texture::Create(Renderer *renderer, nri::TextureDesc *texDesc, nri::Texture2DViewDesc *viewDesc) {
-	if (texDesc) {
+void Texture::Create(Renderer *renderer, nri::TextureDesc &texDesc, nri::Texture2DViewDesc &viewDesc) {
+	if (texDesc.format != nri::Format::UNKNOWN) {
 		NRI_ABORT_ON_FAILURE(
-				renderer->GetNRI().CreateTexture(*renderer->GetRenderDevice(), *texDesc, m_texture));
+				renderer->GetNRI().CreateTexture(*renderer->GetRenderDevice(), texDesc, m_texture));
 
 		nri::ResourceGroupDesc resourceGroupDesc = {};
 		resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
@@ -14,9 +14,9 @@ void Texture::Create(Renderer *renderer, nri::TextureDesc *texDesc, nri::Texture
 				&m_mem));
 	}
 
-	if (viewDesc) {
-		viewDesc->texture = m_texture;
+	if (viewDesc.format != nri::Format::UNKNOWN) {
+		viewDesc.texture = m_texture;
 		NRI_ABORT_ON_FAILURE(
-				renderer->GetNRI().CreateTexture2DView(*viewDesc, m_view));
+				renderer->GetNRI().CreateTexture2DView(viewDesc, m_view));
 	}
 }
