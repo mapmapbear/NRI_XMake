@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include "assimp/camera.h"
 #include <unordered_map>
 #undef OPAQUE
 #undef TRANSPARENT
@@ -22,6 +23,8 @@ struct Scene;
 struct MeshData;
 struct MaterialData;
 struct NodeData;
+struct CameraData;
+struct LightData;
 
 typedef std::vector<std::vector<uint8_t>> ShaderCodeStorage;
 typedef void *Mip;
@@ -68,11 +71,13 @@ void LoadTextureFromMemory(nri::Format format, uint32_t width, uint32_t height,
 bool LoadTextureFromMemory(const std::string &name, const uint8_t *data,
 		int dataSize, Texture &texture,
 		bool computeAvgColorAndAlphaMode);
-bool LoadScene(const std::string &path, Scene &scene, bool allowUpdate);
+bool LoadScene(const std::string &path, Scene &scene, bool allowUpdate = false);
 
 MeshData ProcessMesh(const aiMesh *mesh);
 MaterialData ProcessMaterial(const aiMaterial *material, const std::string &basePath);
 NodeData ProcessNode(const aiNode *node, const aiScene *scene, Scene &outScene, NodeData *parentNode = nullptr);
+LightData ProcessLights(aiLight *light);
+CameraData ProcessCamers(aiCamera* camera);
 
 struct Texture {
 	std::string name;
@@ -105,7 +110,7 @@ struct Texture {
 	inline uint16_t GetHeight() const { return height; }
 
 	inline uint16_t GetDepth() const { return depth; }
-	inline nri::Format GetFormat(bool isDDS = false) const {
+	inline nri::Format GetFormat() const {
 		return format;
 	}
 	static nri::Format ConvertDXGIFormatToNRI(tinyddsloader::DDSFile::DXGIFormat format);
@@ -191,7 +196,7 @@ struct MeshData {
 	std::vector<glm::vec2> texCoords;
 	std::vector<glm::vec3> tangents;
 	std::vector<glm::vec3> bitangents;
-	std::vector<unsigned int> indices;
+	std::vector<uint32_t> indices;
 	std::vector<Vertex> m_vertexesData;
 	uint32_t materialIndex;
 };
@@ -213,6 +218,34 @@ struct NodeData {
 	std::vector<unsigned int> meshIndices;
 	bool isRoot = false;
 };
+
+struct LightData
+{
+	glm::vec3 position;
+	glm::vec3 color;
+	glm::vec3 direction;
+	glm::vec3 attenuation;
+	float range;
+	float intensity;
+	float angleInner;
+	float angleOuter;
+	bool isSpotLight = false;
+	bool isDirectionalLight = false;
+	bool isPointLight = false;
+};
+
+struct CameraData
+{
+	glm::vec3 position;
+	glm::vec3 direction;
+	glm::vec3 up;
+	float fov;
+	float aspect;
+	float nearPlane;
+	float farPlane;
+	float orthogonalize;
+};
+
 
 // per mesh instance data
 struct MeshInstance {
@@ -333,6 +366,8 @@ struct Scene {
 	std::vector<MaterialData> materialDatas;
 	std::vector<MeshData> meshDatas;
 	std::vector<NodeData> nodeDatas;
+	std::vector<LightData> lightDatas;
+	std::vector<CameraData> cameraDatas;
 	NodeData rootNode;
 
 	uint32_t totalInstancedPrimitivesNum = 0;

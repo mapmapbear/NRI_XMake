@@ -13,8 +13,10 @@
 
 #include "Detex/stb_image.h"
 
+#include "assimp/light.h"
 #include "assimp/material.h"
 #include "assimp/postprocess.h"
+#include "assimp/types.h"
 #include "glm/gtc/type_ptr.hpp"
 #include "glm/vector_relational.hpp"
 #include "tinyddsloader.h"
@@ -741,7 +743,7 @@ bool utils::LoadTextureFromMemory(const std::string &name, const uint8_t *data, 
 	stbi_image_free(image);
 
 	const int kMipNum = 1;
-	// PostProcessTexture(name, texture, computeAvgColorAndAlphaMode, dTexture, kMipNum);
+	PostProcessTexture(name, texture, computeAvgColorAndAlphaMode, dTexture, kMipNum);
 	return true;
 }
 
@@ -760,11 +762,11 @@ bool utils::LoadTexture(const std::string &path, Texture &texture, bool isDDS, b
 		std::string newPath = changeExtension(path);
 
 		texture.data.Load(newPath.c_str());
-		texture.width = texture.data.GetWidth();
-		texture.height = texture.data.GetHeight();
-		texture.depth = texture.data.GetDepth();
-		texture.mipNum = texture.data.GetMipCount();
-		texture.layerNum = texture.data.GetArraySize();
+		texture.width = (uint16_t)texture.data.GetWidth();
+		texture.height = (uint16_t)texture.data.GetHeight();
+		texture.depth = (uint16_t)texture.data.GetDepth();
+		texture.mipNum = (uint8_t)texture.data.GetMipCount();
+		texture.layerNum = (uint16_t)texture.data.GetArraySize();
 		texture.format = utils::Texture::ConvertDXGIFormatToNRI(texture.data.GetFormat());
 		texture.initialized = true;
 		texture.isDDS = true;
@@ -963,7 +965,7 @@ utils::MeshData utils::ProcessMesh(const aiMesh *mesh) {
 			meshData.indices.push_back(face.mIndices[j]);
 		}
 	}
-	return meshData;
+	return std::move(meshData);
 }
 
 utils::MaterialData utils::ProcessMaterial(const aiMaterial *material, const std::string &basePath) {
@@ -974,18 +976,18 @@ utils::MaterialData utils::ProcessMaterial(const aiMaterial *material, const std
 	} else {
 		matData.baseColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 默认白色
 	}
-	int metallic;
+	float metallic;
 	if (material->Get(AI_MATKEY_METALLIC_FACTOR, metallic) == AI_SUCCESS) {
 		matData.metallic = metallic;
 	} else {
-		matData.metallic = 0.0;
+		matData.metallic = 0.0f;
 	}
 
-	int roughness;
+	float roughness;
 	if (material->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == AI_SUCCESS) {
 		matData.roughness = roughness;
 	} else {
-		matData.roughness = 0.0;
+		matData.roughness = 0.0f;
 	}
 
 	aiString texturePath;
@@ -1016,7 +1018,7 @@ utils::MaterialData utils::ProcessMaterial(const aiMaterial *material, const std
 
 	printf("\n\n");
 
-	return matData;
+	return std::move(matData);
 }
 
 glm::mat4 ConvertToGLMMat4(const aiMatrix4x4 &mat) {
@@ -1055,7 +1057,35 @@ utils::NodeData utils::ProcessNode(const aiNode *node, const aiScene *scene, Sce
 	for (unsigned int i = 0; i < node->mNumChildren; ++i) {
 		nodeData.children.push_back(utils::ProcessNode(node->mChildren[i], scene, outScene, &nodeData));
 	}
-	return nodeData;
+	return std::move(nodeData);
+}
+
+utils::LightData utils::ProcessLights(aiLight *light) {
+	LightData ld;
+	ld.position = glm::make_vec3(reinterpret_cast<float *>(const_cast<aiVector3D *>(&light->mPosition)));
+	ld.color = glm::make_vec3(reinterpret_cast<float *>(const_cast<aiColor3D *>(&light->mColorDiffuse)));
+	ld.direction = vec3(light->mDirection[0], light->mDirection[1], light->mDirection[2]);
+	ld.attenuation = glm::vec3(light->mAttenuationConstant, light->mAttenuationLinear, light->mAttenuationQuadratic);
+	ld.angleInner = light->mAngleInnerCone;
+	ld.angleOuter = light->mAngleOuterCone;
+	ld.isDirectionalLight = light->mType == aiLightSource_DIRECTIONAL ? true : false;
+	ld.isPointLight = light->mType == aiLightSource_POINT ? true : false;
+	ld.isSpotLight = light->mType == aiLightSource_SPOT ? true : false;
+	ld.range = 1000.0f;
+	return std::move(ld);
+}
+
+utils::CameraData utils::ProcessCamers(aiCamera *camera) {
+	CameraData cd;
+	cd.position = glm::make_vec3(reinterpret_cast<float *>(&camera->mPosition));
+	aiVector3D direction = camera->mPosition - camera->mLookAt;
+	cd.direction = glm::make_vec3(reinterpret_cast<float *>(&direction));
+	cd.up = glm::make_vec3(reinterpret_cast<float *>(&camera->mUp));
+	cd.fov = camera->mHorizontalFOV;
+	cd.nearPlane = camera->mClipPlaneNear;
+	cd.farPlane = camera->mClipPlaneFar;
+	cd.orthogonalize = camera->mOrthographicWidth;
+	return std::move(cd);
 }
 
 bool utils::LoadScene(const std::string &path, Scene &scene, bool allowUpdate) {
@@ -1072,7 +1102,7 @@ bool utils::LoadScene(const std::string &path, Scene &scene, bool allowUpdate) {
 	int meshNum = ai_Scene->mNumMeshes;
 	// meshNum = 1;
 	meshes.resize(meshNum);
-	for (unsigned int i = 0; i < meshNum; ++i) {
+	for (int i = 0; i < meshNum; ++i) {
 		meshes[i] = utils::ProcessMesh(ai_Scene->mMeshes[i]);
 	}
 

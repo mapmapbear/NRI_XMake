@@ -60,7 +60,7 @@ void CommonMeshPass::AllocGPUMemory() {
 				nri::TextureDesc textureDesc = {};
 				textureDesc.type = nri::TextureType::TEXTURE_2D;
 				textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-				textureDesc.format = m_texureDatas[texIndex].GetFormat(true);
+				textureDesc.format = m_texureDatas[texIndex].GetFormat();
 				textureDesc.width = m_texureDatas[texIndex].GetWidth();
 				textureDesc.height = m_texureDatas[texIndex].GetHeight();
 				textureDesc.mipNum = 1; //m_texureDatas[i].GetMipNum();
@@ -91,7 +91,7 @@ void CommonMeshPass::AllocGPUMemory() {
 				nri::TextureDesc textureDesc = {};
 				textureDesc.type = nri::TextureType::TEXTURE_2D;
 				textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-				textureDesc.format = m_texureDatas[texIndex].GetFormat(true);
+				textureDesc.format = m_texureDatas[texIndex].GetFormat();
 				textureDesc.width = m_texureDatas[texIndex].GetWidth();
 				textureDesc.height = m_texureDatas[texIndex].GetHeight();
 				textureDesc.mipNum = 1; //m_texureDatas[i].GetMipNum();
@@ -123,7 +123,7 @@ void CommonMeshPass::AllocGPUMemory() {
 				nri::TextureDesc textureDesc = {};
 				textureDesc.type = nri::TextureType::TEXTURE_2D;
 				textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-				textureDesc.format = m_texureDatas[texIndex].GetFormat(true);
+				textureDesc.format = m_texureDatas[texIndex].GetFormat();
 				textureDesc.width = m_texureDatas[texIndex].GetWidth();
 				textureDesc.height = m_texureDatas[texIndex].GetHeight();
 				textureDesc.mipNum = 1; //m_texureDatas[i].GetMipNum();
@@ -157,11 +157,13 @@ void CommonMeshPass::AllocGPUMemory() {
 	uint64_t previousVertexOffset = 0;
 	uint64_t previousIndexAndVertexSize = 0;
 
+	m_Scene.meshes.resize(m_Scene.meshDatas.size());
+
 	for (size_t i = 0; i < m_Scene.meshDatas.size(); ++i) {
 		utils::MeshData &node = m_Scene.meshDatas.at(i);
+		utils::Mesh &staticMesh = m_Scene.meshes.at(i);
 		m_positions.push_back(node.m_vertexesData);
-		const uint64_t indexDataSize = helper::GetByteSizeOf(node.indices);
-		const uint64_t indexDataAlignedSize = helper::Align(indexDataSize, 32);
+		const uint64_t indexDataAlignedSize = helper::Align(helper::GetByteSizeOf(node.indices), 32);
 		const uint64_t vertexDataSize = helper::GetByteSizeOf(node.m_vertexesData);
 
 		// Compute offsets for the current mesh
@@ -170,7 +172,10 @@ void CommonMeshPass::AllocGPUMemory() {
 
 		// Store the offsets
 		m_sceneMeshOffsets.push_back({ indexOffset, vertexOffset });
-
+		staticMesh.indexOffset = indexOffset;
+		staticMesh.vertexOffset = vertexOffset;
+		staticMesh.indexNum = node.indices.size();
+		staticMesh.vertexNum = node.vertices.size();
 		// Update running totals
 		m_indexDataAlignedTotalSize += indexDataAlignedSize;
 		m_vertexDataTotalSize += vertexDataSize;
@@ -201,7 +206,7 @@ void CommonMeshPass::BindMemory() {
 
 	nri::ResourceGroupDesc resourceGroupDesc = {};
 	resourceGroupDesc.memoryLocation = nri::MemoryLocation::HOST_UPLOAD;
-	resourceGroupDesc.bufferNum = constantBufferArray.size();
+	resourceGroupDesc.bufferNum = (uint32_t)constantBufferArray.size();
 	resourceGroupDesc.buffers = constantBufferArray.data();
 
 	m_MemoryAllocations.resize(1, nullptr);
@@ -214,9 +219,9 @@ void CommonMeshPass::BindMemory() {
 
 	resourceGroupDesc = {};
 	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
-	resourceGroupDesc.bufferNum = bufferArray.size();
+	resourceGroupDesc.bufferNum = (uint32_t)bufferArray.size();
 	resourceGroupDesc.buffers = bufferArray.data();
-	resourceGroupDesc.textureNum = m_textures.size();
+	resourceGroupDesc.textureNum = (uint32_t)m_textures.size();
 	resourceGroupDesc.textures = m_textures.data();
 
 	m_MemoryAllocations.resize(
@@ -282,9 +287,10 @@ void CommonMeshPass::BindMemory() {
 	{
 		std::vector<uint8_t> geometryBufferData(m_indexDataAlignedTotalSize +
 				m_vertexDataTotalSize);
-		for (size_t i = 0; i < m_Scene.meshDatas.size(); ++i) {
-			memcpy(&geometryBufferData[m_sceneMeshOffsets[i].first], m_Scene.meshDatas[i].indices.data(), helper::GetByteSizeOf(m_Scene.meshDatas[i].indices));
-			memcpy(&geometryBufferData[m_sceneMeshOffsets[i].second], m_positions.at(i).data(), helper::GetByteSizeOf(m_positions.at(i)));
+		for (size_t i = 0; i < m_Scene.meshes.size(); ++i) {
+			auto &meshNode = m_Scene.meshes[i];
+			memcpy(&geometryBufferData[meshNode.indexOffset], m_Scene.meshDatas[i].indices.data(), helper::GetByteSizeOf(m_Scene.meshDatas[i].indices));
+			memcpy(&geometryBufferData[meshNode.vertexOffset], m_positions.at(i).data(), helper::GetByteSizeOf(m_positions.at(i)));
 		}
 
 		nri::BufferUploadDesc bufferData = {};
@@ -295,7 +301,7 @@ void CommonMeshPass::BindMemory() {
 			nri::AccessBits::VERTEX_BUFFER };
 		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData };
 
-		uint32_t texSize = m_textures.size();
+		uint32_t texSize = (uint32_t)m_textures.size();
 		std::vector<nri::TextureUploadDesc> texUploadDescArray(texSize);
 		std::vector<nri::TextureSubresourceUploadDesc> subDataArr(texSize);
 
@@ -321,9 +327,9 @@ void CommonMeshPass::BindMemory() {
 				nri::Layout::SHADER_RESOURCE };
 			texUploadDescArray[i].planes = nri::PlaneBits::ALL;
 		}
-		NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), texUploadDescArray.data(), texUploadDescArray.size(),
+		NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), texUploadDescArray.data(), (uint32_t)texUploadDescArray.size(),
 				uploadDescArray.data(),
-				uploadDescArray.size()));
+				(uint32_t)uploadDescArray.size()));
 	}
 }
 
@@ -461,7 +467,7 @@ void CommonMeshPass::BuildPipeline() {
 						&m_TextureDescriptorSet, 1, 0));
 
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
-		descriptorRangeUpdateDescs[0].descriptorNum = m_textureViews.size();
+		descriptorRangeUpdateDescs[0].descriptorNum = (uint32_t)m_textureViews.size();
 		descriptorRangeUpdateDescs[0].descriptors = m_textureViews.data();
 
 		descriptorRangeUpdateDescs[1].descriptorNum = 1;
@@ -526,9 +532,9 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 
 				NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
 
-				uint32_t indexOffset = m_sceneMeshOffsets.at(m_meshNodes[meshIndex].meshIndices[i]).first;
-				uint32_t vertexOffset = m_sceneMeshOffsets.at(m_meshNodes[meshIndex].meshIndices[i]).second;
-				uint32_t indexCount = m_Scene.meshDatas.at(m_meshNodes[meshIndex].meshIndices[i]).indices.size();
+				uint32_t indexOffset = (uint32_t)m_Scene.meshes.at(m_meshNodes[meshIndex].meshIndices[i]).indexOffset;
+				uint32_t vertexOffset = (uint32_t)m_Scene.meshes.at(m_meshNodes[meshIndex].meshIndices[i]).vertexOffset;
+				uint32_t indexCount = (uint32_t)m_Scene.meshes.at(m_meshNodes[meshIndex].meshIndices[i]).indexNum;
 				NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer, indexOffset,
 						nri::IndexType::UINT32);
 				nri::VertexBufferDesc vertexBufferDesc = {};

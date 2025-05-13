@@ -73,7 +73,7 @@ void InstanceMeshPass::AllocGPUMemory() {
 			m_indices.push_back(mesh->mFaces[i].mIndices[j]);
 		}
 	}
-	m_IndexCount = m_indices.size();
+	m_IndexCount = (uint32_t)m_indices.size();
 	const uint64_t indexDataSize = helper::GetByteSizeOf(m_indices);
 	const uint64_t indexDataAlignedSize = helper::Align(indexDataSize, 32);
 	const uint64_t vertexDataSize = helper::GetByteSizeOf(m_positions);
@@ -82,7 +82,7 @@ void InstanceMeshPass::AllocGPUMemory() {
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
 		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-		textureDesc.format = m_texture_albedo_data.GetFormat(true);
+		textureDesc.format = m_texture_albedo_data.GetFormat();
 		textureDesc.width = m_texture_albedo_data.GetWidth();
 		textureDesc.height = m_texture_albedo_data.GetHeight();
 		textureDesc.mipNum = 1;
@@ -96,7 +96,7 @@ void InstanceMeshPass::AllocGPUMemory() {
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
 		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-		textureDesc.format = m_texture_normal_data.GetFormat(true);
+		textureDesc.format = m_texture_normal_data.GetFormat();
 		textureDesc.width = m_texture_normal_data.GetWidth();
 		textureDesc.height = m_texture_normal_data.GetHeight();
 		textureDesc.mipNum = 1;
@@ -110,7 +110,7 @@ void InstanceMeshPass::AllocGPUMemory() {
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
 		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-		textureDesc.format = m_texture_mr_data.GetFormat(true);
+		textureDesc.format = m_texture_mr_data.GetFormat();
 		textureDesc.width = m_texture_mr_data.GetWidth();
 		textureDesc.height = m_texture_mr_data.GetHeight();
 		textureDesc.mipNum = 1;
@@ -124,7 +124,7 @@ void InstanceMeshPass::AllocGPUMemory() {
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
 		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-		textureDesc.format = m_texture_ao_data.GetFormat(true);
+		textureDesc.format = m_texture_ao_data.GetFormat();
 		textureDesc.width = m_texture_ao_data.GetWidth();
 		textureDesc.height = m_texture_ao_data.GetHeight();
 		textureDesc.mipNum = 1;
@@ -138,7 +138,7 @@ void InstanceMeshPass::AllocGPUMemory() {
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
 		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-		textureDesc.format = m_texture_emissive_data.GetFormat(true);
+		textureDesc.format = m_texture_emissive_data.GetFormat();
 		textureDesc.width = m_texture_emissive_data.GetWidth();
 		textureDesc.height = m_texture_emissive_data.GetHeight();
 		textureDesc.mipNum = 1;
@@ -170,7 +170,7 @@ void InstanceMeshPass::AllocGPUMemory() {
 void InstanceMeshPass::BindMemory() {
 	auto NRI = *m_NRI;
 
-	m_IndexCount = m_indices.size();
+	m_IndexCount = (uint32_t)m_indices.size();
 	const uint64_t indexDataSize = helper::GetByteSizeOf(m_indices);
 	const uint64_t indexDataAlignedSize = helper::Align(indexDataSize, 32);
 	const uint64_t vertexDataSize = helper::GetByteSizeOf(m_positions);
@@ -180,7 +180,7 @@ void InstanceMeshPass::BindMemory() {
 
 	nri::ResourceGroupDesc resourceGroupDesc = {};
 	resourceGroupDesc.memoryLocation = nri::MemoryLocation::HOST_UPLOAD;
-	resourceGroupDesc.bufferNum = constantBufferArray.size();
+	resourceGroupDesc.bufferNum = (uint32_t)constantBufferArray.size();
 	resourceGroupDesc.buffers = constantBufferArray.data();
 
 	m_MemoryAllocations.resize(1, nullptr);
@@ -192,9 +192,9 @@ void InstanceMeshPass::BindMemory() {
 	};
 	std::vector<nri::Texture *> textureArray = { m_texture_albedo, m_texture_normal, m_texture_mr, m_texture_ao, m_texture_emissive }; //, m_CubemapTexture };
 	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
-	resourceGroupDesc.bufferNum = bufferArray.size();
+	resourceGroupDesc.bufferNum = (uint32_t)bufferArray.size();
 	resourceGroupDesc.buffers = bufferArray.data();
-	resourceGroupDesc.textureNum = textureArray.size();
+	resourceGroupDesc.textureNum = (uint32_t)textureArray.size();
 	resourceGroupDesc.textures = textureArray.data();
 
 	m_MemoryAllocations.resize(
@@ -297,7 +297,7 @@ void InstanceMeshPass::BindMemory() {
 		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData };
 
 		std::vector<nri::TextureUploadDesc> texUploadDescArray = {};
-		std::array<nri::TextureSubresourceUploadDesc, 16> subresources;
+		// std::array<nri::TextureSubresourceUploadDesc, 16> subresources;
 		// std::vector<utils::Texture> tex_data_array = { m_texture_albedo_data, m_texture_normal_data, m_texture_mr_data, m_texture_ao_data, m_texture_emissive_data };
 		// std::vector<nri::Texture *> tex_array = { m_texture_albedo, m_texture_normal, m_texture_mr, m_texture_ao, m_texture_emissive };
 		// for (size_t i = 0; i < tex_data_array.size(); i++) {
@@ -408,7 +408,7 @@ void InstanceMeshPass::BindMemory() {
 			texUploadDescArray.push_back(textureData);
 		}
 
-		NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), texUploadDescArray.data(), texUploadDescArray.size(),
+		NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), texUploadDescArray.data(), (uint32_t)texUploadDescArray.size(),
 				uploadDescArray.data(),
 				uploadDescArray.size()));
 	}
@@ -545,7 +545,7 @@ void InstanceMeshPass::BuildPipeline() {
 		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_texture_albedo_view, m_texture_normal_view, m_texture_mr_view, m_texture_ao_view, m_texture_emissive_view }; //, m_CubemapTextureShaderResource };
 
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
-		descriptorRangeUpdateDescs[0].descriptorNum = shaderResoruceViewArray.size();
+		descriptorRangeUpdateDescs[0].descriptorNum = (uint32_t)shaderResoruceViewArray.size();
 		descriptorRangeUpdateDescs[0].descriptors = shaderResoruceViewArray.data();
 
 		descriptorRangeUpdateDescs[1].descriptorNum = 1;

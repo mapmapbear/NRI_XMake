@@ -165,19 +165,26 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	NRI_ABORT_ON_FAILURE(
 			nri::nriEnumerateAdapters(&bestAdapterDesc, adapterDescsNum));
 
-	nri::QueueFamilyDesc queueFamilies[2] = {};
+	nri::QueueFamilyDesc queueFamilies[3] = {};
 	queueFamilies[0].queueNum = 1;
 	queueFamilies[0].queueType = nri::QueueType::GRAPHICS;
 	queueFamilies[1].queueNum = 1;
 	queueFamilies[1].queueType = nri::QueueType::COMPUTE;
+	queueFamilies[2].queueNum = 1;
+	queueFamilies[2].queueType = nri::QueueType::COPY;
 
 	// Device
 	nri::DeviceCreationDesc deviceCreationDesc = {};
 	deviceCreationDesc.graphicsAPI = graphicsAPI;
 	deviceCreationDesc.queueFamilies = queueFamilies;
 	deviceCreationDesc.queueFamilyNum = helper::GetCountOf(queueFamilies);
+#ifdef DEBUG
 	deviceCreationDesc.enableGraphicsAPIValidation = true;
 	deviceCreationDesc.enableNRIValidation = true;
+#else
+	deviceCreationDesc.enableGraphicsAPIValidation = false;
+	deviceCreationDesc.enableNRIValidation = false;
+#endif
 	deviceCreationDesc.enableD3D11CommandBufferEmulation =
 			D3D11_COMMANDBUFFER_EMULATION;
 	deviceCreationDesc.vkBindingOffsets = VK_BINDING_OFFSETS;

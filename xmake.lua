@@ -1,8 +1,16 @@
 add_rules("mode.debug", "mode.release")
 set_languages("c++20")
 
-add_requires("glfw", "glm", "assimp", "spdlog")
+-- set_policy("build.warning", true)
+-- set_warnings("all", "extra")
 
+if is_mode("debug") then
+    add_defines("DEBUG")
+    set_symbols("debug")
+    set_optimize("none")
+end
+
+add_requires("glfw", "glm", "assimp", "spdlog")
 
 target("Detex")
     set_kind("static")
