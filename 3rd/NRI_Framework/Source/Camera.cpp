@@ -1,6 +1,7 @@
 // © 2021 NVIDIA Corporation
 
 #include "NRIFramework.h"
+#include "glm/ext/matrix_transform.hpp"
 #include "spdlog/spdlog.h"
 
 // to get a perspective matrix with reversed z, simply swap the near and far plane
@@ -32,6 +33,7 @@ void Camera::Initialize(const vec3 &position, const vec3 &lookAt,
 
 	state.globalPosition = vec3(position);
 	state.rotation = glm::degrees(rot);
+	state.mWorldToView = glm::lookAtLH(state.globalPosition, state.globalPosition + dir, glm::vec3(0.0, 1.0, 0.0));
 	m_IsRelative = isRelative;
 }
 
