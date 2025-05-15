@@ -113,7 +113,8 @@ target("DemoApp")
     add_includedirs("source/", {public = true})
     add_packages("glfw", "glm", "assimp", "spdlog")
     add_files("main.cpp", "source/**.cpp")
-
+    set_warnings("all")
+    
 target("ShaderCompiler")
     set_kind("phony") -- 这里可以是 phony，避免 xmake 生成实际的二进制文件
     set_default(false) -- 让它不在默认 `xmake build` 触发

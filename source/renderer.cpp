@@ -286,24 +286,30 @@ void Renderer::UploadSceneData() {
 	}
 
 	i = 0;
-	std::vector<nri::BufferUploadDesc> uploadBufferDescs(uploadBufferMap.size());
+	std::vector<nri::BufferUploadDesc> uploadBufferDescs;
+	std::vector<std::vector<uint8_t>> geometryBufferDatas;
+	uploadBufferDescs.resize(uploadBufferMap.size());
+	geometryBufferDatas.resize(uploadBufferMap.size());
+	nri::BufferUploadDesc testDesc = {};
 	for (auto &node : uploadBufferMap) {
 		std::shared_ptr<Buffer> buffer = node.first;
 		std::shared_ptr<utils::MeshData> meshData = node.second;
 		uint32_t indicesAlignSize = helper::Align(helper::GetByteSizeOf(meshData->indices), 32);
 		uint32_t vertexSize = helper::GetByteSizeOf(meshData->m_vertexesData);
-		std::vector<uint8_t> geometryBufferData(indicesAlignSize + vertexSize);
-		memcpy(&geometryBufferData[0], meshData->indices.data(), helper::GetByteSizeOf(meshData->indices));
-		memcpy(&geometryBufferData[indicesAlignSize],
-				meshData->m_vertexesData.data(), vertexSize);
+		geometryBufferDatas.at(i).resize(indicesAlignSize + vertexSize);
 
-		nri::BufferUploadDesc &bufferData = uploadBufferDescs.at(i++);
+		memcpy(&geometryBufferDatas.at(i)[0], meshData->indices.data(), helper::GetByteSizeOf(meshData->indices));
+		SPDLOG_ERROR("indicesAlignSize: {}, vertexSize: {}, total: {}", indicesAlignSize, vertexSize, indicesAlignSize + vertexSize);
+		memcpy(&geometryBufferDatas.at(i)[indicesAlignSize], meshData->m_vertexesData.data(), vertexSize);
+
+		nri::BufferUploadDesc &bufferData = uploadBufferDescs.at(i);
 		bufferData.buffer = buffer->GetBuffer();
-		bufferData.data = geometryBufferData.data();
-		bufferData.dataSize = geometryBufferData.size();
+		bufferData.data = geometryBufferDatas.at(i).data();
+		bufferData.dataSize = geometryBufferDatas.at(i).size();
 		bufferData.after = { nri::AccessBits::INDEX_BUFFER |
 			nri::AccessBits::VERTEX_BUFFER };
 		GetNRI().SetDebugName(buffer->GetBuffer(), std::format("Buffer{}", i).c_str());
+		i++;
 	}
 
 	NRI_ABORT_ON_FAILURE(GetNRI().UploadData(*m_GraphicsQueue, uploadDesces.data(), uploadDesces.size(),

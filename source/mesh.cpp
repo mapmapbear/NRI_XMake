@@ -104,14 +104,15 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 	{
 		pSubMesh->m_indexCount = (int)meshdata->indices.size();
 		pSubMesh->m_indexbuffer = std::make_unique<Buffer>();
+		uint32_t indicesAlignSize = helper::Align(helper::GetByteSizeOf(meshdata->indices), 32);
+		uint32_t vertexSize = helper::GetByteSizeOf(meshdata->m_vertexesData);
 		nri::BufferDesc desc = {};
-		desc.size = helper::Align(helper::GetByteSizeOf(meshdata->indices), 32); // indices Size
+		desc.size = indicesAlignSize + vertexSize;
 		pSubMesh->vertexOffset = desc.size;
-		desc.size += helper::GetByteSizeOf(meshdata->m_vertexesData); // vertex Size
 		desc.usage = nri::BufferUsageBits::VERTEX_BUFFER |
 				nri::BufferUsageBits::INDEX_BUFFER;
 		nri::BufferViewDesc viewDesc{};
-		
+
 		pSubMesh->m_indexbuffer->Create(renderer, desc, viewDesc);
 		// pSubMesh->m_vertexbuffer = pSubMesh->m_indexbuffer;
 		renderer->uploadBufferMap.insert({ pSubMesh->m_indexbuffer, meshdata });
