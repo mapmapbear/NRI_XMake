@@ -9,10 +9,13 @@ public:
 	void Create(nri::Texture *tex, nri::Texture2DViewDesc &viewDesc);
 	uint32_t GetViewIndex() { return m_viewIndex; }
 	nri::Texture *GetTexture() { return m_texture; }
+	bool GetUploadState() { return m_uploadState; }
+	void SetUploadState(bool state) { m_uploadState = state; }
 
 private:
 	nri::Texture *m_texture;
 	nri::Descriptor *m_view;
 	nri::Memory *m_mem;
 	uint32_t m_viewIndex = UINT32_MAX;
+	bool m_uploadState = true;
 };

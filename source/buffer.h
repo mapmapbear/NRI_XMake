@@ -5,8 +5,9 @@ class Renderer;
 class Buffer {
 public:
 	Buffer() = default;
-	void Create(Renderer *renderer, nri::BufferDesc *bufferDesc, nri::BufferViewDesc *viewDesc);
+	void Create(Renderer *renderer, nri::BufferDesc &bufferDesc, nri::BufferViewDesc &viewDesc);
 	uint32_t GetViewIndex() { return m_viewIndex; }
+	nri::Buffer *GetBuffer() { return m_buffer; }
 
 private:
 	nri::Buffer *m_buffer;

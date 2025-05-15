@@ -7,6 +7,7 @@
 #include "texture.h"
 #include <assimp/Importer.hpp>
 #include <memory>
+#include <vector>
 
 void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 	struct Vertex {
@@ -31,29 +32,23 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 
 		if (ret == aiReturn_SUCCESS) {
 			std::string p = aiStr.C_Str();
-			utils::Texture textureData;
-			utils::LoadTexture(p, textureData);
+			p = basepath + '/' + p;
+			std::shared_ptr<utils::Texture> textureData = std::make_shared<utils::Texture>();
+			utils::LoadTexture(p, *textureData.get(), false);
 			nri::TextureDesc textureDesc = {};
 			textureDesc.type = nri::TextureType::TEXTURE_2D;
 			textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-			textureDesc.format = textureData.GetFormat();
-			textureDesc.width = textureData.GetWidth();
-			textureDesc.height = textureData.GetHeight();
+			textureDesc.format = textureData->GetFormat();
+			textureDesc.width = textureData->GetWidth();
+			textureDesc.height = textureData->GetHeight();
 			textureDesc.mipNum = 1; //m_texureDatas[i].GetMipNum();
-			textureDesc.depth = textureData.GetDepth();
+			textureDesc.depth = textureData->GetDepth();
 
 			nri::Texture2DViewDesc texViewDesc = {};
 			texViewDesc.viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D;
-			texViewDesc.format = textureData.GetFormat();
+			texViewDesc.format = textureData->GetFormat();
 			tex->Create(renderer, textureDesc, texViewDesc);
-
-			nri::TextureUploadDesc uploadDesc = {};
-			uploadDesc.texture = tex->GetTexture();
-			uploadDesc.after = { nri::AccessBits::SHADER_RESOURCE,
-				nri::Layout::SHADER_RESOURCE };
-			uploadDesc.planes = nri::PlaneBits::ALL;
-			NRI_ABORT_ON_FAILURE(renderer->GetNRI().UploadData(renderer->GetRenderQueue(), &uploadDesc, 1,
-					nullptr, 0));
+			renderer->uploadTextureMap.insert({ tex, textureData });
 		} else {
 			switch (type) {
 				case aiTextureType_NORMAL_CAMERA:
@@ -68,7 +63,8 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 		}
 		return tex;
 	};
-	std::string dirPath = {};
+	std::string dirPath = path.substr(0, path.find_last_of("/\\"));
+	;
 	m_Materials.resize(pScene->mNumMaterials);
 	for (uint32 i = 0; i < pScene->mNumMaterials; ++i) {
 		Material &m = m_Materials[i];
@@ -79,5 +75,46 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 }
 
 std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
-	return nullptr;
+	std::shared_ptr<utils::MeshData> meshdata = std::make_shared<utils::MeshData>();
+	meshdata->m_vertexesData.resize(pMesh->mNumVertices);
+	meshdata->indices.resize(pMesh->mNumFaces * 3);
+
+	for (uint32 j = 0; j < pMesh->mNumVertices; ++j) {
+		utils::Vertex &vertex = meshdata->m_vertexesData[j];
+		vertex.position = *reinterpret_cast<glm::vec3 *>(&pMesh->mVertices[j]);
+		if (pMesh->HasTextureCoords(0)) {
+			vertex.uv = *reinterpret_cast<glm::vec2 *>(&pMesh->mTextureCoords[0][j]);
+		}
+		vertex.normal = *reinterpret_cast<glm::vec3 *>(&pMesh->mNormals[j]);
+		if (pMesh->HasTangentsAndBitangents()) {
+			vertex.tangent = *reinterpret_cast<glm::vec3 *>(&pMesh->mTangents[j]);
+			vertex.bitangent = *reinterpret_cast<glm::vec3 *>(&pMesh->mBitangents[j]);
+		}
+	}
+
+	for (uint32 j = 0; j < pMesh->mNumFaces; ++j) {
+		const aiFace &face = pMesh->mFaces[j];
+		for (uint32 k = 0; k < 3; ++k) {
+			assert(face.mNumIndices == 3);
+			meshdata->indices[j * 3 + k] = face.mIndices[k];
+		}
+	}
+
+	std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
+	{
+		pSubMesh->m_indexCount = (int)meshdata->indices.size();
+		pSubMesh->m_indexbuffer = std::make_unique<Buffer>();
+		nri::BufferDesc desc = {};
+		desc.size = helper::Align(helper::GetByteSizeOf(meshdata->indices), 32); // indices Size
+		pSubMesh->vertexOffset = desc.size;
+		desc.size += helper::GetByteSizeOf(meshdata->m_vertexesData); // vertex Size
+		desc.usage = nri::BufferUsageBits::VERTEX_BUFFER |
+				nri::BufferUsageBits::INDEX_BUFFER;
+		nri::BufferViewDesc viewDesc{};
+		
+		pSubMesh->m_indexbuffer->Create(renderer, desc, viewDesc);
+		// pSubMesh->m_vertexbuffer = pSubMesh->m_indexbuffer;
+		renderer->uploadBufferMap.insert({ pSubMesh->m_indexbuffer, meshdata });
+	}
+	return pSubMesh;
 }

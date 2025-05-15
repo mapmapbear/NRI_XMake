@@ -294,20 +294,18 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		textureDesc.mipNum = 1;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture(*m_Device, textureDesc, m_ColorTexture));
-		NRI.SetDebugName(m_ColorTexture, "m_ColorTexture");
 	}
 
 	{
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
-		textureDesc.usage = nri::TextureUsageBits::DEPTH_STENCIL_ATTACHMENT;
+		textureDesc.usage = nri::TextureUsageBits::DEPTH_STENCIL_ATTACHMENT | nri::TextureUsageBits::SHADER_RESOURCE;
 		textureDesc.format = nri::Format::D32_SFLOAT;
 		textureDesc.width = (uint16_t)GetWindowResolution().first;
 		textureDesc.height = (uint16_t)GetWindowResolution().second;
 		textureDesc.mipNum = 1;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture(*m_Device, textureDesc, m_DepthTexture));
-		NRI.SetDebugName(m_DepthTexture, "m_DepthTexture");
 	}
 
 	nri::ResourceGroupDesc resourceGroupDesc = {};
@@ -320,6 +318,9 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 			NRI.CalculateAllocationNumber(*m_Device, resourceGroupDesc), nullptr);
 	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(
 			*m_Device, resourceGroupDesc, m_MemoryAllocations.data()));
+
+	NRI.SetDebugName(m_ColorTexture, "m_ColorTexture");
+	NRI.SetDebugName(m_DepthTexture, "m_DepthTexture");
 
 	{
 		nri::Texture2DViewDesc textureViewDesc = { .texture = m_DepthTexture, .viewType = nri::Texture2DViewType::DEPTH_STENCIL_ATTACHMENT, .format = nri::Format::D32_SFLOAT };
@@ -347,25 +348,27 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	colorSubRes.sliceNum = 1;
 
 	nri::TextureSubresourceUploadDesc depthSubRes = {};
-	depthSubRes.rowPitch = width * 2;
+	depthSubRes.rowPitch = width * 4;
 	depthSubRes.slicePitch = depthSubRes.rowPitch * height;
 	std::vector<uint8_t> data1(colorSubRes.slicePitch, 1.0);
 	depthSubRes.sliceNum = 1;
 	depthSubRes.slices = data1.data();
 
 	nri::TextureUploadDesc textureData;
-	textureData.subresources = nullptr; // &depthSubRes;
+	textureData.subresources = &depthSubRes;
 	textureData.texture = m_DepthTexture;
-	textureData.after = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT };
-	textureData.planes = nri::PlaneBits::DEPTH;
+	// textureData.after = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT };
+	textureData.after = { nri::AccessBits::COPY_DESTINATION, nri::Layout::COPY_DESTINATION };
+	textureData.planes = nri::PlaneBits::ALL;
 
 	nri::TextureUploadDesc textureData1;
-	textureData1.subresources = nullptr; // &colorSubRes;
+	textureData1.subresources = &colorSubRes;
 	textureData1.texture = m_ColorTexture;
 	textureData1.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT };
-	textureData1.planes = nri::PlaneBits::COLOR;
+	// textureData1.after = { nri::AccessBits::COPY_DESTINATION, nri::Layout::COPY_DESTINATION };
+	textureData1.planes = nri::PlaneBits::ALL;
 
-	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData, textureData1 };
+	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData1, textureData };
 
 	NRI_ABORT_ON_FAILURE(NRI.UploadData(*m_GraphicsQueue, texUploadDescArray.data(), texUploadDescArray.size(),
 			nullptr,
@@ -474,16 +477,50 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 
 	NRI.BeginCommandBuffer(*commandBuffer, m_DescriptorPool);
 	{
-		nri::TextureBarrierDesc textureBarrierDescs = {};
-		textureBarrierDescs.texture = currentBackBuffer.texture;
-		textureBarrierDescs.after = { nri::AccessBits::COLOR_ATTACHMENT,
-			nri::Layout::COLOR_ATTACHMENT };
-		std::array<nri::TextureBarrierDesc, 2> texBarrierArray = { textureBarrierDescs };
-		nri::BarrierGroupDesc barrierGroupDesc = {};
-		barrierGroupDesc.textureNum = 1;
-		barrierGroupDesc.textures = &textureBarrierDescs;
+		// Transform Back Buffer
+		{
+			nri::TextureBarrierDesc textureBarrierDescs = {};
+			textureBarrierDescs.texture = currentBackBuffer.texture;
+			textureBarrierDescs.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT };
 
-		NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
+			nri::BarrierGroupDesc barrierGroupDesc = {};
+			barrierGroupDesc.textureNum = 1;
+			barrierGroupDesc.textures = &textureBarrierDescs;
+
+			NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
+		}
+
+		// Transform Color RT
+		{
+			nri::TextureBarrierDesc textureBarrierDescs = {};
+			textureBarrierDescs.texture = m_ColorTexture;
+			if (frameIndex == 0) {
+				textureBarrierDescs.before = { nri::AccessBits::COPY_DESTINATION, nri::Layout::COPY_DESTINATION };
+			}
+			textureBarrierDescs.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT };
+
+			nri::BarrierGroupDesc barrierGroupDesc = {};
+			barrierGroupDesc.textureNum = 1;
+			barrierGroupDesc.textures = &textureBarrierDescs;
+
+			// NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
+		}
+
+		// Transform Depth RT
+		{
+			nri::TextureBarrierDesc textureBarrierDescs = {};
+			textureBarrierDescs.texture = m_DepthTexture;
+			if (frameIndex == 0) {
+				textureBarrierDescs.before = { nri::AccessBits::COPY_DESTINATION, nri::Layout::COPY_DESTINATION };
+			}
+			textureBarrierDescs.after = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT };
+
+			nri::BarrierGroupDesc barrierGroupDesc = {};
+			barrierGroupDesc.textureNum = 1;
+			barrierGroupDesc.textures = &textureBarrierDescs;
+
+			NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
+		}
 
 		nri::AttachmentsDesc attachmentsDesc = {};
 		attachmentsDesc.colorNum = 1;
@@ -514,16 +551,19 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		}
 		NRI.CmdEndRendering(*commandBuffer);
 
-		nri::TextureBarrierDesc textureBarrierDescs1 = {};
-		textureBarrierDescs1.texture = m_ColorTexture;
-		textureBarrierDescs1.before = { nri::AccessBits::COLOR_ATTACHMENT,
-			nri::Layout::COLOR_ATTACHMENT };
-		textureBarrierDescs1.after = { nri::AccessBits::SHADER_RESOURCE,
-			nri::Layout::SHADER_RESOURCE };
-		nri::BarrierGroupDesc barrierGroupDesc1 = {};
-		barrierGroupDesc1.textureNum = 1;
-		barrierGroupDesc1.textures = &textureBarrierDescs1;
-		NRI.CmdBarrier(*commandBuffer, barrierGroupDesc1);
+		// Transform Color RT -> Back Buffer
+		{
+			nri::TextureBarrierDesc textureBarrierDescs = {};
+			textureBarrierDescs.texture = m_ColorTexture;
+			textureBarrierDescs.before = { nri::AccessBits::COLOR_ATTACHMENT,
+				nri::Layout::COLOR_ATTACHMENT };
+			textureBarrierDescs.after = { nri::AccessBits::SHADER_RESOURCE,
+				nri::Layout::SHADER_RESOURCE };
+			nri::BarrierGroupDesc barrierGroupDesc = {};
+			barrierGroupDesc.textureNum = 1;
+			barrierGroupDesc.textures = &textureBarrierDescs;
+			NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
+		}
 
 		NRI.CmdBeginRendering(*commandBuffer, presentDesc);
 		{
@@ -535,21 +575,32 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		}
 		NRI.CmdEndRendering(*commandBuffer);
 
-		nri::TextureBarrierDesc textureBarrierDescs2 = {};
-		textureBarrierDescs2.texture = m_ColorTexture;
-		textureBarrierDescs2.before = { nri::AccessBits::SHADER_RESOURCE,
-			nri::Layout::SHADER_RESOURCE };
-		textureBarrierDescs2.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT };
-		nri::BarrierGroupDesc barrierGroupDesc2 = {};
-		barrierGroupDesc2.textureNum = 1;
-		barrierGroupDesc2.textures = &textureBarrierDescs2;
-		NRI.CmdBarrier(*commandBuffer, barrierGroupDesc2);
+		// Transform Color RT -> Next Frame
+		{
+			nri::TextureBarrierDesc textureBarrierDescs = {};
+			textureBarrierDescs.texture = m_ColorTexture;
+			textureBarrierDescs.before = { nri::AccessBits::SHADER_RESOURCE,
+				nri::Layout::SHADER_RESOURCE };
+			textureBarrierDescs.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT };
+			nri::BarrierGroupDesc barrierGroupDesc = {};
+			barrierGroupDesc.textureNum = 1;
+			barrierGroupDesc.textures = &textureBarrierDescs;
+			NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
+		}
 
-		textureBarrierDescs.before = textureBarrierDescs.after;
-		textureBarrierDescs.after = { nri::AccessBits::UNKNOWN,
-			nri::Layout::PRESENT };
+		// Transform Back Buffer -> Next Frame
+		{
+			nri::TextureBarrierDesc textureBarrierDescs = {};
+			textureBarrierDescs.texture = currentBackBuffer.texture;
+			textureBarrierDescs.before = textureBarrierDescs.after;
+			textureBarrierDescs.after = { nri::AccessBits::UNKNOWN,
+				nri::Layout::PRESENT };
 
-		NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
+			nri::BarrierGroupDesc barrierGroupDesc = {};
+			barrierGroupDesc.textureNum = 1;
+			barrierGroupDesc.textures = &textureBarrierDescs;
+			NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
+		}
 	}
 	NRI.EndCommandBuffer(*commandBuffer);
 

@@ -8,7 +8,10 @@
 #include "render_pass/instanceMeshPass.h"
 #include "render_pass/presentPass.h"
 #include "render_pass/skyRenderPass.h"
+#include "texture.h"
+#include <debugapi.h>
 #include <memory>
+#include <vector>
 
 Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 		m_Device(device), m_NRI(NRI) {
@@ -250,23 +253,68 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	textureData5.planes = nri::PlaneBits::ALL;
 
 	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData, textureData1, textureData2, textureData3, textureData4, textureData5 };
-	NRI_ABORT_ON_FAILURE(NRI.UploadData(*m_GraphicsQueue, texUploadDescArray.data(), texUploadDescArray.size(),
+	NRI_ABORT_ON_FAILURE(GetNRI().UploadData(*m_GraphicsQueue, texUploadDescArray.data(), texUploadDescArray.size(),
 			nullptr,
 			0));
 
 	std::unique_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = utils::GetFullPath("USD_Sponza/sponza.usdc", utils::DataFolder::ROOT);
-	//meshFile = utils::GetFullPath("Sponza/sponza.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this);
-
+	UploadSceneData();
 	skyPass = std::make_shared<SkyRenderPass>(this);
 	gridPass = std::make_shared<GridRenderPass>(this);
 	meshPass = std::make_shared<InstanceMeshPass>(this);
 	simplePass = std::make_shared<CommonMeshPass>(this, m_Scene);
 }
+
+void Renderer::UploadSceneData() {
+	std::vector<nri::TextureUploadDesc> uploadDesces(uploadTextureMap.size());
+	std::vector<nri::TextureSubresourceUploadDesc> uploadSubDesces(uploadTextureMap.size());
+	int i = 0;
+	for (auto &node : uploadTextureMap) {
+		std::shared_ptr<Texture> tex = node.first;
+		std::shared_ptr<utils::Texture> texData = node.second;
+
+		nri::TextureSubresourceUploadDesc &subRes = uploadSubDesces[i];
+		texData->GetSubresource(subRes, 0);
+		nri::TextureUploadDesc &textureData = uploadDesces[i++];
+		textureData.subresources = &subRes;
+		textureData.texture = tex->GetTexture();
+		textureData.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
+		textureData.planes = nri::PlaneBits::ALL;
+	}
+
+	i = 0;
+	std::vector<nri::BufferUploadDesc> uploadBufferDescs(uploadBufferMap.size());
+	for (auto &node : uploadBufferMap) {
+		std::shared_ptr<Buffer> buffer = node.first;
+		std::shared_ptr<utils::MeshData> meshData = node.second;
+		uint32_t indicesAlignSize = helper::Align(helper::GetByteSizeOf(meshData->indices), 32);
+		uint32_t vertexSize = helper::GetByteSizeOf(meshData->m_vertexesData);
+		std::vector<uint8_t> geometryBufferData(indicesAlignSize + vertexSize);
+		memcpy(&geometryBufferData[0], meshData->indices.data(), helper::GetByteSizeOf(meshData->indices));
+		memcpy(&geometryBufferData[indicesAlignSize],
+				meshData->m_vertexesData.data(), vertexSize);
+
+		nri::BufferUploadDesc &bufferData = uploadBufferDescs.at(i++);
+		bufferData.buffer = buffer->GetBuffer();
+		bufferData.data = geometryBufferData.data();
+		bufferData.dataSize = geometryBufferData.size();
+		bufferData.after = { nri::AccessBits::INDEX_BUFFER |
+			nri::AccessBits::VERTEX_BUFFER };
+		GetNRI().SetDebugName(buffer->GetBuffer(), std::format("Buffer{}", i).c_str());
+	}
+
+	NRI_ABORT_ON_FAILURE(GetNRI().UploadData(*m_GraphicsQueue, uploadDesces.data(), uploadDesces.size(),
+			uploadBufferDescs.data(),
+			uploadBufferDescs.size()));
+}
+
 void Renderer::InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain) {
 	presentPass = std::make_shared<PresentPass>(this, colorRT, swawpchain);
 }
+
 void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	skyPass->Render(info, camera);
 	gridPass->Render(info, camera);

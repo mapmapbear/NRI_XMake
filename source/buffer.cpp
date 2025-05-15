@@ -1,10 +1,10 @@
 #include "buffer.h"
 #include "renderer.h"
 
-void Buffer::Create(Renderer *renderer, nri::BufferDesc *bufferDesc, nri::BufferViewDesc *viewDesc) {
-	if (bufferDesc) {
+void Buffer::Create(Renderer *renderer, nri::BufferDesc &bufferDesc, nri::BufferViewDesc &viewDesc) {
+	if (bufferDesc.size > 0) {
 		NRI_ABORT_ON_FAILURE(
-				renderer->GetNRI().CreateBuffer(*renderer->GetRenderDevice(), *bufferDesc, m_buffer));
+				renderer->GetNRI().CreateBuffer(*renderer->GetRenderDevice(), bufferDesc, m_buffer));
 
 		nri::ResourceGroupDesc resourceGroupDesc = {};
 		resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
@@ -14,9 +14,9 @@ void Buffer::Create(Renderer *renderer, nri::BufferDesc *bufferDesc, nri::Buffer
 				&m_mem));
 	}
 
-	if (viewDesc) {
-		viewDesc->buffer = m_buffer;
+	if (viewDesc.format != nri::Format::UNKNOWN) {
+		viewDesc.buffer = m_buffer;
 		NRI_ABORT_ON_FAILURE(
-				renderer->GetNRI().CreateBufferView(*viewDesc, m_view));
+				renderer->GetNRI().CreateBufferView(viewDesc, m_view));
 	}
 }
