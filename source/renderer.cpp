@@ -26,7 +26,7 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	descriptorPoolDesc.constantBufferMaxNum = BUFFERED_FRAME_MAX_NUM;
 	descriptorPoolDesc.storageBufferMaxNum = 2;
 	descriptorPoolDesc.structuredBufferMaxNum = 2;
-	descriptorPoolDesc.textureMaxNum = 100;
+	descriptorPoolDesc.textureMaxNum = 1024;
 	descriptorPoolDesc.samplerMaxNum = 10;
 
 	NRI_ABORT_ON_FAILURE(NRI.CreateDescriptorPool(*m_Device, descriptorPoolDesc,
@@ -115,7 +115,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 
 		nri::Texture2DViewDesc texViewDesc = {};
 		texViewDesc.viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D;
-		textureDesc.format = defaultBlackTex.GetFormat();
+		texViewDesc.format = defaultBlackTex.GetFormat();
 
 		m_DefaultBlackTex = std::make_shared<Texture>();
 		m_DefaultBlackTex->Create(this, textureDesc, texViewDesc);
@@ -132,7 +132,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 
 		nri::Texture2DViewDesc texViewDesc = {};
 		texViewDesc.viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D;
-		textureDesc.format = defaultWhiteTex.GetFormat();
+		texViewDesc.format = defaultWhiteTex.GetFormat();
 
 		m_DefaultWhiteTex = std::make_shared<Texture>();
 		m_DefaultWhiteTex->Create(this, textureDesc, texViewDesc);
@@ -149,7 +149,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 
 		nri::Texture2DViewDesc texViewDesc = {};
 		texViewDesc.viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D;
-		textureDesc.format = defaultNormalTex.GetFormat();
+		texViewDesc.format = defaultNormalTex.GetFormat();
 
 		m_DefaultNormalTex = std::make_shared<Texture>();
 		m_DefaultNormalTex->Create(this, textureDesc, texViewDesc);
@@ -158,7 +158,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	std::vector<nri::Texture *> textureArray = { m_DiffuseIrradianceTex, m_SpecularIrradianceTex, m_BRDFTex };
 	nri::ResourceGroupDesc resourceGroupDesc = {};
 	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
-	resourceGroupDesc.textureNum = textureArray.size();
+	resourceGroupDesc.textureNum = (uint32_t)textureArray.size();
 	resourceGroupDesc.textures = textureArray.data();
 
 	m_MemoryAllocations.resize(
@@ -177,7 +177,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	int subResCount = 0;
 	for (size_t arrayIndex = 0; arrayIndex < diffuseIrradianceTex.GetArraySize(); arrayIndex++) {
 		for (size_t mipIndex = 0; mipIndex < diffuseIrradianceTex.GetMipNum(); mipIndex++) {
-			const tinyddsloader::DDSFile::ImageData *imgData = diffuseIrradianceTex.data.GetImageData(mipIndex, arrayIndex);
+			const tinyddsloader::DDSFile::ImageData *imgData = diffuseIrradianceTex.data.GetImageData((uint32_t)mipIndex, (uint32_t)arrayIndex);
 			subResArray[subResCount].slices = imgData->m_mem;
 			subResArray[subResCount].sliceNum = 1;
 			subResArray[subResCount].rowPitch = imgData->m_memPitch;
@@ -199,7 +199,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	subResCount = 0;
 	for (size_t arrayIndex = 0; arrayIndex < specularIrradianceTex.GetArraySize(); arrayIndex++) {
 		for (size_t mipIndex = 0; mipIndex < specularIrradianceTex.GetMipNum(); mipIndex++) {
-			const tinyddsloader::DDSFile::ImageData *imgData = specularIrradianceTex.data.GetImageData(mipIndex, arrayIndex);
+			const tinyddsloader::DDSFile::ImageData *imgData = specularIrradianceTex.data.GetImageData((uint32_t)mipIndex, (uint32_t)arrayIndex);
 			subResArray1[subResCount].slices = imgData->m_mem;
 			subResArray1[subResCount].sliceNum = 1;
 			subResArray1[subResCount].rowPitch = imgData->m_memPitch;
@@ -253,11 +253,11 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	textureData5.planes = nri::PlaneBits::ALL;
 
 	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData, textureData1, textureData2, textureData3, textureData4, textureData5 };
-	NRI_ABORT_ON_FAILURE(GetNRI().UploadData(*m_GraphicsQueue, texUploadDescArray.data(), texUploadDescArray.size(),
+	NRI_ABORT_ON_FAILURE(GetNRI().UploadData(*m_GraphicsQueue, texUploadDescArray.data(), (uint32_t)texUploadDescArray.size(),
 			nullptr,
 			0));
 
-	std::unique_ptr<Mesh> mesh = std::make_unique<Mesh>();
+	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = utils::GetFullPath("USD_Sponza/sponza.usdc", utils::DataFolder::ROOT);
 	meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this);
@@ -265,7 +265,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	skyPass = std::make_shared<SkyRenderPass>(this);
 	gridPass = std::make_shared<GridRenderPass>(this);
 	meshPass = std::make_shared<InstanceMeshPass>(this);
-	simplePass = std::make_shared<CommonMeshPass>(this, m_Scene);
+	simplePass = std::make_shared<CommonMeshPass>(this, m_Scene, mesh);
 }
 
 void Renderer::UploadSceneData() {
@@ -290,12 +290,11 @@ void Renderer::UploadSceneData() {
 	std::vector<std::vector<uint8_t>> geometryBufferDatas;
 	uploadBufferDescs.resize(uploadBufferMap.size());
 	geometryBufferDatas.resize(uploadBufferMap.size());
-	nri::BufferUploadDesc testDesc = {};
 	for (auto &node : uploadBufferMap) {
 		std::shared_ptr<Buffer> buffer = node.first;
 		std::shared_ptr<utils::MeshData> meshData = node.second;
-		uint32_t indicesAlignSize = helper::Align(helper::GetByteSizeOf(meshData->indices), 32);
-		uint32_t vertexSize = helper::GetByteSizeOf(meshData->m_vertexesData);
+		uint32_t indicesAlignSize = (uint32_t)helper::Align(helper::GetByteSizeOf(meshData->indices), 32);
+		uint32_t vertexSize = (uint32_t)helper::GetByteSizeOf(meshData->m_vertexesData);
 		geometryBufferDatas.at(i).resize(indicesAlignSize + vertexSize);
 
 		memcpy(&geometryBufferDatas.at(i)[0], meshData->indices.data(), helper::GetByteSizeOf(meshData->indices));
@@ -312,9 +311,9 @@ void Renderer::UploadSceneData() {
 		i++;
 	}
 
-	NRI_ABORT_ON_FAILURE(GetNRI().UploadData(*m_GraphicsQueue, uploadDesces.data(), uploadDesces.size(),
+	NRI_ABORT_ON_FAILURE(GetNRI().UploadData(*m_GraphicsQueue, uploadDesces.data(), static_cast<uint32_t>(uploadDesces.size()),
 			uploadBufferDescs.data(),
-			uploadBufferDescs.size()));
+			static_cast<uint32_t>(uploadBufferDescs.size())));
 }
 
 void Renderer::InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain) {

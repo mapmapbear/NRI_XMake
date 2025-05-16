@@ -6,8 +6,27 @@
 #include "renderer.h"
 #include "texture.h"
 #include <assimp/Importer.hpp>
+#include <map>
 #include <memory>
 #include <vector>
+
+void TraverseNodes(const aiScene *scene, const aiNode *node, const glm::mat4 &parentTransform, std::map<uint32_t, glm::mat4> &results) {
+	aiMatrix4x4 nodeTransform = node->mTransformation;
+	glm::mat4 glmNodeTransform = glm::mat4(
+			nodeTransform.a1, nodeTransform.b1, nodeTransform.c1, nodeTransform.d1,
+			nodeTransform.a2, nodeTransform.b2, nodeTransform.c2, nodeTransform.d2,
+			nodeTransform.a3, nodeTransform.b3, nodeTransform.c3, nodeTransform.d3,
+			nodeTransform.a4, nodeTransform.b4, nodeTransform.c4, nodeTransform.d4);
+	glm::mat4 globalTransform = parentTransform * glmNodeTransform; // 全局变换 = 父节点变换 * 当前节点局部变换
+	for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
+		unsigned int meshID = node->mMeshes[i]; // 获取 meshID
+		results.insert({ meshID, globalTransform }); // 存储结果
+	}
+
+	for (unsigned int i = 0; i < node->mNumChildren; ++i) {
+		TraverseNodes(scene, node->mChildren[i], globalTransform, results);
+	}
+}
 
 void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 	struct Vertex {
@@ -19,6 +38,9 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 	Assimp::Importer importer;
 	const aiScene *pScene = importer.ReadFile(path,
 			aiProcess_Triangulate | aiProcess_ConvertToLeftHanded | aiProcess_CalcTangentSpace | aiProcess_GenUVCoords);
+
+	glm::mat4 identity = glm::mat4(1.0f);
+	TraverseNodes(pScene, pScene->mRootNode, identity, results);
 
 	for (uint32 i = 0; i < pScene->mNumMeshes; ++i) {
 		m_Meshes.push_back(LoadMesh(pScene->mMeshes[i], renderer));
@@ -117,5 +139,6 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 		// pSubMesh->m_vertexbuffer = pSubMesh->m_indexbuffer;
 		renderer->uploadBufferMap.insert({ pSubMesh->m_indexbuffer, meshdata });
 	}
+	pSubMesh->m_materialID = pMesh->mMaterialIndex;
 	return pSubMesh;
 }

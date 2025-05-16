@@ -7,8 +7,10 @@ public:
 	Texture() = default;
 	void Create(Renderer *renderer, nri::TextureDesc &bufferDesc, nri::Texture2DViewDesc &viewDesc);
 	void Create(nri::Texture *tex, nri::Texture2DViewDesc &viewDesc);
-	uint32_t GetViewIndex() { return m_viewIndex; }
+	inline uint32_t GetViewIndex() { return m_viewIndex; }
+	inline void SetViewIndex(uint32_t index) { m_viewIndex = index; }
 	nri::Texture *GetTexture() { return m_texture; }
+	nri::Descriptor *GetView() { return m_view; }
 	bool GetUploadState() { return m_uploadState; }
 	void SetUploadState(bool state) { m_uploadState = state; }
 

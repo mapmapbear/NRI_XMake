@@ -1,12 +1,16 @@
 #pragma once
 #include "NRIDescs.h"
 #include "commonRenderPass.h"
+#include <memory>
+#include <unordered_map>
 #include <vector>
 
+class Mesh;
 class Renderer;
+class Texture;
 class CommonMeshPass : public CommonRenderPass {
 public:
-	CommonMeshPass(Renderer *renderer, utils::Scene &scene);
+	CommonMeshPass(Renderer *renderer, utils::Scene &scene, std::shared_ptr<Mesh>& rootMesh);
 	void Render(struct RenderInfo &info, Camera &camera) override;
 	void BuildPipeline() override;
 	void AllocGPUMemory() override;
@@ -86,6 +90,8 @@ private:
 	std::vector<std::pair<uint64_t, uint64_t>> m_sceneMeshOffsets;
 	std::vector<utils::NodeData> m_meshNodes = {};
 	utils::Scene &m_Scene;
+	std::shared_ptr<Mesh> m_rootMesh;
+	std::unordered_set<std::shared_ptr<Texture>> m_matTexSet;
 
 	uint32_t m_brdfTexIndex = 0;
 };
