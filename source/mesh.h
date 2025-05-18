@@ -13,10 +13,11 @@ class SubMesh {
 	friend class Mesh;
 
 public:
-	int GetMaterialID() { return m_materialID; }
+	int GetMaterialID() const { return m_materialID; }
 	SubMesh() = default;
 	// SubMesh(SubMesh &&) = default;
 	SubMesh(const SubMesh &) = default;
+	glm::mat4 GetTransform() const { return globalTransform; }
 	int m_materialID = -1;
 	int m_indexCount = 0;
 	int m_vertexCount = 0;
@@ -41,7 +42,7 @@ public:
 	void LoadFromUSD(std::string &path, Renderer *renderer);
 	int GetMeshCount() const { return (int)m_Meshes.size(); }
 	SubMesh *GetMesh(const int index) const { return m_Meshes[index].get(); }
-	const Material &GetMaterial(int materialId) const { return m_Materials[materialId]; }
+	const Material &GetMaterial(int materialId) { return m_Materials[materialId]; }
 	Mesh() = default;
 	Mesh(Mesh &&) = default;
 	Mesh(const Mesh &) = default;

@@ -88,7 +88,7 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 		return tex;
 	};
 	std::string dirPath = path.substr(0, path.find_last_of("/\\"));
-	;
+	
 	m_Materials.resize(pScene->mNumMaterials);
 	for (uint32 i = 0; i < pScene->mNumMaterials; ++i) {
 		Material &m = m_Materials[i];
@@ -179,5 +179,6 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 		renderer->uploadBufferMap.insert({ pSubMesh->m_indexbuffer, meshdata });
 	}
 	pSubMesh->m_materialID = pMesh->mMaterialIndex;
+	
 	return pSubMesh;
 }

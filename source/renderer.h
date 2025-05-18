@@ -2,9 +2,11 @@
 #include "Camera.h"
 #include "NRIDescs.h"
 #include "NRIFramework.h"
+#include "mesh.h"
 #include <future>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 struct RenderInfo {
 	nri::AttachmentsDesc &desc;
@@ -65,6 +67,15 @@ private:
 
 public:
 	utils::Scene m_Scene;
+
+	struct RenderNode {
+		const SubMesh* mesh;
+		const Material* material;
+		glm::mat4 globalTransform;
+	};
+
+	std::vector<RenderNode> m_OpaqueRenderNodes;
+	std::vector<RenderNode> m_TransparentRenderNodes;
 
 public:
 	utils::Texture defaultBlackTex;

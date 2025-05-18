@@ -261,6 +261,18 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	std::string meshFile = utils::GetFullPath("USD_Sponza/sponza.usdc", utils::DataFolder::ROOT);
 	meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this);
+	for (int i = 0; i < mesh->GetMeshCount(); ++i) {
+		RenderNode node;
+		node.mesh = mesh->GetMesh(i);
+		node.material = &mesh->GetMaterial(node.mesh->GetMaterialID());
+		node.globalTransform = node.mesh->GetTransform();
+
+		if (node.material->IsTransparent) {
+			m_TransparentRenderNodes.push_back(node);
+		} else {
+			m_OpaqueRenderNodes.push_back(node);
+		}
+	}
 	UploadSceneData();
 	skyPass = std::make_shared<SkyRenderPass>(this);
 	gridPass = std::make_shared<GridRenderPass>(this);
