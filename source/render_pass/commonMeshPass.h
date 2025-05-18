@@ -8,9 +8,10 @@
 class Mesh;
 class Renderer;
 class Texture;
+class Buffer;
 class CommonMeshPass : public CommonRenderPass {
 public:
-	CommonMeshPass(Renderer *renderer, utils::Scene &scene, std::shared_ptr<Mesh>& rootMesh);
+	CommonMeshPass(Renderer *renderer, utils::Scene &scene, std::shared_ptr<Mesh> &rootMesh);
 	void Render(struct RenderInfo &info, Camera &camera) override;
 	void BuildPipeline() override;
 	void AllocGPUMemory() override;
@@ -69,6 +70,7 @@ private:
 	nri::Texture *m_CubemapTexture = nullptr;
 	nri::Buffer *m_ConstantBuffer = nullptr;
 	nri::Buffer *m_GeometryBuffer = {};
+	// std::shared_ptr<Buffer> m_GeometryBuffer1 = nullptr;
 	nri::Buffer *m_MatrixStorageBuffer = nullptr;
 
 	nri::Descriptor *m_CubemapTextureShaderResource = nullptr;
@@ -92,6 +94,7 @@ private:
 	utils::Scene &m_Scene;
 	std::shared_ptr<Mesh> m_rootMesh;
 	std::unordered_set<std::shared_ptr<Texture>> m_matTexSet;
+	std::shared_ptr<Mesh> m_mesh;
 
 	uint32_t m_brdfTexIndex = 0;
 };

@@ -10,7 +10,7 @@ if is_mode("debug") then
     set_optimize("none")
 end
 
-add_requires("glfw", "glm", "assimp", "spdlog")
+add_requires("glfw", "glm", "assimp", "spdlog", "meshoptimizer")
 
 target("Detex")
     set_kind("static")
@@ -111,7 +111,7 @@ target("DemoApp")
     add_includedirs("3rd/NRI_Framework/Include", {public = true})
     add_includedirs("3rd/Detex", {public = true})
     add_includedirs("source/", {public = true})
-    add_packages("glfw", "glm", "assimp", "spdlog")
+    add_packages("glfw", "glm", "assimp", "spdlog", "meshoptimizer")
     add_files("main.cpp", "source/**.cpp")
     set_warnings("all")
     

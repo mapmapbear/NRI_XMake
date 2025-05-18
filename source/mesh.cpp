@@ -1,10 +1,12 @@
 #include "mesh.h"
 #include "NRIDescs.h"
+#include "assimp/GltfMaterial.h"
 #include "assimp/material.h"
 #include "assimp/types.h"
 #include "buffer.h"
 #include "renderer.h"
 #include "texture.h"
+#include <meshoptimizer.h>
 #include <assimp/Importer.hpp>
 #include <map>
 #include <memory>
@@ -93,6 +95,24 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 		m.m_BaseTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_BASE_COLOR);
 		m.m_NormalTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_NORMAL_CAMERA);
 		m.m_MetallicTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_METALNESS);
+		aiString alphaMode;
+		if (pScene->mMaterials[i]->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
+			if (alphaMode == aiString("BLEND")) {
+				std::cout << "Material is translucent (AlphaMode: BLEND)" << std::endl;
+				m.IsTransparent = true;
+			} else if (alphaMode == aiString("MASK")) {
+				float alphaCutoff = 0.5f;
+				pScene->mMaterials[i]->Get(AI_MATKEY_GLTF_ALPHACUTOFF, alphaCutoff);
+				std::cout << "Material uses Alpha Test (AlphaMode: MASK, Cutoff: " << alphaCutoff << ")" << std::endl;
+				m.IsTransparent = true;
+			} else if (alphaMode == aiString("OPAQUE")) {
+				std::cout << "Material is opaque (AlphaMode: OPAQUE)" << std::endl;
+				m.IsTransparent = false;
+			}
+		} else {
+			std::cout << "No AlphaMode specified, assuming opaque" << std::endl;
+			m.IsTransparent = false;
+		}
 	}
 }
 
@@ -122,15 +142,34 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 		}
 	}
 
+	std::vector<uint32_t> remap(meshdata->indices.size());
+	const size_t vertexCount =
+			meshopt_generateVertexRemap(remap.data(), meshdata->indices.data(), meshdata->indices.size(), meshdata->m_vertexesData.data(), meshdata->indices.size(), sizeof(utils::Vertex));
+
+	std::vector<uint32_t> remappedIndices(meshdata->indices.size());
+	std::vector<utils::Vertex> remappedVertices(vertexCount);
+
+	meshopt_remapIndexBuffer(remappedIndices.data(), meshdata->indices.data(), meshdata->indices.size(), remap.data());
+	meshopt_remapVertexBuffer(remappedVertices.data(), meshdata->m_vertexesData.data(), meshdata->m_vertexesData.size(), sizeof(utils::Vertex), remap.data());
+	meshopt_optimizeVertexCache(remappedIndices.data(), remappedIndices.data(), meshdata->indices.size(), vertexCount);
+	// meshopt_optimizeOverdraw(
+	// 		remappedIndices.data(), remappedIndices.data(), meshdata->indices.size(), remappedVertices.data(), vertexCount, sizeof(utils::Vertex),
+	// 		1.05f);
+	meshopt_optimizeVertexFetch(
+			remappedVertices.data(), remappedIndices.data(), meshdata->indices.size(), remappedVertices.data(), vertexCount, sizeof(utils::Vertex));
+
+	meshdata->indices = remappedIndices;
+	meshdata->m_vertexesData = remappedVertices;
+
 	std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
 	{
 		pSubMesh->m_indexCount = (int)meshdata->indices.size();
 		pSubMesh->m_indexbuffer = std::make_unique<Buffer>();
-		uint32_t indicesAlignSize = helper::Align(helper::GetByteSizeOf(meshdata->indices), 32);
-		uint32_t vertexSize = helper::GetByteSizeOf(meshdata->m_vertexesData);
+		uint32_t indicesAlignSize = static_cast<uint32_t>(helper::Align(helper::GetByteSizeOf(meshdata->indices), 32));
+		uint32_t vertexSize = static_cast<uint32_t>(helper::GetByteSizeOf(meshdata->m_vertexesData));
 		nri::BufferDesc desc = {};
 		desc.size = indicesAlignSize + vertexSize;
-		pSubMesh->vertexOffset = desc.size;
+		pSubMesh->vertexOffset = indicesAlignSize;
 		desc.usage = nri::BufferUsageBits::VERTEX_BUFFER |
 				nri::BufferUsageBits::INDEX_BUFFER;
 		nri::BufferViewDesc viewDesc{};

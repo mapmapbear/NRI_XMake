@@ -298,7 +298,6 @@ void Renderer::UploadSceneData() {
 		geometryBufferDatas.at(i).resize(indicesAlignSize + vertexSize);
 
 		memcpy(&geometryBufferDatas.at(i)[0], meshData->indices.data(), helper::GetByteSizeOf(meshData->indices));
-		SPDLOG_ERROR("indicesAlignSize: {}, vertexSize: {}, total: {}", indicesAlignSize, vertexSize, indicesAlignSize + vertexSize);
 		memcpy(&geometryBufferDatas.at(i)[indicesAlignSize], meshData->m_vertexesData.data(), vertexSize);
 
 		nri::BufferUploadDesc &bufferData = uploadBufferDescs.at(i);

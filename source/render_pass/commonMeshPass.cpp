@@ -5,6 +5,7 @@
 #include "buffer.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "mesh.h"
+#include "spdlog/spdlog.h"
 #include "texture.h"
 #include <stddef.h>
 #include <cstddef>
@@ -199,6 +200,13 @@ void CommonMeshPass::AllocGPUMemory() {
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_GeometryBuffer));
 		NRI.SetDebugName(m_GeometryBuffer, "m_GeometryBuffer");
+		m_mesh = std::make_shared<Mesh>();
+		std::unique_ptr<SubMesh> subMesh = std::make_unique<SubMesh>();
+		std::shared_ptr<Buffer> m_GeometryBuffer1 = std::make_shared<Buffer>();
+		nri::BufferViewDesc viewDesc = {};
+		m_GeometryBuffer1->Create(m_renderer, bufferDesc, viewDesc);
+		subMesh->m_indexbuffer = m_GeometryBuffer1;
+		m_mesh->m_Meshes.push_back((std::move(subMesh)));
 	}
 }
 
@@ -309,7 +317,15 @@ void CommonMeshPass::BindMemory() {
 		bufferData.dataSize = geometryBufferData.size();
 		bufferData.after = { nri::AccessBits::INDEX_BUFFER |
 			nri::AccessBits::VERTEX_BUFFER };
-		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData };
+
+		nri::BufferUploadDesc bufferData1 = {};
+		bufferData1.buffer = m_mesh->m_Meshes.at(0)->m_indexbuffer->GetBuffer();
+		bufferData1.data = &geometryBufferData[0];
+		bufferData1.dataSize = geometryBufferData.size();
+		bufferData1.after = { nri::AccessBits::INDEX_BUFFER |
+			nri::AccessBits::VERTEX_BUFFER };
+		NRI.SetDebugName(m_mesh->m_Meshes.at(0)->m_indexbuffer->GetBuffer(), "m_GeometryBuffer1");
+		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData, bufferData1 };
 
 		uint32_t texSize = (uint32_t)m_textures.size();
 		std::vector<nri::TextureUploadDesc> texUploadDescArray(texSize);
@@ -428,7 +444,7 @@ void CommonMeshPass::BuildPipeline() {
 		nri::RasterizationDesc rasterizationDesc = {};
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
 		rasterizationDesc.cullMode = nri::CullMode::BACK;
-		rasterizationDesc.frontCounterClockwise = true;
+		rasterizationDesc.frontCounterClockwise = false;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 #ifdef HDR_ENABLE
@@ -478,7 +494,7 @@ void CommonMeshPass::BuildPipeline() {
 	{
 		for (auto &tex : m_matTexSet) {
 			nri::Descriptor *view = tex->GetView();
-			tex->SetViewIndex(newMatTexIndex);
+			tex->SetViewIndex(newMatTexIndex++);
 			m_textureViews.push_back(view);
 		}
 	}
@@ -529,58 +545,58 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
 
-	{
-		helper::Annotation annotation(NRI, info.cmdBuffer, "SimpleModelMesh");
-
-		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
-		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
-		glm::mat4 m1 = glm::mat4(1.0);
-		for (uint32_t meshIndex = 0; meshIndex < m_meshNodes.size(); ++meshIndex) {
-			m1 = m_meshNodes.at(meshIndex).globalTransform;
-
-			for (uint16_t i = 0; i < m_meshNodes[meshIndex].meshIndices.size(); ++i) {
-				CBlock block = {};
-				block.modelMat = m1;
-				block.camPos = vec4(cameraPos, 1.0);
-				uint32_t index = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex;
-				uint32_t index1 = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex1;
-				uint32_t index2 = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex2;
-				block.index[0] = index; //m_renderer->testIndex;
-				block.index[1] = index1;
-				block.index[2] = index2;
-				block.index[3] = m_brdfTexIndex;
-				utils::MaterialData matData = m_Scene.materialDatas.at(m_Scene.meshDatas.at(i).materialIndex);
-				block.baseColor = matData.baseColor;
-				block.pbrParams = { matData.metallic, matData.roughness, 0.0, 0.0 };
-				block.testVec = { m_renderer->testRoughness, m_renderer->testMaterial, 0.0, 0.0 };
-
-				NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
-
-				uint32_t indexOffset = (uint32_t)m_Scene.meshes.at(m_meshNodes[meshIndex].meshIndices[i]).indexOffset;
-				uint32_t vertexOffset = (uint32_t)m_Scene.meshes.at(m_meshNodes[meshIndex].meshIndices[i]).vertexOffset;
-				uint32_t indexCount = (uint32_t)m_Scene.meshes.at(m_meshNodes[meshIndex].meshIndices[i]).indexNum;
-				NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer, indexOffset,
-						nri::IndexType::UINT32);
-				nri::VertexBufferDesc vertexBufferDesc = {};
-				vertexBufferDesc.buffer = m_GeometryBuffer;
-				vertexBufferDesc.offset = vertexOffset;
-				vertexBufferDesc.stride = sizeof(utils::Vertex);
-				NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
-				NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
-						*m_ConstantBufferDescriptorSet, nullptr);
-				{
-					const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
-						600.f, 0.0f, 1.0f };
-					NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
-
-					nri::Rect scissor = { 0, 0, 900, 600 };
-					NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
-				}
-				uint32_t instanceCount = 1;
-				NRI.CmdDrawIndexed(info.cmdBuffer, { indexCount, instanceCount, 0, 0, 0 });
-			}
-		}
-	}
+	// {
+	// 	helper::Annotation annotation(NRI, info.cmdBuffer, "SimpleModelMesh");
+	// 
+	// 	NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
+	// 	NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
+	// 	glm::mat4 m1 = glm::mat4(1.0);
+	// 	for (uint32_t meshIndex = 0; meshIndex < m_meshNodes.size(); ++meshIndex) {
+	// 		m1 = m_meshNodes.at(meshIndex).globalTransform;
+	// 
+	// 		for (uint16_t i = 0; i < m_meshNodes[meshIndex].meshIndices.size(); ++i) {
+	// 			CBlock block = {};
+	// 			block.modelMat = m1;
+	// 			block.camPos = vec4(cameraPos, 1.0);
+	// 			uint32_t index = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex;
+	// 			uint32_t index1 = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex1;
+	// 			uint32_t index2 = m_materialIndexBlocks.at(m_Scene.meshDatas.at(i).materialIndex).textureIndex2;
+	// 			block.index[0] = index; //m_renderer->testIndex;
+	// 			block.index[1] = index1;
+	// 			block.index[2] = index2;
+	// 			block.index[3] = m_brdfTexIndex;
+	// 			utils::MaterialData matData = m_Scene.materialDatas.at(m_Scene.meshDatas.at(i).materialIndex);
+	// 			block.baseColor = matData.baseColor;
+	// 			block.pbrParams = { matData.metallic, matData.roughness, 0.0, 0.0 };
+	// 			block.testVec = { m_renderer->testRoughness, m_renderer->testMaterial, 0.0, 0.0 };
+	// 
+	// 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+	// 
+	// 			uint32_t indexOffset = (uint32_t)m_Scene.meshes.at(m_meshNodes[meshIndex].meshIndices[i]).indexOffset;
+	// 			uint32_t vertexOffset = (uint32_t)m_Scene.meshes.at(m_meshNodes[meshIndex].meshIndices[i]).vertexOffset;
+	// 			uint32_t indexCount = (uint32_t)m_Scene.meshes.at(m_meshNodes[meshIndex].meshIndices[i]).indexNum;
+	// 			NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_mesh->m_Meshes.at(0)->m_indexbuffer->GetBuffer(), indexOffset,
+	// 					nri::IndexType::UINT32);
+	// 			nri::VertexBufferDesc vertexBufferDesc = {};
+	// 			vertexBufferDesc.buffer = m_mesh->m_Meshes.at(0)->m_indexbuffer->GetBuffer();
+	// 			vertexBufferDesc.offset = vertexOffset;
+	// 			vertexBufferDesc.stride = sizeof(utils::Vertex);
+	// 			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+	// 			NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
+	// 					*m_ConstantBufferDescriptorSet, nullptr);
+	// 			{
+	// 				const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
+	// 					600.f, 0.0f, 1.0f };
+	// 				NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
+	// 
+	// 				nri::Rect scissor = { 0, 0, 900, 600 };
+	// 				NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
+	// 			}
+	// 			uint32_t instanceCount = 1;
+	// 			NRI.CmdDrawIndexed(info.cmdBuffer, { indexCount, instanceCount, 0, 0, 0 });
+	// 		}
+	// 	}
+	// }
 
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "SimpleModelMesh2");
@@ -597,14 +613,16 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			block.index[0] = mat.m_BaseTexture->GetViewIndex();
 			block.index[1] = block.index[2] = block.index[3] = 0.0;
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
-			NRI.CmdSetIndexBuffer(info.cmdBuffer, *sMesh->m_indexbuffer->GetBuffer(), sMesh->indexOffset,
-					nri::IndexType::UINT32);
-
+			nri::Buffer* geoBuffer = m_rootMesh->m_Meshes.at(meshIndex)->m_indexbuffer->GetBuffer();
 			nri::VertexBufferDesc vertexBufferDesc = {};
-			vertexBufferDesc.buffer = sMesh->m_indexbuffer->GetBuffer();
-			vertexBufferDesc.offset = sMesh->vertexOffset;
+			vertexBufferDesc.buffer = geoBuffer;
+			vertexBufferDesc.offset = m_rootMesh->m_Meshes.at(meshIndex)->vertexOffset;
 			vertexBufferDesc.stride = sizeof(utils::Vertex);
 			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+
+			NRI.CmdSetIndexBuffer(info.cmdBuffer, *geoBuffer, sMesh->indexOffset,
+					nri::IndexType::UINT32);
+	
 			NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
 					*m_ConstantBufferDescriptorSet, nullptr);
 

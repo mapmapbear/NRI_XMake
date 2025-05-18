@@ -1,9 +1,9 @@
 #pragma once
+#include "glm/mat4x4.hpp"
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
-#include <map>
-#include "glm/mat4x4.hpp"
 
 class Buffer;
 class Texture;
@@ -14,8 +14,9 @@ class SubMesh {
 
 public:
 	int GetMaterialID() { return m_materialID; }
-
-
+	SubMesh() = default;
+	// SubMesh(SubMesh &&) = default;
+	SubMesh(const SubMesh &) = default;
 	int m_materialID = -1;
 	int m_indexCount = 0;
 	int m_vertexCount = 0;
@@ -46,7 +47,8 @@ public:
 	Mesh(const Mesh &) = default;
 	std::map<uint32_t, glm::mat4> results = {};
 
-private:
+	// private:
+public:
 	std::unique_ptr<SubMesh> LoadMesh(aiMesh *pMesh, Renderer *renderer);
 
 	std::vector<std::unique_ptr<SubMesh>> m_Meshes;
