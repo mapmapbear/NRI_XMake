@@ -10,6 +10,7 @@
 #include <assimp/Importer.hpp>
 #include <map>
 #include <memory>
+#include <set>
 #include <vector>
 
 void TraverseNodes(const aiScene *scene, const aiNode *node, const glm::mat4 &parentTransform, std::map<uint32_t, glm::mat4> &results) {
@@ -88,7 +89,7 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 		return tex;
 	};
 	std::string dirPath = path.substr(0, path.find_last_of("/\\"));
-	
+
 	m_Materials.resize(pScene->mNumMaterials);
 	for (uint32 i = 0; i < pScene->mNumMaterials; ++i) {
 		Material &m = m_Materials[i];
@@ -119,11 +120,12 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 	std::shared_ptr<utils::MeshData> meshdata = std::make_shared<utils::MeshData>();
 	meshdata->m_vertexesData.resize(pMesh->mNumVertices);
+	meshdata->vertices.resize(pMesh->mNumVertices);
 	meshdata->indices.resize(pMesh->mNumFaces * 3);
-
 	for (uint32 j = 0; j < pMesh->mNumVertices; ++j) {
 		utils::Vertex &vertex = meshdata->m_vertexesData[j];
 		vertex.position = *reinterpret_cast<glm::vec3 *>(&pMesh->mVertices[j]);
+		meshdata->vertices[j] = *reinterpret_cast<glm::vec3 *>(&pMesh->mVertices[j]);
 		if (pMesh->HasTextureCoords(0)) {
 			vertex.uv = *reinterpret_cast<glm::vec2 *>(&pMesh->mTextureCoords[0][j]);
 		}
@@ -142,30 +144,34 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 		}
 	}
 
-	std::vector<uint32_t> remap(meshdata->indices.size());
-	const size_t vertexCount =
-			meshopt_generateVertexRemap(remap.data(), meshdata->indices.data(), meshdata->indices.size(), meshdata->m_vertexesData.data(), meshdata->indices.size(), sizeof(utils::Vertex));
+	size_t vertexCount = meshdata->m_vertexesData.size();
+	size_t indexCount = meshdata->indices.size();
 
-	std::vector<uint32_t> remappedIndices(meshdata->indices.size());
-	std::vector<utils::Vertex> remappedVertices(vertexCount);
+	std::vector<unsigned int> remap(vertexCount);
+	size_t newVertexCount = meshopt_generateVertexRemap(remap.data(), meshdata->indices.data(), indexCount, meshdata->m_vertexesData.data(), vertexCount, sizeof(utils::Vertex));
 
-	meshopt_remapIndexBuffer(remappedIndices.data(), meshdata->indices.data(), meshdata->indices.size(), remap.data());
-	meshopt_remapVertexBuffer(remappedVertices.data(), meshdata->m_vertexesData.data(), meshdata->m_vertexesData.size(), sizeof(utils::Vertex), remap.data());
-	meshopt_optimizeVertexCache(remappedIndices.data(), remappedIndices.data(), meshdata->indices.size(), vertexCount);
-	// meshopt_optimizeOverdraw(
-	// 		remappedIndices.data(), remappedIndices.data(), meshdata->indices.size(), remappedVertices.data(), vertexCount, sizeof(utils::Vertex),
-	// 		1.05f);
-	meshopt_optimizeVertexFetch(
-			remappedVertices.data(), remappedIndices.data(), meshdata->indices.size(), remappedVertices.data(), vertexCount, sizeof(utils::Vertex));
+	std::vector<utils::Vertex> remappedVertices(newVertexCount);
+	std::vector<uint32_t> remappedIndices(indexCount);
+	meshopt_remapVertexBuffer(remappedVertices.data(), meshdata->m_vertexesData.data(), vertexCount, sizeof(utils::Vertex), remap.data());
+	meshopt_remapIndexBuffer(remappedIndices.data(), meshdata->indices.data(), indexCount, remap.data());
 
+	std::vector<uint32_t> optimizedIndices(indexCount);
+	meshopt_optimizeVertexCache(optimizedIndices.data(), remappedIndices.data(), indexCount, newVertexCount);
+
+	std::vector<uint32_t> shadow_indices(indexCount);
+	meshopt_generateShadowIndexBuffer(shadow_indices.data(), optimizedIndices.data(), indexCount, remappedVertices.data(), newVertexCount, sizeof(glm::vec3), sizeof(utils::Vertex));
+	
 	meshdata->indices = remappedIndices;
+	meshdata->shadow_indices = shadow_indices;
 	meshdata->m_vertexesData = remappedVertices;
 
 	std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
 	{
 		pSubMesh->m_indexCount = (int)meshdata->indices.size();
 		pSubMesh->m_indexbuffer = std::make_unique<Buffer>();
+		pSubMesh->m_vertexbuffer = std::make_unique<Buffer>();
 		uint32_t indicesAlignSize = static_cast<uint32_t>(helper::Align(helper::GetByteSizeOf(meshdata->indices), 32));
+		uint32_t shadow_indicesAlignSize = static_cast<uint32_t>(helper::Align(helper::GetByteSizeOf(meshdata->shadow_indices), 32));
 		uint32_t vertexSize = static_cast<uint32_t>(helper::GetByteSizeOf(meshdata->m_vertexesData));
 		nri::BufferDesc desc = {};
 		desc.size = indicesAlignSize + vertexSize;
@@ -175,10 +181,13 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 		nri::BufferViewDesc viewDesc{};
 
 		pSubMesh->m_indexbuffer->Create(renderer, desc, viewDesc);
+		desc.size = shadow_indicesAlignSize + static_cast<uint32_t>(helper::GetByteSizeOf(meshdata->vertices));
+		pSubMesh->m_vertexbuffer->Create(renderer, desc, viewDesc);
 		// pSubMesh->m_vertexbuffer = pSubMesh->m_indexbuffer;
-		renderer->uploadBufferMap.insert({ pSubMesh->m_indexbuffer, meshdata });
+		renderer->uploadIndexBufferMap.insert({ pSubMesh->m_indexbuffer, meshdata });
+		renderer->uploadShadowIndexBufferMap.insert({ pSubMesh->m_vertexbuffer, meshdata });
 	}
 	pSubMesh->m_materialID = pMesh->mMaterialIndex;
-	
+
 	return pSubMesh;
 }

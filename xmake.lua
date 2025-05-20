@@ -10,7 +10,8 @@ if is_mode("debug") then
     set_optimize("none")
 end
 
-add_requires("glfw", "glm", "assimp", "spdlog", "meshoptimizer")
+add_requires("glfw", "glm", "assimp", "spdlog")
+add_requires("meshoptimizer", {debug = true})
 
 target("Detex")
     set_kind("static")

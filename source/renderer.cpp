@@ -300,9 +300,9 @@ void Renderer::UploadSceneData() {
 	i = 0;
 	std::vector<nri::BufferUploadDesc> uploadBufferDescs;
 	std::vector<std::vector<uint8_t>> geometryBufferDatas;
-	uploadBufferDescs.resize(uploadBufferMap.size());
-	geometryBufferDatas.resize(uploadBufferMap.size());
-	for (auto &node : uploadBufferMap) {
+	uploadBufferDescs.resize(uploadIndexBufferMap.size() + uploadShadowIndexBufferMap.size());
+	geometryBufferDatas.resize(uploadIndexBufferMap.size() + uploadShadowIndexBufferMap.size());
+	for (auto &node : uploadIndexBufferMap) {
 		std::shared_ptr<Buffer> buffer = node.first;
 		std::shared_ptr<utils::MeshData> meshData = node.second;
 		uint32_t indicesAlignSize = (uint32_t)helper::Align(helper::GetByteSizeOf(meshData->indices), 32);
@@ -311,6 +311,25 @@ void Renderer::UploadSceneData() {
 
 		memcpy(&geometryBufferDatas.at(i)[0], meshData->indices.data(), helper::GetByteSizeOf(meshData->indices));
 		memcpy(&geometryBufferDatas.at(i)[indicesAlignSize], meshData->m_vertexesData.data(), vertexSize);
+
+		nri::BufferUploadDesc &bufferData = uploadBufferDescs.at(i);
+		bufferData.buffer = buffer->GetBuffer();
+		bufferData.data = geometryBufferDatas.at(i).data();
+		bufferData.dataSize = geometryBufferDatas.at(i).size();
+		bufferData.after = { nri::AccessBits::INDEX_BUFFER |
+			nri::AccessBits::VERTEX_BUFFER };
+		GetNRI().SetDebugName(buffer->GetBuffer(), std::format("Buffer{}", i).c_str());
+		i++;
+	}
+	i = uploadIndexBufferMap.size();
+	for (auto &node : uploadShadowIndexBufferMap) {
+		std::shared_ptr<Buffer> buffer = node.first;
+		std::shared_ptr<utils::MeshData> meshData = node.second;
+		uint32_t shadow_indicesAlignSize = (uint32_t)helper::Align(helper::GetByteSizeOf(meshData->shadow_indices), 32);
+		uint32_t vertexSize = (uint32_t)helper::GetByteSizeOf(meshData->vertices);
+		geometryBufferDatas.at(i).resize(shadow_indicesAlignSize + vertexSize);
+		memcpy(&geometryBufferDatas.at(i)[0], meshData->shadow_indices.data(), helper::GetByteSizeOf(meshData->shadow_indices));
+		memcpy(&geometryBufferDatas.at(i)[shadow_indicesAlignSize], meshData->m_vertexesData.data(), vertexSize);
 
 		nri::BufferUploadDesc &bufferData = uploadBufferDescs.at(i);
 		bufferData.buffer = buffer->GetBuffer();

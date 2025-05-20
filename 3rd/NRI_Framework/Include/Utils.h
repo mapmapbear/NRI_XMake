@@ -197,6 +197,7 @@ struct MeshData {
 	std::vector<glm::vec3> tangents;
 	std::vector<glm::vec3> bitangents;
 	std::vector<uint32_t> indices;
+	std::vector<uint32_t> shadow_indices;
 	std::vector<Vertex> m_vertexesData;
 	uint32_t materialIndex;
 };

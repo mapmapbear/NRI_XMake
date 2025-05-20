@@ -446,7 +446,7 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	desc.nearZ = 0.01f;
 	desc.farZ = 100.0f;
 	desc.isReversedZ = true;
-	desc.timeScale = 1.0;
+	desc.timeScale = 5.0;
 	GetCameraDescFromInputDevices(desc);
 	m_Camera.Update(desc, frameIndex);
 }

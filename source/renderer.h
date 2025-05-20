@@ -54,7 +54,8 @@ public:
 	float testRoughness = 0.0;
 	void SetTestIndex(int index) { testIndex = index; }
 	std::unordered_map<std::shared_ptr<Texture>, std::shared_ptr<utils::Texture>> uploadTextureMap;
-	std::unordered_map<std::shared_ptr<Buffer>, std::shared_ptr<utils::MeshData>> uploadBufferMap;
+	std::unordered_map<std::shared_ptr<Buffer>, std::shared_ptr<utils::MeshData>> uploadIndexBufferMap;
+	std::unordered_map<std::shared_ptr<Buffer>, std::shared_ptr<utils::MeshData>> uploadShadowIndexBufferMap;
 
 private:
 	nri::Device *m_Device = nullptr;
