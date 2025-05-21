@@ -364,8 +364,8 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	nri::TextureUploadDesc textureData1;
 	textureData1.subresources = &colorSubRes;
 	textureData1.texture = m_ColorTexture;
-	textureData1.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT };
-	// textureData1.after = { nri::AccessBits::COPY_DESTINATION, nri::Layout::COPY_DESTINATION };
+	//textureData1.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT };
+	textureData1.after = { nri::AccessBits::COPY_DESTINATION, nri::Layout::COPY_DESTINATION };
 	textureData1.planes = nri::PlaneBits::ALL;
 
 	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData1, textureData };
@@ -503,7 +503,7 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 			barrierGroupDesc.textureNum = 1;
 			barrierGroupDesc.textures = &textureBarrierDescs;
 
-			// NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
+			NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
 		}
 
 		// Transform Depth RT
@@ -531,6 +531,17 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		presentDesc = attachmentsDesc;
 		presentDesc.colors = &currentBackBuffer.colorAttachment;
 
+		nri::AttachmentsDesc depthAttachmentsDesc = attachmentsDesc;
+		depthAttachmentsDesc.colorNum = 0;
+		depthAttachmentsDesc.colors = nullptr;
+
+		// NRI.CmdBeginRendering(*commandBuffer, depthAttachmentsDesc);
+		// {
+		// 	RenderInfo info = { .desc = attachmentsDesc, .cmdBuffer = *commandBuffer };
+		// 	testRenderPtr->OnRender(info, m_Camera);
+		// }
+		// NRI.CmdEndRendering(*commandBuffer);
+
 		NRI.CmdBeginRendering(*commandBuffer, attachmentsDesc);
 		{
 			{
@@ -546,10 +557,11 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 				clearDesc.value.depthStencil.depth = 0.0;
 				NRI.CmdClearAttachments(*commandBuffer, &clearDesc, 1, nullptr, 0);
 			}
-			RenderInfo info = { .desc = attachmentsDesc, .cmdBuffer = *commandBuffer };
-			testRenderPtr->OnRender(info, m_Camera);
 		}
 		NRI.CmdEndRendering(*commandBuffer);
+
+		RenderInfo info = { .desc = attachmentsDesc, .cmdBuffer = *commandBuffer };
+		testRenderPtr->OnRender(info, m_Camera);
 
 		// Transform Color RT -> Back Buffer
 		{

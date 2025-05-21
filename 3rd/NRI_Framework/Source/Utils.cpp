@@ -26,8 +26,10 @@ struct Shader {
 	nri::StageBits stage;
 };
 
-constexpr std::array<Shader, 13> gShaderExts = { {
+constexpr std::array<Shader, 15> gShaderExts = { {
 		{ "", nri::StageBits::NONE },
+		{ "vs_main", nri::StageBits::VERTEX_SHADER },
+		{ "ps_main", nri::StageBits::FRAGMENT_SHADER },
 		{ ".vs.", nri::StageBits::VERTEX_SHADER },
 		{ ".tcs.", nri::StageBits::TESS_CONTROL_SHADER },
 		{ ".tes.", nri::StageBits::TESS_EVALUATION_SHADER },
@@ -40,6 +42,7 @@ constexpr std::array<Shader, 13> gShaderExts = { {
 		{ ".rchit.", nri::StageBits::CLOSEST_HIT_SHADER },
 		{ ".rahit.", nri::StageBits::ANY_HIT_SHADER },
 		{ "<noimpl>", nri::StageBits::CALLABLE_SHADER },
+
 } };
 
 //========================================================================================================================
@@ -622,7 +625,13 @@ bool utils::LoadFile(const std::string &path, std::vector<uint8_t> &data) {
 
 nri::ShaderDesc utils::LoadShader(nri::GraphicsAPI graphicsAPI, const std::string &shaderName, ShaderCodeStorage &storage, const char *entryPointName) {
 	const char *ext = GetShaderExt(graphicsAPI);
-	std::string path = GetFullPath(shaderName + ext, DataFolder::TESTSHADER);
+	std::string newShaderName = shaderName;
+	bool defaultState = true;
+	if (entryPointName != nullptr && strcmp(entryPointName, "main")) {
+		newShaderName += { "_" + std::string(entryPointName) };
+		defaultState = false;
+	}
+	std::string path = GetFullPath(newShaderName + ext, DataFolder::TESTSHADER);
 	nri::ShaderDesc shaderDesc = {};
 
 	size_t i = 1;
@@ -643,7 +652,7 @@ nri::ShaderDesc utils::LoadShader(nri::GraphicsAPI graphicsAPI, const std::strin
 	}
 
 	if (i == gShaderExts.size()) {
-		printf("ERROR: Shader '%s' has invalid shader extension!\n", shaderName.c_str());
+		SPDLOG_ERROR("ERROR: Shader {} has invalid shader extension!\n error Path: {}", newShaderName.c_str(), path);
 
 		NRI_ABORT_ON_FALSE(false);
 	};

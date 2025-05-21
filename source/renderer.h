@@ -32,6 +32,7 @@ public:
 	void OnStart(nri::DescriptorSet *globalSet);
 	void OnUpdate();
 	void OnPreRender();
+	void OnRenderDepth(RenderInfo &info, Camera &camera);
 	void OnRender(RenderInfo &info, Camera &camera);
 	void OnPresent(RenderInfo &info);
 	void OnPostRender();
@@ -45,6 +46,9 @@ public:
 	std::shared_ptr<Texture> GetDefaultBlackTexPtr() { return m_DefaultBlackTex; }
 	std::shared_ptr<Texture> GetDefaultWhiteTexPtr() { return m_DefaultWhiteTex; }
 	std::shared_ptr<Texture> GetDefaultNormalTexPtr() { return m_DefaultNormalTex; }
+
+private:
+	void RandomLights();
 
 public:
 	int testIndex = 0;
@@ -68,10 +72,10 @@ private:
 
 public:
 	utils::Scene m_Scene;
-
+	std::pair<glm::vec3, glm::vec3> m_SceneAABB;
 	struct RenderNode {
-		const SubMesh* mesh;
-		const Material* material;
+		const SubMesh *mesh;
+		const Material *material;
 		glm::mat4 globalTransform;
 	};
 

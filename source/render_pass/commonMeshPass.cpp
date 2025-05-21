@@ -121,7 +121,6 @@ void CommonMeshPass::BindMemory() {
 				NRI.CreateBufferView(bufferViewDesc, m_ConstantBufferView));
 		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
-
 }
 
 void CommonMeshPass::BuildPipeline() {
@@ -129,7 +128,6 @@ void CommonMeshPass::BuildPipeline() {
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
 
 	// Pipeline
-	utils::ShaderCodeStorage shaderCodeStorage;
 	{
 		nri::DescriptorRangeDesc descriptorRangeConstant[1];
 		descriptorRangeConstant[0] = { 0, 1, nri::DescriptorType::CONSTANT_BUFFER,
@@ -222,7 +220,7 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::DepthAttachmentDesc depthAttachmentDesc = {};
 		depthAttachmentDesc.write = true;
-		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::EQUAL;
 		depthAttachmentDesc.boundsTest = false;
 
 		nri::OutputMergerDesc outputMergerDesc = {};
@@ -230,6 +228,8 @@ void CommonMeshPass::BuildPipeline() {
 		outputMergerDesc.colorNum = 1;
 		outputMergerDesc.depth = depthAttachmentDesc;
 		outputMergerDesc.depthStencilFormat = nri::Format::D32_SFLOAT;
+
+		utils::ShaderCodeStorage shaderCodeStorage;
 
 		nri::ShaderDesc shaderStages[] = {
 			utils::LoadShader(deviceDesc.graphicsAPI,
@@ -249,6 +249,101 @@ void CommonMeshPass::BuildPipeline() {
 
 		NRI_ABORT_ON_FAILURE(NRI.CreateGraphicsPipeline(
 				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_Pipeline));
+	}
+
+	// Depthonly Pipeline
+	{
+		nri::DescriptorRangeDesc descriptorRangeConstant[1];
+		descriptorRangeConstant[0] = { 0, 1, nri::DescriptorType::CONSTANT_BUFFER,
+			nri::StageBits::ALL };
+
+		nri::DescriptorSetDesc descriptorSetDescs[] = {
+			{ 0, descriptorRangeConstant,
+					helper::GetCountOf(descriptorRangeConstant) }
+		};
+
+		nri::RootConstantDesc rootConstant = { 1, sizeof(CBlock),
+			nri::StageBits::ALL };
+
+		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
+		pipelineLayoutDesc.descriptorSetNum =
+				helper::GetCountOf(descriptorSetDescs);
+		pipelineLayoutDesc.descriptorSets = descriptorSetDescs;
+		pipelineLayoutDesc.rootConstantNum = 1;
+		pipelineLayoutDesc.rootConstants = &rootConstant;
+		pipelineLayoutDesc.shaderStages =
+				nri::StageBits::VERTEX_SHADER | nri::StageBits::FRAGMENT_SHADER;
+
+		NRI_ABORT_ON_FAILURE(NRI.CreatePipelineLayout(*m_renderer->GetRenderDevice(), pipelineLayoutDesc,
+				m_DepthPipelineLayout));
+
+		nri::VertexStreamDesc vertexStreamDesc = {};
+		vertexStreamDesc.bindingSlot = 0;
+
+		nri::VertexAttributeDesc vertexAttributeDesc = {};
+		vertexAttributeDesc.format = nri::Format::RGB32_SFLOAT;
+		vertexAttributeDesc.streamIndex = 0;
+		vertexAttributeDesc.offset = helper::GetOffsetOf(&utils::Vertex::position);
+		vertexAttributeDesc.d3d = { "POSITION", 0 };
+		vertexAttributeDesc.vk.location = { 0 };
+
+		nri::VertexInputDesc vertexInputDesc = {};
+		vertexInputDesc.attributes = &vertexAttributeDesc;
+		vertexInputDesc.attributeNum = 1;
+		vertexInputDesc.streams = &vertexStreamDesc;
+		vertexInputDesc.streamNum = 1;
+
+		nri::InputAssemblyDesc inputAssemblyDesc = {};
+		inputAssemblyDesc.topology = nri::Topology::TRIANGLE_LIST;
+
+		nri::RasterizationDesc rasterizationDesc = {};
+		rasterizationDesc.fillMode = nri::FillMode::SOLID;
+		rasterizationDesc.cullMode = nri::CullMode::BACK;
+		rasterizationDesc.frontCounterClockwise = false;
+
+		nri::ColorAttachmentDesc colorAttachmentDesc = {};
+#ifdef HDR_ENABLE
+		colorAttachmentDesc.format = nri::Format::R10_G10_B10_A2_UNORM;
+#else
+		colorAttachmentDesc.format = nri::Format::RGBA8_UNORM;
+#endif
+		colorAttachmentDesc.colorWriteMask = nri::ColorWriteBits::RGBA;
+		colorAttachmentDesc.blendEnabled = false;
+		colorAttachmentDesc.colorBlend = { nri::BlendFactor::SRC_ALPHA,
+			nri::BlendFactor::ONE_MINUS_SRC_ALPHA,
+			nri::BlendFunc::ADD };
+
+		nri::DepthAttachmentDesc depthAttachmentDesc = {};
+		depthAttachmentDesc.write = true;
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
+		depthAttachmentDesc.boundsTest = false;
+
+		nri::OutputMergerDesc outputMergerDesc = {};
+		outputMergerDesc.colors = &colorAttachmentDesc;
+		outputMergerDesc.colorNum = 1;
+		outputMergerDesc.depth = depthAttachmentDesc;
+		outputMergerDesc.depthStencilFormat = nri::Format::D32_SFLOAT;
+
+		utils::ShaderCodeStorage shaderCodeStorage;
+
+		nri::ShaderDesc shaderStages[] = {
+			utils::LoadShader(deviceDesc.graphicsAPI,
+					"depthOnly", shaderCodeStorage, "vs_main"),
+			utils::LoadShader(deviceDesc.graphicsAPI, "depthOnly",
+					shaderCodeStorage, "ps_main")
+		};
+
+		nri::GraphicsPipelineDesc graphicsPipelineDesc = {};
+		graphicsPipelineDesc.pipelineLayout = m_DepthPipelineLayout;
+		graphicsPipelineDesc.vertexInput = &vertexInputDesc;
+		graphicsPipelineDesc.inputAssembly = inputAssemblyDesc;
+		graphicsPipelineDesc.rasterization = rasterizationDesc;
+		graphicsPipelineDesc.outputMerger = outputMergerDesc;
+		graphicsPipelineDesc.shaders = shaderStages;
+		graphicsPipelineDesc.shaderNum = helper::GetCountOf(shaderStages);
+
+		NRI_ABORT_ON_FAILURE(NRI.CreateGraphicsPipeline(
+				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_DepthPipeline));
 	}
 
 	// add temp descriptors
@@ -308,7 +403,7 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 	}
 
 	{
-		helper::Annotation annotation(NRI, info.cmdBuffer, "SimpleModelMesh2");
+		helper::Annotation annotation(NRI, info.cmdBuffer, "GLTF Mesh Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
 
@@ -321,6 +416,63 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			block.index[1] = block.index[2] = block.index[3] = 0u;
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
 			nri::Buffer *geoBuffer = node.mesh->m_indexbuffer->GetBuffer();
+			nri::VertexBufferDesc vertexBufferDesc = {};
+			vertexBufferDesc.buffer = geoBuffer;
+			vertexBufferDesc.offset = node.mesh->vertexOffset;
+			vertexBufferDesc.stride = sizeof(utils::Vertex);
+			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+
+			NRI.CmdSetIndexBuffer(info.cmdBuffer, *geoBuffer, node.mesh->indexOffset,
+					nri::IndexType::UINT32);
+
+			NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
+					*m_ConstantBufferDescriptorSet, nullptr);
+
+			{
+				const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
+					600.f, 0.0f, 1.0f };
+				NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
+
+				nri::Rect scissor = { 0, 0, 900, 600 };
+				NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
+			}
+			uint32_t instanceCount = 1;
+			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.mesh->m_indexCount), instanceCount, 0, 0, 0 });
+		}
+	}
+}
+
+
+void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
+	auto NRI = *m_NRI;
+
+	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
+			*m_ConstantBuffer, 0,
+			sizeof(ConstantBufferLayout));
+
+	const glm::mat4 p = camera.state.mViewToClip;
+	const glm::vec3 cameraPos = camera.state.globalPosition;
+	if (commonConstants) {
+		commonConstants->modelMat = glm::mat4(1.0);
+		commonConstants->viewMat = camera.state.mWorldToView;
+		commonConstants->projectMat = p;
+		NRI.UnmapBuffer(*m_ConstantBuffer);
+	}
+
+	{
+		helper::Annotation annotation(NRI, info.cmdBuffer, "Depth PreZ Pass");
+		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_DepthPipelineLayout);
+		NRI.CmdSetPipeline(info.cmdBuffer, *m_DepthPipeline);
+		
+		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
+			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
+			CBlock block = {};
+			block.modelMat = m_rootMesh->results.at(index);
+			block.camPos = vec4(cameraPos, 1.0);
+			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
+			block.index[1] = block.index[2] = block.index[3] = 0u;
+			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+			nri::Buffer *geoBuffer = node.mesh->m_vertexbuffer->GetBuffer();
 			nri::VertexBufferDesc vertexBufferDesc = {};
 			vertexBufferDesc.buffer = geoBuffer;
 			vertexBufferDesc.offset = node.mesh->vertexOffset;

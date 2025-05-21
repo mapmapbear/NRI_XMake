@@ -1,0 +1,16 @@
+3rd/d3d12ma/
+3rd/Directx12Agility/
+3rd/MetaUtility
+3rd/Detex/
+3rd/imgui/
+3rd/MathLib/
+3rd/nvtt3/
+3rd/ShaderMake/
+3rd/tinyddsLoader/
+3rd/WinPixEventRuntime/
+build/
+data/
+.vscode/
+.xmake/
+.gitignore
+*.bat

@@ -11,6 +11,8 @@
 #include "texture.h"
 #include <debugapi.h>
 #include <memory>
+#include <random>
+#include <random>
 #include <vector>
 
 Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
@@ -59,6 +61,31 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 		printf("Can not found this texture %s", specularIrrTex.c_str());
 	}
 }
+
+void Renderer::RandomLights() {
+		// 使用场景包围盒的范围来限制光源位置
+		glm::vec3 min = m_SceneAABB.first;
+		glm::vec3 max = m_SceneAABB.second;
+
+		// 设置随机数生成器
+		std::random_device rd;
+		std::mt19937 gen(rd());
+
+		// 为每个维度创建均匀分布
+		std::uniform_real_distribution<float> distX(min.x, max.x);
+		std::uniform_real_distribution<float> distY(min.y, max.y); 
+		std::uniform_real_distribution<float> distZ(min.z, max.z);
+
+		// 随机生成10个光源位置
+		for(int i = 0; i < 10; i++) {
+			glm::vec3 lightPos;
+			lightPos.x = distX(gen);
+			lightPos.y = distY(gen);
+			lightPos.z = distZ(gen);
+
+			m_LightPositions.push_back(lightPos);
+		}
+	}
 
 void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	auto NRI = m_NRI;
@@ -261,11 +288,21 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	std::string meshFile = utils::GetFullPath("USD_Sponza/sponza.usdc", utils::DataFolder::ROOT);
 	meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this);
+
+	glm::vec3 sceneMin = glm::vec3(std::numeric_limits<float>::max());
+	glm::vec3 sceneMax = glm::vec3(std::numeric_limits<float>::lowest());
 	for (int i = 0; i < mesh->GetMeshCount(); ++i) {
 		RenderNode node;
 		node.mesh = mesh->GetMesh(i);
 		node.material = &mesh->GetMaterial(node.mesh->GetMaterialID());
-		node.globalTransform = node.mesh->GetTransform();
+		node.globalTransform = mesh->results.at(i);
+
+		auto submeshAABB = node.mesh->aabb;
+		glm::vec3 transformedMin = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.first, 1.0f));
+		glm::vec3 transformedMax = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.second, 1.0f));
+
+		sceneMin = glm::min(sceneMin, transformedMin);
+		sceneMax = glm::max(sceneMax, transformedMax);
 
 		if (node.material->IsTransparent) {
 			m_TransparentRenderNodes.push_back(node);
@@ -273,6 +310,9 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 			m_OpaqueRenderNodes.push_back(node);
 		}
 	}
+	m_SceneAABB = std::make_pair(sceneMin, sceneMax);
+	
+	RandomLights();
 	UploadSceneData();
 	skyPass = std::make_shared<SkyRenderPass>(this);
 	gridPass = std::make_shared<GridRenderPass>(this);
@@ -351,10 +391,29 @@ void Renderer::InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain
 }
 
 void Renderer::OnRender(RenderInfo &info, Camera &camera) {
-	skyPass->Render(info, camera);
-	gridPass->Render(info, camera);
-	meshPass->Render(info, camera);
-	simplePass->SetTestIndex(testIndex);
+	nri::AttachmentsDesc depthAttachmentsDesc = info.desc;
+	depthAttachmentsDesc.colorNum = 0;
+	depthAttachmentsDesc.colors = nullptr;
+
+	GetNRI().CmdBeginRendering(info.cmdBuffer, depthAttachmentsDesc);
+	{
+		RenderInfo infoX = { .desc = depthAttachmentsDesc, .cmdBuffer = info.cmdBuffer };
+		simplePass->RenderDepth(infoX, camera);
+	}
+	GetNRI().CmdEndRendering(info.cmdBuffer);
+
+	GetNRI().CmdBeginRendering(info.cmdBuffer, info.desc);
+	{
+		skyPass->Render(info, camera);
+		gridPass->Render(info, camera);
+		meshPass->Render(info, camera);
+		simplePass->SetTestIndex(testIndex);
+		simplePass->Render(info, camera);
+	}
+	GetNRI().CmdEndRendering(info.cmdBuffer);
+}
+
+void Renderer::OnRenderDepth(RenderInfo &info, Camera &camera) {
 	simplePass->Render(info, camera);
 }
 

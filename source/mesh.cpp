@@ -2,8 +2,10 @@
 #include "NRIDescs.h"
 #include "assimp/GltfMaterial.h"
 #include "assimp/material.h"
+#include "assimp/postprocess.h"
 #include "assimp/types.h"
 #include "buffer.h"
+#include "glm/gtc/type_ptr.hpp"
 #include "renderer.h"
 #include "texture.h"
 #include <meshoptimizer.h>
@@ -11,6 +13,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <utility>
 #include <vector>
 
 void TraverseNodes(const aiScene *scene, const aiNode *node, const glm::mat4 &parentTransform, std::map<uint32_t, glm::mat4> &results) {
@@ -40,7 +43,7 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 
 	Assimp::Importer importer;
 	const aiScene *pScene = importer.ReadFile(path,
-			aiProcess_Triangulate | aiProcess_ConvertToLeftHanded | aiProcess_CalcTangentSpace | aiProcess_GenUVCoords);
+			aiProcess_Triangulate | aiProcess_ConvertToLeftHanded | aiProcess_CalcTangentSpace | aiProcess_GenUVCoords | aiProcess_GenBoundingBoxes);
 
 	glm::mat4 identity = glm::mat4(1.0f);
 	TraverseNodes(pScene, pScene->mRootNode, identity, results);
@@ -99,15 +102,15 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 		aiString alphaMode;
 		if (pScene->mMaterials[i]->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
 			if (alphaMode == aiString("BLEND")) {
-				std::cout << "Material is translucent (AlphaMode: BLEND)" << std::endl;
+				SPDLOG_INFO("Material is translucent (AlphaMode: BLEND)");
 				m.IsTransparent = true;
 			} else if (alphaMode == aiString("MASK")) {
 				float alphaCutoff = 0.5f;
 				pScene->mMaterials[i]->Get(AI_MATKEY_GLTF_ALPHACUTOFF, alphaCutoff);
-				std::cout << "Material uses Alpha Test (AlphaMode: MASK, Cutoff: " << alphaCutoff << ")" << std::endl;
+				SPDLOG_INFO("Material uses Alpha Test (AlphaMode: MASK, Cutoff: {}", alphaCutoff);
 				m.IsTransparent = true;
 			} else if (alphaMode == aiString("OPAQUE")) {
-				std::cout << "Material is opaque (AlphaMode: OPAQUE)" << std::endl;
+				// std::cout << "Material is opaque (AlphaMode: OPAQUE)" << std::endl;
 				m.IsTransparent = false;
 			}
 		} else {
@@ -122,6 +125,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 	meshdata->m_vertexesData.resize(pMesh->mNumVertices);
 	meshdata->vertices.resize(pMesh->mNumVertices);
 	meshdata->indices.resize(pMesh->mNumFaces * 3);
+	const aiAABB &aabb = pMesh->mAABB;
 	for (uint32 j = 0; j < pMesh->mNumVertices; ++j) {
 		utils::Vertex &vertex = meshdata->m_vertexesData[j];
 		vertex.position = *reinterpret_cast<glm::vec3 *>(&pMesh->mVertices[j]);
@@ -160,13 +164,14 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 
 	std::vector<uint32_t> shadow_indices(indexCount);
 	meshopt_generateShadowIndexBuffer(shadow_indices.data(), optimizedIndices.data(), indexCount, remappedVertices.data(), newVertexCount, sizeof(glm::vec3), sizeof(utils::Vertex));
-	
+
 	meshdata->indices = remappedIndices;
 	meshdata->shadow_indices = shadow_indices;
 	meshdata->m_vertexesData = remappedVertices;
 
 	std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
 	{
+		pSubMesh->aabb = std::make_pair(glm::make_vec3((float*)&aabb.mMin.x), glm::make_vec3((float*)&aabb.mMax));
 		pSubMesh->m_indexCount = (int)meshdata->indices.size();
 		pSubMesh->m_indexbuffer = std::make_unique<Buffer>();
 		pSubMesh->m_vertexbuffer = std::make_unique<Buffer>();
