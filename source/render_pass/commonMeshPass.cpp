@@ -298,7 +298,7 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::RasterizationDesc rasterizationDesc = {};
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
-		rasterizationDesc.cullMode = nri::CullMode::BACK;
+		rasterizationDesc.cullMode = nri::CullMode::NONE;
 		rasterizationDesc.frontCounterClockwise = false;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
@@ -344,6 +344,76 @@ void CommonMeshPass::BuildPipeline() {
 
 		NRI_ABORT_ON_FAILURE(NRI.CreateGraphicsPipeline(
 				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_DepthPipeline));
+	}
+
+	{
+		nri::VertexStreamDesc vertexStreamDesc = {};
+		vertexStreamDesc.bindingSlot = 0;
+
+		nri::VertexAttributeDesc vertexAttributeDesc = {};
+		vertexAttributeDesc.format = nri::Format::RGB32_SFLOAT;
+		vertexAttributeDesc.streamIndex = 0;
+		vertexAttributeDesc.offset = helper::GetOffsetOf(&utils::Vertex::position);
+		vertexAttributeDesc.d3d = { "POSITION", 0 };
+		vertexAttributeDesc.vk.location = { 0 };
+
+		nri::VertexInputDesc vertexInputDesc = {};
+		vertexInputDesc.attributes = &vertexAttributeDesc;
+		vertexInputDesc.attributeNum = 1;
+		vertexInputDesc.streams = &vertexStreamDesc;
+		vertexInputDesc.streamNum = 1;
+
+		nri::InputAssemblyDesc inputAssemblyDesc = {};
+		inputAssemblyDesc.topology = nri::Topology::TRIANGLE_LIST;
+
+		nri::RasterizationDesc rasterizationDesc = {};
+		rasterizationDesc.fillMode = nri::FillMode::SOLID;
+		rasterizationDesc.cullMode = nri::CullMode::NONE;
+		rasterizationDesc.frontCounterClockwise = false;
+
+		nri::ColorAttachmentDesc colorAttachmentDesc = {};
+#ifdef HDR_ENABLE
+		colorAttachmentDesc.format = nri::Format::R10_G10_B10_A2_UNORM;
+#else
+		colorAttachmentDesc.format = nri::Format::RGBA8_UNORM;
+#endif
+		colorAttachmentDesc.colorWriteMask = nri::ColorWriteBits::RGBA;
+		colorAttachmentDesc.blendEnabled = false;
+		colorAttachmentDesc.colorBlend = { nri::BlendFactor::SRC_ALPHA,
+			nri::BlendFactor::ONE_MINUS_SRC_ALPHA,
+			nri::BlendFunc::ADD };
+
+		nri::DepthAttachmentDesc depthAttachmentDesc = {};
+		depthAttachmentDesc.write = true;
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
+		depthAttachmentDesc.boundsTest = false;
+
+		nri::OutputMergerDesc outputMergerDesc = {};
+		outputMergerDesc.colors = &colorAttachmentDesc;
+		outputMergerDesc.colorNum = 1;
+		outputMergerDesc.depth = depthAttachmentDesc;
+		outputMergerDesc.depthStencilFormat = nri::Format::D32_SFLOAT;
+
+		utils::ShaderCodeStorage shaderCodeStorage;
+
+		nri::ShaderDesc shaderStages[] = {
+			utils::LoadShader(deviceDesc.graphicsAPI,
+					"depthOnly", shaderCodeStorage, "vs_main"),
+			utils::LoadShader(deviceDesc.graphicsAPI, "depthOnly",
+					shaderCodeStorage, "ps_main")
+		};
+
+		nri::GraphicsPipelineDesc graphicsPipelineDesc = {};
+		graphicsPipelineDesc.pipelineLayout = m_DepthPipelineLayout;
+		graphicsPipelineDesc.vertexInput = &vertexInputDesc;
+		graphicsPipelineDesc.inputAssembly = inputAssemblyDesc;
+		graphicsPipelineDesc.rasterization = rasterizationDesc;
+		graphicsPipelineDesc.outputMerger = outputMergerDesc;
+		graphicsPipelineDesc.shaders = shaderStages;
+		graphicsPipelineDesc.shaderNum = helper::GetCountOf(shaderStages);
+
+		NRI_ABORT_ON_FAILURE(NRI.CreateGraphicsPipeline(
+				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_ShadowPipeline));
 	}
 
 	// add temp descriptors
@@ -472,7 +542,7 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
 			block.index[1] = block.index[2] = block.index[3] = 0u;
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
-			nri::Buffer *geoBuffer = node.mesh->m_vertexbuffer->GetBuffer();
+			nri::Buffer *geoBuffer = node.mesh->m_indexbuffer->GetBuffer();
 			nri::VertexBufferDesc vertexBufferDesc = {};
 			vertexBufferDesc.buffer = geoBuffer;
 			vertexBufferDesc.offset = node.mesh->vertexOffset;
@@ -497,4 +567,9 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.mesh->m_indexCount), instanceCount, 0, 0, 0 });
 		}
 	}
+}
+
+void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera)
+{
+	
 }

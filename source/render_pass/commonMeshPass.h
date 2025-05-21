@@ -14,6 +14,7 @@ public:
 	CommonMeshPass(Renderer *renderer, utils::Scene &scene, std::shared_ptr<Mesh> &rootMesh);
 	void Render(struct RenderInfo &info, Camera &camera) override;
 	void RenderDepth(struct RenderInfo &info, Camera &camera);
+	void RenderShadow(struct RenderInfo &info, Camera &camera);
 	void BuildPipeline() override;
 	void AllocGPUMemory() override;
 	void BindMemory() override;
@@ -37,6 +38,8 @@ private:
 
 	nri::PipelineLayout *m_DepthPipelineLayout = nullptr;
 	nri::Pipeline *m_DepthPipeline = nullptr;
+
+	nri::Pipeline *m_ShadowPipeline = nullptr;
 	// ------------------------------------
 	//             Material Data
 	nri::Texture *m_texture_albedo = nullptr;

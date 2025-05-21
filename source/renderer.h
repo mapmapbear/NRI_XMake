@@ -73,6 +73,7 @@ private:
 public:
 	utils::Scene m_Scene;
 	std::pair<glm::vec3, glm::vec3> m_SceneAABB;
+	std::vector<glm::vec3> m_LightPositions;
 	struct RenderNode {
 		const SubMesh *mesh;
 		const Material *material;
