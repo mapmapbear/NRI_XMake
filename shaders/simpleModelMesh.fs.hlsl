@@ -6,6 +6,7 @@ struct InputPS
     float4 position : SV_Position;
     float2 uv : TEXCOORD0;
     float3 positionWS : TEXCOORD1;
+    float4 positionLS : TEXCOORD2;
     float3 normalWS : NORMAL;
     float3 tangentWS : TANGENT;
 };
@@ -57,6 +58,10 @@ float4 main(InputPS input) : SV_Target
     }
 
 
+    float3 projCoords = input.positionLS.xyz / input.positionLS.w;
+    projCoords.xy = projCoords.xy * 0.5 + 0.5;
+    projCoords.y = 1.0 - projCoords.y;
+
     //part of PBR
     // color.xyz = DirectionalLight(input.positionWS, worldNormal, v, ligDir, float3(1.0, 0.0, 1.0), baseColor.xyz, metallic, roughness, c_F0);
     float3 dir = -v;
@@ -65,7 +70,11 @@ float4 main(InputPS input) : SV_Target
     TextureCube<float4> diffuseIBL = ResourceDescriptorHeap[g_PushConstants.indexGroup.w];
     TextureCube<float4> specularIBL = ResourceDescriptorHeap[g_PushConstants.indexGroup.w + 1];
     Texture2D<float4> BRDFTex = ResourceDescriptorHeap[g_PushConstants.indexGroup.w + 2];
+    Texture2D<float> shadowMap = ResourceDescriptorHeap[g_PushConstants.indexGroup.w + 3];
+
     SamplerState g_SamplerBRDF = SamplerDescriptorHeap[2];
+    SamplerComparisonState g_SamplerShadow = SamplerDescriptorHeap[3];
+    float shadow = shadowMap.SampleCmpLevelZero(g_SamplerShadow, projCoords.xy, projCoords.z);
     
     color.xyz += IBL(worldNormal, v, R, baseColor.xyz, metallic, roughness, c_F0, BRDFTex, diffuseIBL, specularIBL, g_Sampler, g_SamplerBRDF);
     return color;

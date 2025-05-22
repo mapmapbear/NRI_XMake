@@ -3,6 +3,7 @@
 #include "NRIDescs.h"
 #include "assimp/scene.h"
 #include "buffer.h"
+#include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "mesh.h"
 #include "spdlog/spdlog.h"
@@ -77,7 +78,7 @@ void CommonMeshPass::BindMemory() {
 		m_matTexSet.insert(mat.m_MetallicTexture);
 	}
 
-	m_textureViews.resize(3);
+	m_textureViews.resize(4);
 
 	m_brdfTexIndex = m_renderer->texViewOffset;
 	nri::Texture2DViewDesc texture2DViewDesc1 = { .texture = m_renderer->m_DiffuseIrradianceTex, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_CUBE, .format = m_renderer->diffuseIrradianceTex.GetFormat(), .mipOffset = 0, .mipNum = m_renderer->diffuseIrradianceTex.GetMipNum(), .layerOffset = 0, .layerNum = 6 };
@@ -94,12 +95,29 @@ void CommonMeshPass::BindMemory() {
 	NRI_ABORT_ON_FAILURE(
 			NRI.CreateTexture2DView(texture2DViewDes3, m_textureViews[2]));
 
+	nri::Texture2DViewDesc texture2DViewDes4 = { .texture = m_renderer->m_ShadowMap->GetTexture(), .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = nri::Format::D32_SFLOAT };
+	NRI_ABORT_ON_FAILURE(
+			NRI.CreateTexture2DView(texture2DViewDes4, m_textureViews[3]));
+
 	{ // Sampler
 		nri::SamplerDesc samplerDesc = {};
 		samplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE,
 			nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
 		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
 			nri::Filter::LINEAR };
+		samplerDesc.mipMax = 16;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
+	}
+
+	// Shadow Sampler
+	{
+		nri::SamplerDesc samplerDesc = {};
+		samplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE,
+			nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
+		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
+			nri::Filter::LINEAR };
+		samplerDesc.compareFunc = nri::CompareFunc::LESS;
 		samplerDesc.mipMax = 16;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
@@ -346,78 +364,8 @@ void CommonMeshPass::BuildPipeline() {
 				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_DepthPipeline));
 	}
 
-	{
-		nri::VertexStreamDesc vertexStreamDesc = {};
-		vertexStreamDesc.bindingSlot = 0;
-
-		nri::VertexAttributeDesc vertexAttributeDesc = {};
-		vertexAttributeDesc.format = nri::Format::RGB32_SFLOAT;
-		vertexAttributeDesc.streamIndex = 0;
-		vertexAttributeDesc.offset = helper::GetOffsetOf(&utils::Vertex::position);
-		vertexAttributeDesc.d3d = { "POSITION", 0 };
-		vertexAttributeDesc.vk.location = { 0 };
-
-		nri::VertexInputDesc vertexInputDesc = {};
-		vertexInputDesc.attributes = &vertexAttributeDesc;
-		vertexInputDesc.attributeNum = 1;
-		vertexInputDesc.streams = &vertexStreamDesc;
-		vertexInputDesc.streamNum = 1;
-
-		nri::InputAssemblyDesc inputAssemblyDesc = {};
-		inputAssemblyDesc.topology = nri::Topology::TRIANGLE_LIST;
-
-		nri::RasterizationDesc rasterizationDesc = {};
-		rasterizationDesc.fillMode = nri::FillMode::SOLID;
-		rasterizationDesc.cullMode = nri::CullMode::NONE;
-		rasterizationDesc.frontCounterClockwise = false;
-
-		nri::ColorAttachmentDesc colorAttachmentDesc = {};
-#ifdef HDR_ENABLE
-		colorAttachmentDesc.format = nri::Format::R10_G10_B10_A2_UNORM;
-#else
-		colorAttachmentDesc.format = nri::Format::RGBA8_UNORM;
-#endif
-		colorAttachmentDesc.colorWriteMask = nri::ColorWriteBits::RGBA;
-		colorAttachmentDesc.blendEnabled = false;
-		colorAttachmentDesc.colorBlend = { nri::BlendFactor::SRC_ALPHA,
-			nri::BlendFactor::ONE_MINUS_SRC_ALPHA,
-			nri::BlendFunc::ADD };
-
-		nri::DepthAttachmentDesc depthAttachmentDesc = {};
-		depthAttachmentDesc.write = true;
-		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
-		depthAttachmentDesc.boundsTest = false;
-
-		nri::OutputMergerDesc outputMergerDesc = {};
-		outputMergerDesc.colors = &colorAttachmentDesc;
-		outputMergerDesc.colorNum = 1;
-		outputMergerDesc.depth = depthAttachmentDesc;
-		outputMergerDesc.depthStencilFormat = nri::Format::D32_SFLOAT;
-
-		utils::ShaderCodeStorage shaderCodeStorage;
-
-		nri::ShaderDesc shaderStages[] = {
-			utils::LoadShader(deviceDesc.graphicsAPI,
-					"depthOnly", shaderCodeStorage, "vs_main"),
-			utils::LoadShader(deviceDesc.graphicsAPI, "depthOnly",
-					shaderCodeStorage, "ps_main")
-		};
-
-		nri::GraphicsPipelineDesc graphicsPipelineDesc = {};
-		graphicsPipelineDesc.pipelineLayout = m_DepthPipelineLayout;
-		graphicsPipelineDesc.vertexInput = &vertexInputDesc;
-		graphicsPipelineDesc.inputAssembly = inputAssemblyDesc;
-		graphicsPipelineDesc.rasterization = rasterizationDesc;
-		graphicsPipelineDesc.outputMerger = outputMergerDesc;
-		graphicsPipelineDesc.shaders = shaderStages;
-		graphicsPipelineDesc.shaderNum = helper::GetCountOf(shaderStages);
-
-		NRI_ABORT_ON_FAILURE(NRI.CreateGraphicsPipeline(
-				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_ShadowPipeline));
-	}
-
 	// add temp descriptors
-	uint32_t newMatTexIndex = m_brdfTexIndex + 3;
+	uint32_t newMatTexIndex = m_brdfTexIndex + 4;
 	{
 		for (auto &tex : m_matTexSet) {
 			nri::Descriptor *view = tex->GetView();
@@ -454,6 +402,12 @@ void CommonMeshPass::BuildPipeline() {
 		NRI.UpdateDescriptorRanges(*m_ConstantBufferDescriptorSet, 0, 1,
 				&descriptorRangeUpdateDesc);
 	}
+
+	glm::mat4 lightViewMat = glm::lookAtLH(vec3(0.001, 100.0, 0.001), vec3(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
+	float shadowRange = 100.0f;
+	glm::mat4 lightProjMat = glm::orthoLH(-shadowRange, shadowRange, -shadowRange,
+			shadowRange, 200.0f, 0.01f);
+	m_lightVP = lightProjMat * lightViewMat;
 }
 
 void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
@@ -469,6 +423,7 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 		commonConstants->modelMat = glm::mat4(1.0);
 		commonConstants->viewMat = camera.state.mWorldToView;
 		commonConstants->projectMat = p;
+		commonConstants->lightVP = m_lightVP;
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
 
@@ -512,7 +467,6 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 	}
 }
 
-
 void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 	auto NRI = *m_NRI;
 
@@ -526,6 +480,7 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 		commonConstants->modelMat = glm::mat4(1.0);
 		commonConstants->viewMat = camera.state.mWorldToView;
 		commonConstants->projectMat = p;
+		commonConstants->lightVP = m_lightVP;
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
 
@@ -533,7 +488,7 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Depth PreZ Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_DepthPipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_DepthPipeline);
-		
+
 		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
@@ -569,7 +524,5 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 	}
 }
 
-void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera)
-{
-	
+void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 }

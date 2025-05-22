@@ -103,5 +103,6 @@ private:
 	std::unordered_set<std::shared_ptr<Texture>> m_matTexSet;
 	std::shared_ptr<Mesh> m_mesh;
 
+	glm::mat4 m_lightVP = glm::mat4(1.0);
 	uint32_t m_brdfTexIndex = 0;
 };
