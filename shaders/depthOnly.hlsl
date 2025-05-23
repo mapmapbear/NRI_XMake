@@ -47,7 +47,7 @@ outputVS vs_main(inputVS input)
     float4x4 testMat = g_PushConstants.modelMat;
     float4x4 vpMat = mul(viewMat, testMat);
 	float4x4 mvpMat = mul(projectMat, vpMat);
-	output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));
+	output.position = mul(testMat, float4(input.in_position.xyz, 1.0));
 #ifdef ALPHA_TEST
     output.texCoord = input.in_texcoord;
 #endif
@@ -55,9 +55,13 @@ outputVS vs_main(inputVS input)
 }
 
 [earlydepthstencil]
-float4 ps_main() : SV_Target
+// float4 ps_main() : SV_Target
+// {
+//     return 0.0;
+// }
+void ps_main()
 {
-    return 0.0;
+
 }
 
 

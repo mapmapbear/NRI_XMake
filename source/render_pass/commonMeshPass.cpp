@@ -4,6 +4,7 @@
 #include "assimp/scene.h"
 #include "buffer.h"
 #include "glm/ext/matrix_transform.hpp"
+#include "glm/matrix.hpp"
 #include "mesh.h"
 #include "spdlog/spdlog.h"
 #include "texture.h"
@@ -319,8 +320,6 @@ void CommonMeshPass::BuildPipeline() {
 		depthAttachmentDesc.boundsTest = false;
 
 		nri::OutputMergerDesc outputMergerDesc = {};
-		outputMergerDesc.colors = &colorAttachmentDesc;
-		outputMergerDesc.colorNum = 1;
 		outputMergerDesc.depth = depthAttachmentDesc;
 		outputMergerDesc.depthStencilFormat = nri::Format::D32_SFLOAT;
 
@@ -346,7 +345,33 @@ void CommonMeshPass::BuildPipeline() {
 				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_DepthPipeline));
 	}
 
+#if 1
+	// Shadow Pipeline
 	{
+		nri::DescriptorRangeDesc descriptorRangeConstant[1];
+		descriptorRangeConstant[0] = { 0, 1, nri::DescriptorType::CONSTANT_BUFFER,
+			nri::StageBits::ALL };
+
+		nri::DescriptorSetDesc descriptorSetDescs[] = {
+			{ 0, descriptorRangeConstant,
+					helper::GetCountOf(descriptorRangeConstant) }
+		};
+
+		nri::RootConstantDesc rootConstant = { 1, sizeof(CBlock),
+			nri::StageBits::ALL };
+
+		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
+		pipelineLayoutDesc.descriptorSetNum =
+				helper::GetCountOf(descriptorSetDescs);
+		pipelineLayoutDesc.descriptorSets = descriptorSetDescs;
+		pipelineLayoutDesc.rootConstantNum = 1;
+		pipelineLayoutDesc.rootConstants = &rootConstant;
+		pipelineLayoutDesc.shaderStages =
+				nri::StageBits::VERTEX_SHADER | nri::StageBits::FRAGMENT_SHADER;
+
+		NRI_ABORT_ON_FAILURE(NRI.CreatePipelineLayout(*m_renderer->GetRenderDevice(), pipelineLayoutDesc,
+				m_ShadowPipelineLayout));
+
 		nri::VertexStreamDesc vertexStreamDesc = {};
 		vertexStreamDesc.bindingSlot = 0;
 
@@ -389,8 +414,6 @@ void CommonMeshPass::BuildPipeline() {
 		depthAttachmentDesc.boundsTest = false;
 
 		nri::OutputMergerDesc outputMergerDesc = {};
-		outputMergerDesc.colors = &colorAttachmentDesc;
-		outputMergerDesc.colorNum = 1;
 		outputMergerDesc.depth = depthAttachmentDesc;
 		outputMergerDesc.depthStencilFormat = nri::Format::D32_SFLOAT;
 
@@ -404,7 +427,7 @@ void CommonMeshPass::BuildPipeline() {
 		};
 
 		nri::GraphicsPipelineDesc graphicsPipelineDesc = {};
-		graphicsPipelineDesc.pipelineLayout = m_DepthPipelineLayout;
+		graphicsPipelineDesc.pipelineLayout = m_ShadowPipelineLayout;
 		graphicsPipelineDesc.vertexInput = &vertexInputDesc;
 		graphicsPipelineDesc.inputAssembly = inputAssemblyDesc;
 		graphicsPipelineDesc.rasterization = rasterizationDesc;
@@ -415,7 +438,7 @@ void CommonMeshPass::BuildPipeline() {
 		NRI_ABORT_ON_FAILURE(NRI.CreateGraphicsPipeline(
 				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_ShadowPipeline));
 	}
-
+#endif
 	// add temp descriptors
 	uint32_t newMatTexIndex = m_brdfTexIndex + 3;
 	{
@@ -512,7 +535,6 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 	}
 }
 
-
 void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 	auto NRI = *m_NRI;
 
@@ -533,11 +555,14 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Depth PreZ Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_DepthPipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_DepthPipeline);
-		
+
 		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
 			block.modelMat = m_rootMesh->results.at(index);
+			block.modelMat = camera.state.mWorldToView * block.modelMat;
+			block.modelMat = p * block.modelMat;
+
 			block.camPos = vec4(cameraPos, 1.0);
 			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
 			block.index[1] = block.index[2] = block.index[3] = 0u;
@@ -569,7 +594,74 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 	}
 }
 
-void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera)
-{
-	
+void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
+	auto NRI = *m_NRI;
+
+	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
+			*m_ConstantBuffer, 0,
+			sizeof(ConstantBufferLayout));
+
+	const glm::mat4 p = camera.state.mViewToClip;
+	const glm::vec3 cameraPos = camera.state.globalPosition;
+	if (commonConstants) {
+		commonConstants->modelMat = glm::mat4(0.2);
+
+		// glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, 0.5f, 0.0f));
+		glm::vec3 lightPos = glm::vec3(0.2, 100.0, 0.2);
+		glm::mat4 lightView = glm::lookAt(lightPos, glm::vec3(0.0, 0.0, 0.0), glm::vec3(0.0f, 1.0f, 0.0f));
+		float orthoSize = 50.0f;
+		glm::mat4 lightProj = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, 0.1f, 100.0f);
+
+		commonConstants->viewMat = lightView;
+		commonConstants->projectMat = lightProj;
+		NRI.UnmapBuffer(*m_ConstantBuffer);
+	}
+
+	{
+		helper::Annotation annotation(NRI, info.cmdBuffer, "Shadow Pass");
+		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_ShadowPipelineLayout);
+		NRI.CmdSetPipeline(info.cmdBuffer, *m_ShadowPipeline);
+		nri::ClearDesc clearDesc = {};
+		clearDesc.planes = nri::PlaneBits::DEPTH;
+		clearDesc.value.depthStencil.depth = 0.0;
+		NRI.CmdClearAttachments(info.cmdBuffer, &clearDesc, 1, nullptr, 0);
+		glm::vec3 lightPos = glm::vec3(0.2, 100.0, 0.2);
+		glm::mat4 lightView = glm::lookAt(lightPos, glm::vec3(0.0, 0.0, 0.0), glm::vec3(0.0f, 1.0f, 0.0f));
+		float orthoSize = 200.0f;
+		glm::mat4 lightProj = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, 1000.0f, 0.1f);
+
+		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
+			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
+			CBlock block = {};
+			block.modelMat = m_rootMesh->results.at(index);
+			block.modelMat = (lightProj * (lightView * block.modelMat));
+			block.camPos = vec4(cameraPos, 1.0);
+			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
+			block.index[1] = block.index[2] = block.index[3] = 0u;
+			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+			nri::Buffer *geoBuffer = node.mesh->m_indexbuffer->GetBuffer();
+			nri::VertexBufferDesc vertexBufferDesc = {};
+			vertexBufferDesc.buffer = geoBuffer;
+			vertexBufferDesc.offset = node.mesh->vertexOffset;
+			vertexBufferDesc.stride = sizeof(utils::Vertex);
+			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+
+			NRI.CmdSetIndexBuffer(info.cmdBuffer, *geoBuffer, node.mesh->indexOffset,
+					nri::IndexType::UINT32);
+
+			NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
+					*m_ConstantBufferDescriptorSet, nullptr);
+
+			{
+				const nri::Viewport viewport = { 0.0f, 0.0f, 2048.f,
+					2048.f, 0.0f, 1.0f };
+				NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
+
+				nri::Rect scissor = { 0, 0, 2048, 2048 };
+				NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
+			}
+			uint32_t instanceCount = 1;
+			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.mesh->m_indexCount), instanceCount, 0, 0, 0 });
+		}
+	}
 }

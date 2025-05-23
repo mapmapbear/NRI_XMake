@@ -98,6 +98,7 @@ public:
 	std::shared_ptr<Texture> m_DefaultBlackTex = nullptr;
 	std::shared_ptr<Texture> m_DefaultWhiteTex = nullptr;
 	std::shared_ptr<Texture> m_DefaultNormalTex = nullptr;
+	std::shared_ptr<Texture> m_ShadowMap = nullptr;
 
 	std::vector<nri::Memory *> m_MemoryAllocations;
 

@@ -39,6 +39,7 @@ private:
 	nri::PipelineLayout *m_DepthPipelineLayout = nullptr;
 	nri::Pipeline *m_DepthPipeline = nullptr;
 
+	nri::PipelineLayout *m_ShadowPipelineLayout = nullptr;
 	nri::Pipeline *m_ShadowPipeline = nullptr;
 	// ------------------------------------
 	//             Material Data

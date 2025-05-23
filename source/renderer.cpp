@@ -12,7 +12,6 @@
 #include <debugapi.h>
 #include <memory>
 #include <random>
-#include <random>
 #include <vector>
 
 Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
@@ -63,29 +62,29 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 }
 
 void Renderer::RandomLights() {
-		// 使用场景包围盒的范围来限制光源位置
-		glm::vec3 min = m_SceneAABB.first;
-		glm::vec3 max = m_SceneAABB.second;
+	// 使用场景包围盒的范围来限制光源位置
+	glm::vec3 min = m_SceneAABB.first;
+	glm::vec3 max = m_SceneAABB.second;
 
-		// 设置随机数生成器
-		std::random_device rd;
-		std::mt19937 gen(rd());
+	// 设置随机数生成器
+	std::random_device rd;
+	std::mt19937 gen(rd());
 
-		// 为每个维度创建均匀分布
-		std::uniform_real_distribution<float> distX(min.x, max.x);
-		std::uniform_real_distribution<float> distY(min.y, max.y); 
-		std::uniform_real_distribution<float> distZ(min.z, max.z);
+	// 为每个维度创建均匀分布
+	std::uniform_real_distribution<float> distX(min.x, max.x);
+	std::uniform_real_distribution<float> distY(min.y, max.y);
+	std::uniform_real_distribution<float> distZ(min.z, max.z);
 
-		// 随机生成10个光源位置
-		for(int i = 0; i < 10; i++) {
-			glm::vec3 lightPos;
-			lightPos.x = distX(gen);
-			lightPos.y = distY(gen);
-			lightPos.z = distZ(gen);
+	// 随机生成10个光源位置
+	for (int i = 0; i < 10; i++) {
+		glm::vec3 lightPos;
+		lightPos.x = distX(gen);
+		lightPos.y = distY(gen);
+		lightPos.z = distZ(gen);
 
-			m_LightPositions.push_back(lightPos);
-		}
+		m_LightPositions.push_back(lightPos);
 	}
+}
 
 void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	auto NRI = m_NRI;
@@ -180,6 +179,23 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 
 		m_DefaultNormalTex = std::make_shared<Texture>();
 		m_DefaultNormalTex->Create(this, textureDesc, texViewDesc);
+	}
+
+	{
+		nri::TextureDesc textureDesc = {};
+		textureDesc.type = nri::TextureType::TEXTURE_2D;
+		textureDesc.usage = nri::TextureUsageBits::DEPTH_STENCIL_ATTACHMENT;
+		textureDesc.format = nri::Format::D32_SFLOAT;
+		textureDesc.width = 2048;
+		textureDesc.height = 2048;
+		textureDesc.mipNum = 1;
+
+		nri::Texture2DViewDesc texViewDesc = {};
+		texViewDesc.viewType = nri::Texture2DViewType::DEPTH_STENCIL_ATTACHMENT;
+		texViewDesc.format = nri::Format::D32_SFLOAT;
+
+		m_ShadowMap = std::make_shared<Texture>();
+		m_ShadowMap->Create(this, textureDesc, texViewDesc);
 	}
 
 	std::vector<nri::Texture *> textureArray = { m_DiffuseIrradianceTex, m_SpecularIrradianceTex, m_BRDFTex };
@@ -279,7 +295,19 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	textureData5.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
 	textureData5.planes = nri::PlaneBits::ALL;
 
-	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData, textureData1, textureData2, textureData3, textureData4, textureData5 };
+	nri::TextureSubresourceUploadDesc depthSubRes = {};
+	depthSubRes.rowPitch = 2048 * 4;
+	depthSubRes.slicePitch = depthSubRes.rowPitch * 2048;
+	std::vector<uint8_t> data1(depthSubRes.slicePitch, 1.0);
+	depthSubRes.sliceNum = 1;
+	depthSubRes.slices = data1.data();
+	nri::TextureUploadDesc textureData6;
+	textureData6.subresources = &depthSubRes;
+	textureData6.texture = m_ShadowMap->GetTexture();
+	textureData6.after = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT };
+	textureData6.planes = nri::PlaneBits::ALL;
+
+	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData, textureData1, textureData2, textureData3, textureData4, textureData5, textureData6 };
 	NRI_ABORT_ON_FAILURE(GetNRI().UploadData(*m_GraphicsQueue, texUploadDescArray.data(), (uint32_t)texUploadDescArray.size(),
 			nullptr,
 			0));
@@ -311,7 +339,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 		}
 	}
 	m_SceneAABB = std::make_pair(sceneMin, sceneMax);
-	
+
 	RandomLights();
 	UploadSceneData();
 	skyPass = std::make_shared<SkyRenderPass>(this);
@@ -397,8 +425,17 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 
 	GetNRI().CmdBeginRendering(info.cmdBuffer, depthAttachmentsDesc);
 	{
-		RenderInfo infoX = { .desc = depthAttachmentsDesc, .cmdBuffer = info.cmdBuffer };
-		simplePass->RenderDepth(infoX, camera);
+		RenderInfo depthInfo = { .desc = depthAttachmentsDesc, .cmdBuffer = info.cmdBuffer };
+		simplePass->RenderDepth(depthInfo, camera);
+	}
+	GetNRI().CmdEndRendering(info.cmdBuffer);
+
+	nri::AttachmentsDesc shadowAttachmentDesc = {};
+	shadowAttachmentDesc.depthStencil = m_ShadowMap->GetView();
+	GetNRI().CmdBeginRendering(info.cmdBuffer, shadowAttachmentDesc);
+	{
+		RenderInfo shadowInfo = { .desc = shadowAttachmentDesc, .cmdBuffer = info.cmdBuffer };
+		simplePass->RenderShadow(shadowInfo, camera);
 	}
 	GetNRI().CmdEndRendering(info.cmdBuffer);
 

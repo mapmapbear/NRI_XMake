@@ -188,7 +188,6 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 		pSubMesh->m_indexbuffer->Create(renderer, desc, viewDesc);
 		desc.size = shadow_indicesAlignSize + static_cast<uint32_t>(helper::GetByteSizeOf(meshdata->vertices));
 		pSubMesh->m_vertexbuffer->Create(renderer, desc, viewDesc);
-		// pSubMesh->m_vertexbuffer = pSubMesh->m_indexbuffer;
 		renderer->uploadIndexBufferMap.insert({ pSubMesh->m_indexbuffer, meshdata });
 		renderer->uploadShadowIndexBufferMap.insert({ pSubMesh->m_vertexbuffer, meshdata });
 	}
