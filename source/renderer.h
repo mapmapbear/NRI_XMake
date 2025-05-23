@@ -30,7 +30,7 @@ public:
 	nri::DescriptorSet *GetGloablDescriptorSet() { return m_GloablFrameDescriptorSet; }
 
 	void OnStart(nri::DescriptorSet *globalSet);
-	void OnUpdate();
+	void OnUpdate(float deltaTime);
 	void OnPreRender();
 	void OnRenderDepth(RenderInfo &info, Camera &camera);
 	void OnRender(RenderInfo &info, Camera &camera);
@@ -49,6 +49,7 @@ public:
 
 private:
 	void RandomLights();
+	glm::mat4 computeLightSpaceMatrix(float yaw, float pitch, float roll);
 
 public:
 	int testIndex = 0;
@@ -73,7 +74,8 @@ private:
 public:
 	utils::Scene m_Scene;
 	std::pair<glm::vec3, glm::vec3> m_SceneAABB;
-	std::vector<glm::vec3> m_LightPositions;
+	glm::mat4 m_lightVP = glm::mat4(1.0);
+	glm::vec3 m_lightPos = glm::vec3(0.2, 100.0, 0.2);
 	struct RenderNode {
 		const SubMesh *mesh;
 		const Material *material;
@@ -98,8 +100,6 @@ public:
 	std::shared_ptr<Texture> m_DefaultBlackTex = nullptr;
 	std::shared_ptr<Texture> m_DefaultWhiteTex = nullptr;
 	std::shared_ptr<Texture> m_DefaultNormalTex = nullptr;
-	std::shared_ptr<Texture> m_ShadowMap = nullptr;
-
 	std::shared_ptr<Texture> m_ShadowMap = nullptr;
 
 	std::vector<nri::Memory *> m_MemoryAllocations;

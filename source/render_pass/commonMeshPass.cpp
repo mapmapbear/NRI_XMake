@@ -116,9 +116,9 @@ void CommonMeshPass::BindMemory() {
 		nri::SamplerDesc samplerDesc = {};
 		samplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE,
 			nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
-		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
-			nri::Filter::LINEAR };
-		samplerDesc.compareFunc = nri::CompareFunc::LESS;
+		samplerDesc.filters = { nri::Filter::NEAREST, nri::Filter::NEAREST,
+			nri::Filter::NEAREST };
+		samplerDesc.compareFunc = nri::CompareFunc::LESS_EQUAL;
 		samplerDesc.mipMax = 16;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
@@ -363,7 +363,6 @@ void CommonMeshPass::BuildPipeline() {
 				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_DepthPipeline));
 	}
 
-#if 1
 	// Shadow Pipeline
 	{
 		nri::DescriptorRangeDesc descriptorRangeConstant[1];
@@ -456,7 +455,7 @@ void CommonMeshPass::BuildPipeline() {
 		NRI_ABORT_ON_FAILURE(NRI.CreateGraphicsPipeline(
 				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_ShadowPipeline));
 	}
-#endif
+
 	// add temp descriptors
 	uint32_t newMatTexIndex = m_brdfTexIndex + 4;
 	{
@@ -495,28 +494,20 @@ void CommonMeshPass::BuildPipeline() {
 		NRI.UpdateDescriptorRanges(*m_ConstantBufferDescriptorSet, 0, 1,
 				&descriptorRangeUpdateDesc);
 	}
-
-	glm::mat4 lightViewMat = glm::lookAtLH(vec3(0.001, 100.0, 0.001), vec3(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
-	float shadowRange = 100.0f;
-	glm::mat4 lightProjMat = glm::orthoLH(-shadowRange, shadowRange, -shadowRange,
-			shadowRange, 200.0f, 0.01f);
-	m_lightVP = lightProjMat * lightViewMat;
 }
 
 void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 	auto NRI = *m_NRI;
+	const glm::vec3 cameraPos = camera.state.globalPosition;
 
 	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
 			*m_ConstantBuffer, 0,
 			sizeof(ConstantBufferLayout));
-
-	const glm::mat4 p = camera.state.mViewToClip;
-	const glm::vec3 cameraPos = camera.state.globalPosition;
 	if (commonConstants) {
 		commonConstants->modelMat = glm::mat4(1.0);
 		commonConstants->viewMat = camera.state.mWorldToView;
-		commonConstants->projectMat = p;
-		commonConstants->lightVP = m_lightVP;
+		commonConstants->projectMat = camera.state.mViewToClip;
+		commonConstants->lightVP = m_renderer->m_lightVP;
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
 
@@ -531,7 +522,8 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			block.modelMat = m_rootMesh->results.at(index);
 			block.camPos = vec4(cameraPos, 1.0);
 			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
-			block.index[1] = block.index[2] = block.index[3] = 0u;
+			block.index[1] = block.index[2] = 0u;
+			block.index[3] = m_brdfTexIndex;
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
 			nri::Buffer *geoBuffer = node.mesh->m_indexbuffer->GetBuffer();
 			nri::VertexBufferDesc vertexBufferDesc = {};
@@ -562,20 +554,9 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 
 void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 	auto NRI = *m_NRI;
-
-	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
-			*m_ConstantBuffer, 0,
-			sizeof(ConstantBufferLayout));
-
 	const glm::mat4 p = camera.state.mViewToClip;
 	const glm::vec3 cameraPos = camera.state.globalPosition;
-	if (commonConstants) {
-		commonConstants->modelMat = glm::mat4(1.0);
-		commonConstants->viewMat = camera.state.mWorldToView;
-		commonConstants->projectMat = p;
-		commonConstants->lightVP = m_lightVP;
-		NRI.UnmapBuffer(*m_ConstantBuffer);
-	}
+
 
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Depth PreZ Pass");
@@ -622,26 +603,7 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 
 void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 	auto NRI = *m_NRI;
-
-	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
-			*m_ConstantBuffer, 0,
-			sizeof(ConstantBufferLayout));
-
-	const glm::mat4 p = camera.state.mViewToClip;
 	const glm::vec3 cameraPos = camera.state.globalPosition;
-	if (commonConstants) {
-		commonConstants->modelMat = glm::mat4(0.2);
-
-		// glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, 0.5f, 0.0f));
-		glm::vec3 lightPos = glm::vec3(0.2, 100.0, 0.2);
-		glm::mat4 lightView = glm::lookAt(lightPos, glm::vec3(0.0, 0.0, 0.0), glm::vec3(0.0f, 1.0f, 0.0f));
-		float orthoSize = 50.0f;
-		glm::mat4 lightProj = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, 0.1f, 100.0f);
-
-		commonConstants->viewMat = lightView;
-		commonConstants->projectMat = lightProj;
-		NRI.UnmapBuffer(*m_ConstantBuffer);
-	}
 
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Shadow Pass");
@@ -651,16 +613,12 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 		clearDesc.planes = nri::PlaneBits::DEPTH;
 		clearDesc.value.depthStencil.depth = 0.0;
 		NRI.CmdClearAttachments(info.cmdBuffer, &clearDesc, 1, nullptr, 0);
-		glm::vec3 lightPos = glm::vec3(0.2, 100.0, 0.2);
-		glm::mat4 lightView = glm::lookAt(lightPos, glm::vec3(0.0, 0.0, 0.0), glm::vec3(0.0f, 1.0f, 0.0f));
-		float orthoSize = 200.0f;
-		glm::mat4 lightProj = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, 1000.0f, 0.1f);
-
+		
 		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
 			block.modelMat = m_rootMesh->results.at(index);
-			block.modelMat = (lightProj * (lightView * block.modelMat));
+			block.modelMat = m_renderer->m_lightVP * block.modelMat;
 			block.camPos = vec4(cameraPos, 1.0);
 			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
 			block.index[1] = block.index[2] = block.index[3] = 0u;

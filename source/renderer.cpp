@@ -9,6 +9,7 @@
 #include "render_pass/instanceMeshPass.h"
 #include "render_pass/presentPass.h"
 #include "render_pass/skyRenderPass.h"
+#include "spdlog/spdlog.h"
 #include "texture.h"
 #include <debugapi.h>
 #include <memory>
@@ -77,14 +78,14 @@ void Renderer::RandomLights() {
 	std::uniform_real_distribution<float> distZ(min.z, max.z);
 
 	// 随机生成10个光源位置
-	for (int i = 0; i < 10; i++) {
-		glm::vec3 lightPos;
-		lightPos.x = distX(gen);
-		lightPos.y = distY(gen);
-		lightPos.z = distZ(gen);
+	// for (int i = 0; i < 10; i++) {
+	// 	glm::vec3 lightPos;
+	// 	lightPos.x = distX(gen);
+	// 	lightPos.y = distY(gen);
+	// 	lightPos.z = distZ(gen);
 
-		m_LightPositions.push_back(lightPos);
-	}
+	// 	m_LightPositions.push_back(lightPos);
+	// }
 }
 
 void Renderer::OnStart(nri::DescriptorSet *globalSet) {
@@ -347,6 +348,34 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	gridPass = std::make_shared<GridRenderPass>(this);
 	meshPass = std::make_shared<InstanceMeshPass>(this);
 	simplePass = std::make_shared<CommonMeshPass>(this, m_Scene, mesh);
+}
+
+glm::mat4 Renderer::computeLightSpaceMatrix(float yaw, float pitch, float roll) {
+	glm::vec3 defaultLightDir(0.0f, 1.0f, 0.0f);
+	glm::mat4 rotationMatrix = glm::eulerAngleYXZ(glm::radians(yaw), glm::radians(pitch), glm::radians(roll));
+	glm::vec4 rotatedLightDir = rotationMatrix * glm::vec4(defaultLightDir, 0.0f);
+	glm::vec3 lightDir = glm::normalize(glm::vec3(rotatedLightDir));
+
+	glm::vec3 eye(0.0f, 100.0f, 0.0f);
+	glm::vec3 center = eye + lightDir;
+	glm::vec3 up(0.0f, 1.0f, 0.0f);
+
+	if (glm::length(glm::cross(lightDir, up)) < 1e-6f) {
+		up = glm::vec3(1.0f, 0.0f, 0.0f);
+	}
+	glm::mat4 lightSpaceMatrix = glm::lookAt(eye, center, up);
+
+	return lightSpaceMatrix;
+}
+
+void Renderer::OnUpdate(float deltaTime) {
+	m_lightPos = glm::vec3(cos(glm::radians(testVec.x)), 1.5f * 80.0f, cos(glm::radians(testVec.y)) * 1.0f);
+
+	glm::mat4 lightView = glm::lookAt(m_lightPos, glm::vec3(0.0, 0.0, 0.0), glm::vec3(0.0f, 1.0f, 0.0f));
+	// lightView = computeLightSpaceMatrix(testVec.x, testVec.y, testVec.z);
+	float orthoSize = 200.0f;
+	glm::mat4 lightProj = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, 1000.0f, 0.1f);
+	m_lightVP = lightProj * lightView;
 }
 
 void Renderer::UploadSceneData() {

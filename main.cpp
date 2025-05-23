@@ -1,4 +1,5 @@
 // © 2021 NVIDIA Corporation
+#include "GLFW/glfw3.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/gtc/random.hpp"
 #include "glm/trigonometric.hpp"
@@ -416,6 +417,10 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 		ImGui::SliderFloat("Metallic", &testRenderPtr->testMaterial, 0.0, 1.0);
 		ImGui::SliderFloat("Roughness", &testRenderPtr->testRoughness, 0.0, 1.0);
 		// ImGui::SliderFloat4("Mat Debug", &testRenderPtr->testVec.x, 0.0, 1.0);
+		ImGui::Text("Light Rotation");
+		ImGui::SliderFloat("Yaw", &testRenderPtr->testVec.x, 0.0f, 360.0f);
+		ImGui::SliderFloat("Pitch", &testRenderPtr->testVec.y, -90.0f, 90.0f); 
+		ImGui::SliderFloat("Roll", &testRenderPtr->testVec.z, 0.0f, 360.0f);
 	}
 	ImGui::End();
 
@@ -449,6 +454,9 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	desc.timeScale = 5.0;
 	GetCameraDescFromInputDevices(desc);
 	m_Camera.Update(desc, frameIndex);
+
+	float deltaTime = deltaTime = glfwGetTime();
+	testRenderPtr->OnUpdate(deltaTime);
 }
 
 void Sample::RenderFrame(uint32_t frameIndex) {

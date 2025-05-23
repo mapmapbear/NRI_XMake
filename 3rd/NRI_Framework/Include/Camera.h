@@ -3,8 +3,11 @@
 #pragma once
 #include <utility>
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_ENABLE_EXPERIMENTAL 
 #include "glm/glm.hpp"
 #include "glm/gtc/type_ptr.hpp"
+#include "glm/gtx/euler_angles.hpp"
+
 using namespace glm;
 
 struct CameraDesc {
