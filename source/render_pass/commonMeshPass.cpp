@@ -119,6 +119,7 @@ void CommonMeshPass::BindMemory() {
 		samplerDesc.filters = { nri::Filter::NEAREST, nri::Filter::NEAREST,
 			nri::Filter::NEAREST };
 		samplerDesc.compareFunc = nri::CompareFunc::LESS_EQUAL;
+		samplerDesc.mipMin = 0;
 		samplerDesc.mipMax = 16;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));

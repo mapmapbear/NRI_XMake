@@ -370,11 +370,11 @@ glm::mat4 Renderer::computeLightSpaceMatrix(float yaw, float pitch, float roll) 
 
 void Renderer::OnUpdate(float deltaTime) {
 	m_lightPos = glm::vec3(cos(glm::radians(testVec.x)), 1.5f * 80.0f, cos(glm::radians(testVec.y)) * 1.0f);
-
+	m_lightPos = glm::vec3(0.01f, 200.0f, 0.01f);
 	glm::mat4 lightView = glm::lookAt(m_lightPos, glm::vec3(0.0, 0.0, 0.0), glm::vec3(0.0f, 1.0f, 0.0f));
 	// lightView = computeLightSpaceMatrix(testVec.x, testVec.y, testVec.z);
 	float orthoSize = 200.0f;
-	glm::mat4 lightProj = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, 1000.0f, 0.1f);
+	glm::mat4 lightProj = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, 200.0f, 0.1f);
 	m_lightVP = lightProj * lightView;
 }
 

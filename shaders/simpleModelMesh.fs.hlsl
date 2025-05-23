@@ -62,8 +62,9 @@ float4 main(InputPS input) : SV_Target
 
     float3 projCoords = input.positionLS.xyz / input.positionLS.w;
     projCoords.xy = projCoords.xy * 0.5 + 0.5;
-    // projCoords.y = 1.0 - projCoords.y;
-
+    projCoords.y = 1.0 - projCoords.y;
+    float shadow = 1.0;
+    
     //part of PBR
     // color.xyz = DirectionalLight(input.positionWS, worldNormal, v, ligDir, float3(1.0, 0.0, 1.0), baseColor.xyz, metallic, roughness, c_F0);
     float3 dir = -v;
@@ -75,10 +76,25 @@ float4 main(InputPS input) : SV_Target
     Texture2D<float> shadowMap = ResourceDescriptorHeap[g_PushConstants.indexGroup.w + 3];
 
     SamplerState g_SamplerBRDF = SamplerDescriptorHeap[2];
+    #ifdef SHADOW
+    SamplerState g_SamplerShadow = SamplerDescriptorHeap[3];
+    #else 
     SamplerComparisonState g_SamplerShadow = SamplerDescriptorHeap[3];
+    #endif
     float bias = max(0.0005 * (1.0 - dot(normal, ligDir)), 0.00005);
-    float shadow = shadowMap.SampleCmpLevelZero(g_SamplerShadow, projCoords.xy, projCoords.z);
-    baseColor.xyz *= shadow;
+    if(projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
+    {
+        shadow = 1.0;
+    }
+    else
+    {
+        #ifdef SHADOW
+        shadow = shadowMap.Sample(g_SamplerShadow, projCoords.xy).r > projCoords.z + 0.0005 ? 0.0 : 1.0;
+        #else
+        shadow = shadowMap.SampleCmpLevelZero(g_SamplerShadow, projCoords.xy, projCoords.z + 0.5);
+        #endif
+    }
+    baseColor.xyz *= saturate(1.0 - shadow);
     return baseColor;
     color.xyz += IBL(worldNormal, v, R, baseColor.xyz, metallic, roughness, c_F0, BRDFTex, diffuseIBL, specularIBL, g_Sampler, g_SamplerBRDF);
     return color;
