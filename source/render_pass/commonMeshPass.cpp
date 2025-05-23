@@ -3,6 +3,7 @@
 #include "NRIDescs.h"
 #include "assimp/scene.h"
 #include "buffer.h"
+#include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/matrix.hpp"
 #include "mesh.h"
@@ -78,7 +79,7 @@ void CommonMeshPass::BindMemory() {
 		m_matTexSet.insert(mat.m_MetallicTexture);
 	}
 
-	m_textureViews.resize(3);
+	m_textureViews.resize(4);
 
 	m_brdfTexIndex = m_renderer->texViewOffset;
 	nri::Texture2DViewDesc texture2DViewDesc1 = { .texture = m_renderer->m_DiffuseIrradianceTex, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_CUBE, .format = m_renderer->diffuseIrradianceTex.GetFormat(), .mipOffset = 0, .mipNum = m_renderer->diffuseIrradianceTex.GetMipNum(), .layerOffset = 0, .layerNum = 6 };
@@ -95,12 +96,29 @@ void CommonMeshPass::BindMemory() {
 	NRI_ABORT_ON_FAILURE(
 			NRI.CreateTexture2DView(texture2DViewDes3, m_textureViews[2]));
 
+	nri::Texture2DViewDesc texture2DViewDes4 = { .texture = m_renderer->m_ShadowMap->GetTexture(), .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = nri::Format::D32_SFLOAT };
+	NRI_ABORT_ON_FAILURE(
+			NRI.CreateTexture2DView(texture2DViewDes4, m_textureViews[3]));
+
 	{ // Sampler
 		nri::SamplerDesc samplerDesc = {};
 		samplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE,
 			nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
 		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
 			nri::Filter::LINEAR };
+		samplerDesc.mipMax = 16;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
+	}
+
+	// Shadow Sampler
+	{
+		nri::SamplerDesc samplerDesc = {};
+		samplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE,
+			nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
+		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
+			nri::Filter::LINEAR };
+		samplerDesc.compareFunc = nri::CompareFunc::LESS;
 		samplerDesc.mipMax = 16;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
@@ -440,7 +458,7 @@ void CommonMeshPass::BuildPipeline() {
 	}
 #endif
 	// add temp descriptors
-	uint32_t newMatTexIndex = m_brdfTexIndex + 3;
+	uint32_t newMatTexIndex = m_brdfTexIndex + 4;
 	{
 		for (auto &tex : m_matTexSet) {
 			nri::Descriptor *view = tex->GetView();
@@ -477,6 +495,12 @@ void CommonMeshPass::BuildPipeline() {
 		NRI.UpdateDescriptorRanges(*m_ConstantBufferDescriptorSet, 0, 1,
 				&descriptorRangeUpdateDesc);
 	}
+
+	glm::mat4 lightViewMat = glm::lookAtLH(vec3(0.001, 100.0, 0.001), vec3(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
+	float shadowRange = 100.0f;
+	glm::mat4 lightProjMat = glm::orthoLH(-shadowRange, shadowRange, -shadowRange,
+			shadowRange, 200.0f, 0.01f);
+	m_lightVP = lightProjMat * lightViewMat;
 }
 
 void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
@@ -492,6 +516,7 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 		commonConstants->modelMat = glm::mat4(1.0);
 		commonConstants->viewMat = camera.state.mWorldToView;
 		commonConstants->projectMat = p;
+		commonConstants->lightVP = m_lightVP;
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
 
@@ -548,6 +573,7 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 		commonConstants->modelMat = glm::mat4(1.0);
 		commonConstants->viewMat = camera.state.mWorldToView;
 		commonConstants->projectMat = p;
+		commonConstants->lightVP = m_lightVP;
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
 

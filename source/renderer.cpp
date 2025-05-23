@@ -1,5 +1,6 @@
 #include "renderer.h"
 #include "Camera.h"
+#include "NRIDescs.h"
 #include "Utils.h"
 #include "buffer.h"
 #include "mesh.h"
@@ -184,7 +185,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	{
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
-		textureDesc.usage = nri::TextureUsageBits::DEPTH_STENCIL_ATTACHMENT;
+		textureDesc.usage = nri::TextureUsageBits::DEPTH_STENCIL_ATTACHMENT | nri::TextureUsageBits::SHADER_RESOURCE;
 		textureDesc.format = nri::Format::D32_SFLOAT;
 		textureDesc.width = 2048;
 		textureDesc.height = 2048;

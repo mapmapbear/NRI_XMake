@@ -6,6 +6,7 @@ NRI_RESOURCE( cbuffer, CommonConstants, b, 0, 0 )
     float4x4 modelMat;
 	float4x4 viewMat;
 	float4x4 projectMat;
+    float4x4 lightVP;
 };
 
 struct PushConstants
@@ -31,6 +32,7 @@ struct outputVS
     float4 position : SV_Position;
     float2 texCoord : TEXCOORD0;
     float3 positionWS : TEXCOORD1;
+    float4 positionLS : TEXCOORD2;
     float3 normalWS : NORMAL;
     float3 tangentWS : TANGENT;
 };
@@ -85,6 +87,7 @@ outputVS main(inputVS input)
     float4x4 normalMatrix = transpose(inverse(g_PushConstants.modelMat));
     output.normalWS  = normalize(mul(normalMatrix, float4(input.in_normal, 0.0)).xyz);
     output.positionWS = mul(testMat, float4(input.in_position, 1.0)).xyz; 
-    output.tangentWS = normalize(mul(normalMatrix, float4(input.in_tangent, 1.0))).xyz; 
+    output.positionLS = mul(lightVP, float4(input.in_position, 1.0));
+    output.tangentWS = normalize(mul(normalMatrix, float4(input.in_tangent, 1.0))).xyz;
     return output;
 }

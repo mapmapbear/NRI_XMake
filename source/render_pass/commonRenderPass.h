@@ -16,6 +16,7 @@ struct ConstantBufferLayout {
 	glm::mat4 modelMat;
 	glm::mat4 viewMat;
 	glm::mat4 projectMat;
+	glm::mat4 lightVP;
 };
 
 class Renderer;

@@ -55,13 +55,9 @@ outputVS vs_main(inputVS input)
 }
 
 [earlydepthstencil]
-// float4 ps_main() : SV_Target
-// {
-//     return 0.0;
-// }
 void ps_main()
 {
-
+    return ;
 }
 
 
