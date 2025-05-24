@@ -41,6 +41,7 @@ struct Frame {
 	nri::Descriptor *constantBufferView;
 	nri::DescriptorSet *constantBufferDescriptorSet;
 	uint64_t constantBufferViewOffset;
+	uint32_t fenceValue = 0;
 };
 
 class Sample : public SampleBase {
@@ -61,7 +62,8 @@ private:
 	nri::SwapChain *m_SwapChain = nullptr;
 	nri::Queue *m_GraphicsQueue = nullptr;
 	nri::Queue *m_ComputeQueue = nullptr;
-	nri::Fence *m_FrameFence = nullptr;
+	nri::Fence *m_FrameFence[BUFFERED_FRAME_MAX_NUM] = { nullptr, nullptr };
+	uint64_t fenceValue[BUFFERED_FRAME_MAX_NUM] = { 0, 0 };
 	nri::Fence *m_ComputeFence = nullptr;
 	nri::DescriptorPool *m_DescriptorPool = nullptr;
 	nri::PipelineLayout *m_PipelineLayout = nullptr;
@@ -147,7 +149,8 @@ Sample::~Sample() {
 	NRI.DestroyTexture(*m_DepthTexture);
 	NRI.DestroyTexture(*m_ColorTexture);
 	NRI.DestroyDescriptorPool(*m_DescriptorPool);
-	NRI.DestroyFence(*m_FrameFence);
+	NRI.DestroyFence(*m_FrameFence[0]);
+	NRI.DestroyFence(*m_FrameFence[1]);
 	NRI.DestroySwapChain(*m_SwapChain);
 	NRI.DestroyStreamer(*m_Streamer);
 
@@ -179,7 +182,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	deviceCreationDesc.graphicsAPI = graphicsAPI;
 	deviceCreationDesc.queueFamilies = queueFamilies;
 	deviceCreationDesc.queueFamilyNum = helper::GetCountOf(queueFamilies);
-#ifdef DEBUG
+#ifndef DEBUG
 	deviceCreationDesc.enableGraphicsAPIValidation = true;
 	deviceCreationDesc.enableNRIValidation = true;
 #else
@@ -224,7 +227,8 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	NRI.SetDebugName(m_ComputeQueue, "ComputeQueue");
 	testRenderPtr = new Renderer(NRI, m_Device);
 	// Fences
-	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_FrameFence));
+	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_FrameFence[0]));
+	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_FrameFence[1]));
 	// Swap chain
 	nri::Format swapChainFormat;
 	{
@@ -419,26 +423,26 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 		// ImGui::SliderFloat4("Mat Debug", &testRenderPtr->testVec.x, 0.0, 1.0);
 		ImGui::Text("Light Rotation");
 		ImGui::SliderFloat("Yaw", &testRenderPtr->testVec.x, 0.0f, 360.0f);
-		ImGui::SliderFloat("Pitch", &testRenderPtr->testVec.y, -90.0f, 90.0f); 
+		ImGui::SliderFloat("Pitch", &testRenderPtr->testVec.y, -90.0f, 90.0f);
 		ImGui::SliderFloat("Roll", &testRenderPtr->testVec.z, 0.0f, 360.0f);
 	}
 	ImGui::End();
 
 	std::unordered_map<std::string, utils::NodeData> nodeNameMap;
 
-	ImGui::Begin("Scene Hierarchy");
-	{
-		ShowNode(m_Scene1.rootNode);
-		// ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-		// ImGui::Text("Frame: %u", frameIndex);
-		// ImGui::Text("Window Size: %u x %u",
-		// 		GetWindowResolution().first, GetWindowResolution().second);
-		// ImGui::Text("SwapChain Size: %u x %u",
-		// 		NRI.GetTextureDesc(*m_SwapChainBuffers[0].texture).width,
-		// 		NRI.GetTextureDesc(*m_SwapChainBuffers[0].texture).height);
-		// ImGui::Text("SwapChain Format: BT709_G22_8BIT");
-	}
-	ImGui::End();
+	// ImGui::Begin("Scene Hierarchy");
+	// {
+	// 	ShowNode(m_Scene1.rootNode);
+	// 	// ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+	// 	// ImGui::Text("Frame: %u", frameIndex);
+	// 	// ImGui::Text("Window Size: %u x %u",
+	// 	// 		GetWindowResolution().first, GetWindowResolution().second);
+	// 	// ImGui::Text("SwapChain Size: %u x %u",
+	// 	// 		NRI.GetTextureDesc(*m_SwapChainBuffers[0].texture).width,
+	// 	// 		NRI.GetTextureDesc(*m_SwapChainBuffers[0].texture).height);
+	// 	// ImGui::Text("SwapChain Format: BT709_G22_8BIT");
+	// }
+	// ImGui::End();
 
 	ImGui::ShowDemoWindow();
 
@@ -466,12 +470,8 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 	nri::Dim_t h2 = h / 2;
 
 	const uint32_t bufferedFrameIndex = frameIndex % BUFFERED_FRAME_MAX_NUM;
-	const Frame &frame = m_Frames[bufferedFrameIndex];
 
-	if (frameIndex >= BUFFERED_FRAME_MAX_NUM) {
-		NRI.Wait(*m_FrameFence, 1 + frameIndex - BUFFERED_FRAME_MAX_NUM);
-		NRI.ResetCommandAllocator(*frame.commandAllocator);
-	}
+	Frame &frame = m_Frames[bufferedFrameIndex];
 
 	const uint32_t currentTextureIndex =
 			NRI.AcquireNextSwapChainTexture(*m_SwapChain);
@@ -479,7 +479,6 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 
 	// Record
 	nri::CommandBuffer *commandBuffer = frame.commandBuffer;
-	nri::CommandBuffer *commandBufferCompute = frame.commandBufferCompute;
 
 	nri::AttachmentsDesc presentDesc = {};
 
@@ -632,19 +631,23 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		NRI.QueueSubmit(*m_GraphicsQueue, queueSubmitDesc);
 	}
 
-	// Present
-	NRI.QueuePresent(*m_SwapChain);
-
-	{ // Signaling after "Present" improves D3D11 performance a bit
+	{
 		nri::FenceSubmitDesc signalFence = {};
-		signalFence.fence = m_FrameFence;
-		signalFence.value = 1 + frameIndex;
+		signalFence.fence = m_FrameFence[bufferedFrameIndex];
+		signalFence.value = ++frame.fenceValue;
 
 		nri::QueueSubmitDesc queueSubmitDesc = {};
 		queueSubmitDesc.signalFences = &signalFence;
 		queueSubmitDesc.signalFenceNum = 1;
 
 		NRI.QueueSubmit(*m_GraphicsQueue, queueSubmitDesc);
+	}
+
+	NRI.QueuePresent(*m_SwapChain);
+
+	if (frameIndex >= BUFFERED_FRAME_MAX_NUM) {
+		NRI.Wait(*m_FrameFence[bufferedFrameIndex], frame.fenceValue);
+		NRI.ResetCommandAllocator(*frame.commandAllocator);
 	}
 }
 

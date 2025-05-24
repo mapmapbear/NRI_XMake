@@ -94,7 +94,7 @@ float4 main(InputPS input) : SV_Target
         shadow = shadowMap.SampleCmpLevelZero(g_SamplerShadow, projCoords.xy, projCoords.z + 0.5);
         #endif
     }
-    baseColor.xyz *= saturate(1.0 - shadow);
+    baseColor.xyz = saturate(1.0 - shadow);
     return baseColor;
     color.xyz += IBL(worldNormal, v, R, baseColor.xyz, metallic, roughness, c_F0, BRDFTex, diffuseIBL, specularIBL, g_Sampler, g_SamplerBRDF);
     return color;

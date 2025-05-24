@@ -516,7 +516,16 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 		helper::Annotation annotation(NRI, info.cmdBuffer, "GLTF Mesh Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
+		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
+				*m_ConstantBufferDescriptorSet, nullptr);
+		{
+			const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
+				600.f, 0.0f, 1.0f };
+			NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
 
+			nri::Rect scissor = { 0, 0, 900, 600 };
+			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
+		}
 		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
@@ -535,18 +544,6 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 
 			NRI.CmdSetIndexBuffer(info.cmdBuffer, *geoBuffer, node.mesh->indexOffset,
 					nri::IndexType::UINT32);
-
-			NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
-					*m_ConstantBufferDescriptorSet, nullptr);
-
-			{
-				const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
-					600.f, 0.0f, 1.0f };
-				NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
-
-				nri::Rect scissor = { 0, 0, 900, 600 };
-				NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
-			}
 			uint32_t instanceCount = 1;
 			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.mesh->m_indexCount), instanceCount, 0, 0, 0 });
 		}
@@ -558,12 +555,20 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 	const glm::mat4 p = camera.state.mViewToClip;
 	const glm::vec3 cameraPos = camera.state.globalPosition;
 
-
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Depth PreZ Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_DepthPipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_DepthPipeline);
+		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
+				*m_ConstantBufferDescriptorSet, nullptr);
+		{
+			const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
+				600.f, 0.0f, 1.0f };
+			NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
 
+			nri::Rect scissor = { 0, 0, 900, 600 };
+			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
+		}
 		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
@@ -584,18 +589,6 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 
 			NRI.CmdSetIndexBuffer(info.cmdBuffer, *geoBuffer, node.mesh->indexOffset,
 					nri::IndexType::UINT32);
-
-			NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
-					*m_ConstantBufferDescriptorSet, nullptr);
-
-			{
-				const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
-					600.f, 0.0f, 1.0f };
-				NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
-
-				nri::Rect scissor = { 0, 0, 900, 600 };
-				NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
-			}
 			uint32_t instanceCount = 1;
 			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.mesh->m_indexCount), instanceCount, 0, 0, 0 });
 		}
@@ -614,7 +607,14 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 		clearDesc.planes = nri::PlaneBits::DEPTH;
 		clearDesc.value.depthStencil.depth = 0.0;
 		NRI.CmdClearAttachments(info.cmdBuffer, &clearDesc, 1, nullptr, 0);
-		
+		{
+			const nri::Viewport viewport = { 0.0f, 0.0f, 2048.f,
+				2048.f, 0.0f, 1.0f };
+			NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
+
+			nri::Rect scissor = { 0, 0, 2048, 2048 };
+			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
+		}
 		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
@@ -633,18 +633,6 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 
 			NRI.CmdSetIndexBuffer(info.cmdBuffer, *geoBuffer, node.mesh->indexOffset,
 					nri::IndexType::UINT32);
-
-			NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
-					*m_ConstantBufferDescriptorSet, nullptr);
-
-			{
-				const nri::Viewport viewport = { 0.0f, 0.0f, 2048.f,
-					2048.f, 0.0f, 1.0f };
-				NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
-
-				nri::Rect scissor = { 0, 0, 2048, 2048 };
-				NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
-			}
 			uint32_t instanceCount = 1;
 			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.mesh->m_indexCount), instanceCount, 0, 0, 0 });
 		}
