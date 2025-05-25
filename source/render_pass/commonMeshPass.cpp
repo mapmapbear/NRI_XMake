@@ -110,6 +110,7 @@ void CommonMeshPass::BindMemory() {
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
 	}
+	NRI.SetDebugName(m_Sampler, "m_cubeSampler");
 
 	// Shadow Sampler
 	{
@@ -120,12 +121,11 @@ void CommonMeshPass::BindMemory() {
 			nri::Filter::NEAREST };
 		samplerDesc.compareFunc = nri::CompareFunc::LESS_EQUAL;
 		samplerDesc.mipMin = 0;
-		samplerDesc.mipMax = 16;
+		samplerDesc.mipMax = 1;
 		NRI_ABORT_ON_FAILURE(
-				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
+				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_SamplerShadow));
 	}
-
-	NRI.SetDebugName(m_Sampler, "m_cubeSampler");
+	NRI.SetDebugName(m_SamplerShadow, "m_ShadowMapSampler");
 
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
 	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
@@ -157,7 +157,7 @@ void CommonMeshPass::BuildPipeline() {
 		// descriptorRangeTexture[0] = { 0, (uint32_t)m_textureViews.size(), nri::DescriptorType::TEXTURE,
 		descriptorRangeTexture[0] = { 0, 999, nri::DescriptorType::TEXTURE,
 			nri::StageBits::FRAGMENT_SHADER };
-		descriptorRangeTexture[1] = { 0, 1, nri::DescriptorType::SAMPLER,
+		descriptorRangeTexture[1] = { 0, 2, nri::DescriptorType::SAMPLER,
 			nri::StageBits::FRAGMENT_SHADER };
 
 		nri::DescriptorSetDesc descriptorSetDescs[] = {
@@ -477,9 +477,9 @@ void CommonMeshPass::BuildPipeline() {
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
 		descriptorRangeUpdateDescs[0].descriptorNum = (uint32_t)m_textureViews.size();
 		descriptorRangeUpdateDescs[0].descriptors = m_textureViews.data();
-
-		descriptorRangeUpdateDescs[1].descriptorNum = 1;
-		descriptorRangeUpdateDescs[1].descriptors = &m_Sampler;
+		std::vector<nri::Descriptor *> samplerArray = { m_Sampler, m_SamplerShadow };
+		descriptorRangeUpdateDescs[1].descriptorNum = 2;
+		descriptorRangeUpdateDescs[1].descriptors = samplerArray.data();
 
 		NRI.UpdateDescriptorRanges(*m_TextureDescriptorSet, 0,
 				helper::GetCountOf(descriptorRangeUpdateDescs),

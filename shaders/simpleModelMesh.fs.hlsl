@@ -3,12 +3,12 @@
 
 struct InputPS
 {
-    float4 position : SV_Position;
-    float2 uv : TEXCOORD0;
+    float4 position   : SV_Position;
+    float2 uv         : TEXCOORD0;
     float3 positionWS : TEXCOORD1;
     float4 positionLS : TEXCOORD2;
-    float3 normalWS : NORMAL;
-    float3 tangentWS : TANGENT;
+    float3 normalWS   : NORMAL;
+    float3 tangentWS  : TANGENT;
 };
 
 struct PushConstants
@@ -21,6 +21,8 @@ struct PushConstants
     uint4 indexGroup;
 };
 NRI_ROOT_CONSTANTS( PushConstants, g_PushConstants, 1, 0 );
+
+#define SHADOW
 
 [earlydepthstencil]
 float4 main(InputPS input) : SV_Target
@@ -76,25 +78,17 @@ float4 main(InputPS input) : SV_Target
     Texture2D<float> shadowMap = ResourceDescriptorHeap[g_PushConstants.indexGroup.w + 3];
 
     SamplerState g_SamplerBRDF = SamplerDescriptorHeap[2];
-    #ifdef SHADOW
+    #ifndef SHADOW
     SamplerState g_SamplerShadow = SamplerDescriptorHeap[3];
     #else 
     SamplerComparisonState g_SamplerShadow = SamplerDescriptorHeap[3];
     #endif
     float bias = max(0.0005 * (1.0 - dot(normal, ligDir)), 0.00005);
-    if(projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
-    {
-        shadow = 1.0;
-    }
-    else
-    {
-        #ifdef SHADOW
-        shadow = shadowMap.Sample(g_SamplerShadow, projCoords.xy).r > projCoords.z + 0.0005 ? 0.0 : 1.0;
-        #else
-        shadow = shadowMap.SampleCmpLevelZero(g_SamplerShadow, projCoords.xy, projCoords.z + 0.5);
-        #endif
-    }
-    baseColor.xyz = saturate(1.0 - shadow);
+    shadow = shadowMap.SampleCmpLevelZero(g_SamplerShadow, projCoords.xy, projCoords.z);
+    // shadow = shadowMap.Sample(g_SamplerShadow, projCoords.xy).x  < projCoords.z ? 1.0 : 0.0;
+    // baseColor.xyz = clamp(saturate(1.0 - shadow), 0.0, 1.0);
+    baseColor.xyz = shadow;
+    // baseColor = float4(projCoords.xy, 0.0, 1.0);
     return baseColor;
     color.xyz += IBL(worldNormal, v, R, baseColor.xyz, metallic, roughness, c_F0, BRDFTex, diffuseIBL, specularIBL, g_Sampler, g_SamplerBRDF);
     return color;

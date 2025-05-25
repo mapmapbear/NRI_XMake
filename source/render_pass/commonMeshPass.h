@@ -85,6 +85,7 @@ private:
 	nri::Descriptor *m_MatrixStorageBufferSRV = nullptr;
 	nri::Descriptor *m_ConstantBufferView = nullptr;
 	nri::Descriptor *m_Sampler = nullptr;
+	nri::Descriptor *m_SamplerShadow = nullptr;
 
 	nri::DescriptorSet *m_TextureDescriptorSet = nullptr;
 	nri::DescriptorSet *m_ConstantBufferDescriptorSet = nullptr;

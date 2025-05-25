@@ -22,19 +22,19 @@ struct inputVS
 {
     float3 in_position : POSITION0;
     float2 in_texcoord : TEXCOORD0;
-    float3 in_normal : NORMAL;
-    float3 in_tangent : TANGENT;
-    uint instanceID : SV_InstanceID;
+    float3 in_normal   : NORMAL;
+    float3 in_tangent  : TANGENT;
+    uint instanceID    : SV_InstanceID;
 };
 
 struct outputVS 
 {
-    float4 position : SV_Position;
-    float2 texCoord : TEXCOORD0;
+    float4 position   : SV_Position;
+    float2 texCoord   : TEXCOORD0;
     float3 positionWS : TEXCOORD1;
     float4 positionLS : TEXCOORD2;
-    float3 normalWS : NORMAL;
-    float3 tangentWS : TANGENT;
+    float3 normalWS   : NORMAL;
+    float3 tangentWS  : TANGENT;
 };
 
 float4x4 inverse(float4x4 m) {
