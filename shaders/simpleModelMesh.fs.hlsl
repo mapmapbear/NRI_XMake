@@ -7,6 +7,7 @@ struct InputPS
     float2 uv         : TEXCOORD0;
     float3 positionWS : TEXCOORD1;
     float4 positionLS : TEXCOORD2;
+    float4 positionLS1 : TEXCOORD3;
     float3 normalWS   : NORMAL;
     float3 tangentWS  : TANGENT;
 };
@@ -78,15 +79,17 @@ float4 main(InputPS input) : SV_Target
     Texture2D<float> shadowMap = ResourceDescriptorHeap[g_PushConstants.indexGroup.w + 3];
 
     SamplerState g_SamplerBRDF = SamplerDescriptorHeap[2];
-    #ifndef SHADOW
+    #ifdef SHADOW
     SamplerState g_SamplerShadow = SamplerDescriptorHeap[3];
     #else 
     SamplerComparisonState g_SamplerShadow = SamplerDescriptorHeap[3];
     #endif
     float bias = max(0.0005 * (1.0 - dot(normal, ligDir)), 0.00005);
-    shadow = shadowMap.SampleCmpLevelZero(g_SamplerShadow, projCoords.xy, projCoords.z);
-    // shadow = shadowMap.Sample(g_SamplerShadow, projCoords.xy).x  < projCoords.z ? 1.0 : 0.0;
+    // shadow = shadowMap.SampleCmpLevelZero(g_SamplerShadow, projCoords.xy, projCoords.z);
+    shadow = shadowMap.Sample(g_SamplerShadow, projCoords.xy).x;
+    shadow = shadow > projCoords.z ? 0.0 : 1.0;
     // baseColor.xyz = clamp(saturate(1.0 - shadow), 0.0, 1.0);
+    float4 outPosLS = input.positionLS.xyzz;
     baseColor.xyz = shadow;
     // baseColor = float4(projCoords.xy, 0.0, 1.0);
     return baseColor;

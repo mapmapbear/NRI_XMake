@@ -119,7 +119,7 @@ void CommonMeshPass::BindMemory() {
 			nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
 		samplerDesc.filters = { nri::Filter::NEAREST, nri::Filter::NEAREST,
 			nri::Filter::NEAREST };
-		samplerDesc.compareFunc = nri::CompareFunc::LESS_EQUAL;
+		samplerDesc.compareFunc = nri::CompareFunc::GREATER;
 		samplerDesc.mipMin = 0;
 		samplerDesc.mipMax = 1;
 		NRI_ABORT_ON_FAILURE(
@@ -223,7 +223,7 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::RasterizationDesc rasterizationDesc = {};
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
-		rasterizationDesc.cullMode = nri::CullMode::BACK;
+		rasterizationDesc.cullMode = nri::CullMode::NONE;
 		rasterizationDesc.frontCounterClockwise = false;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
@@ -240,7 +240,7 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::DepthAttachmentDesc depthAttachmentDesc = {};
 		depthAttachmentDesc.write = true;
-		depthAttachmentDesc.compareFunc = nri::CompareFunc::EQUAL;
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
 		depthAttachmentDesc.boundsTest = false;
 
 		nri::OutputMergerDesc outputMergerDesc = {};
@@ -318,7 +318,7 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::RasterizationDesc rasterizationDesc = {};
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
-		rasterizationDesc.cullMode = nri::CullMode::NONE;
+		rasterizationDesc.cullMode = nri::CullMode::BACK;
 		rasterizationDesc.frontCounterClockwise = false;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
@@ -335,7 +335,7 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::DepthAttachmentDesc depthAttachmentDesc = {};
 		depthAttachmentDesc.write = true;
-		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER;
 		depthAttachmentDesc.boundsTest = false;
 
 		nri::OutputMergerDesc outputMergerDesc = {};
@@ -411,7 +411,7 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::RasterizationDesc rasterizationDesc = {};
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
-		rasterizationDesc.cullMode = nri::CullMode::NONE;
+		rasterizationDesc.cullMode = nri::CullMode::BACK;
 		rasterizationDesc.frontCounterClockwise = false;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
@@ -619,10 +619,11 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
 			block.modelMat = m_rootMesh->results.at(index);
-			block.modelMat = m_renderer->m_lightVP * block.modelMat;
+			// block.modelMat = m_renderer->m_lightVP * block.modelMat;
 			block.camPos = vec4(cameraPos, 1.0);
 			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
-			block.index[1] = block.index[2] = block.index[3] = 0u;
+			block.index[1] = block.index[2] = block.index[3] = 1u;
+			block.testVec.y = 2.0f;
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
 			nri::Buffer *geoBuffer = node.mesh->m_indexbuffer->GetBuffer();
 			nri::VertexBufferDesc vertexBufferDesc = {};

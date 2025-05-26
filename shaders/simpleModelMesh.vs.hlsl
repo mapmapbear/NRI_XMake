@@ -33,6 +33,7 @@ struct outputVS
     float2 texCoord   : TEXCOORD0;
     float3 positionWS : TEXCOORD1;
     float4 positionLS : TEXCOORD2;
+    float4 positionLS1 : TEXCOORD3;
     float3 normalWS   : NORMAL;
     float3 tangentWS  : TANGENT;
 };
@@ -88,6 +89,7 @@ outputVS main(inputVS input)
     output.normalWS  = normalize(mul(normalMatrix, float4(input.in_normal, 0.0)).xyz);
     output.positionWS = mul(testMat, float4(input.in_position, 1.0)).xyz; 
     output.positionLS = mul(lightVP, float4(output.positionWS, 1.0));
+    output.positionLS1 = mul(lightVP, float4(0.0, 50.0, 0.0, 1.0));
     output.tangentWS = normalize(mul(normalMatrix, float4(input.in_tangent, 1.0))).xyz;
     return output;
 }

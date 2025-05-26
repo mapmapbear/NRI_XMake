@@ -5,6 +5,7 @@
 #include "buffer.h"
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
+#include "glm/matrix.hpp"
 #include "mesh.h"
 #include "render_pass/commonMeshPass.h"
 #include "render_pass/gridRenderPass.h"
@@ -374,17 +375,13 @@ void Renderer::OnUpdate(float deltaTime) {
 	m_lightPos = glm::vec3(cos(glm::radians(testVec.x)), 1.5f * 80.0f, cos(glm::radians(testVec.y)) * 1.0f);
 	m_lightPos = glm::vec3(0.01f, 200.0f, 0.01f);
 
-	glm::vec3 normalizedLightDir = glm::normalize(vec3(0.0, -1.0, 0.0));
-	float distanceFromOrigin = 200; //m_SceneAABB.second.y;
-	glm::vec3 lightPosition = -normalizedLightDir * distanceFromOrigin;
+	glm::vec3 normalizedLightDir = vec3(0.001, -1.0, 0.001);
+	float distanceFromOrigin = m_SceneAABB.second.y + 50000;
+	glm::vec3 lightPosition = normalizedLightDir * distanceFromOrigin;
 	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
-	if (std::abs(glm::dot(normalizedLightDir, up)) > 0.99f) {
-		up = glm::vec3(1.0f, 0.0f, 0.0f);
-	}
 	glm::mat4 lightView = glm::lookAtLH(lightPosition, vec3(0.0, 0.0, 0.0), up);
-	// lightView = computeLightSpaceMatrix(testVec.x, testVec.y, testVec.z);
 	float orthoSize = 200.0f;
-	glm::mat4 lightProj = glm::orthoLH_ZO(-orthoSize, orthoSize, -orthoSize, orthoSize, distanceFromOrigin, 0.01f);
+	glm::mat4 lightProj = glm::orthoLH_ZO(-orthoSize, orthoSize, -orthoSize, orthoSize, 0.01f, distanceFromOrigin);
 	m_lightVP = lightProj * lightView;
 }
 
