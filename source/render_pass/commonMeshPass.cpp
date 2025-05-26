@@ -119,7 +119,7 @@ void CommonMeshPass::BindMemory() {
 			nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
 		samplerDesc.filters = { nri::Filter::NEAREST, nri::Filter::NEAREST,
 			nri::Filter::NEAREST };
-		samplerDesc.compareFunc = nri::CompareFunc::GREATER;
+		samplerDesc.compareFunc = nri::CompareFunc::LESS_EQUAL;
 		samplerDesc.mipMin = 0;
 		samplerDesc.mipMax = 1;
 		NRI_ABORT_ON_FAILURE(
@@ -428,7 +428,7 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::DepthAttachmentDesc depthAttachmentDesc = {};
 		depthAttachmentDesc.write = true;
-		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::LESS_EQUAL;
 		depthAttachmentDesc.boundsTest = false;
 
 		nri::OutputMergerDesc outputMergerDesc = {};
@@ -605,7 +605,7 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_ShadowPipeline);
 		nri::ClearDesc clearDesc = {};
 		clearDesc.planes = nri::PlaneBits::DEPTH;
-		clearDesc.value.depthStencil.depth = 0.0;
+		clearDesc.value.depthStencil.depth = 1.0;
 		NRI.CmdClearAttachments(info.cmdBuffer, &clearDesc, 1, nullptr, 0);
 		{
 			const nri::Viewport viewport = { 0.0f, 0.0f, 2048.f,

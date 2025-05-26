@@ -375,13 +375,14 @@ void Renderer::OnUpdate(float deltaTime) {
 	m_lightPos = glm::vec3(cos(glm::radians(testVec.x)), 1.5f * 80.0f, cos(glm::radians(testVec.y)) * 1.0f);
 	m_lightPos = glm::vec3(0.01f, 200.0f, 0.01f);
 
-	glm::vec3 normalizedLightDir = vec3(0.001, -1.0, 0.001);
-	float distanceFromOrigin = m_SceneAABB.second.y + 50000;
-	glm::vec3 lightPosition = normalizedLightDir * distanceFromOrigin;
+	glm::vec3 normalizedLightDir = vec3(0.001, 1.0, 0.001);
+	float distanceFromOrigin = 200.f; //m_SceneAABB.second.y;// + 50000;
+	glm::vec3 lightPosition = -normalizedLightDir * distanceFromOrigin;
+	lightPosition = vec3(0.001, 200.0, 0.001);
 	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 	glm::mat4 lightView = glm::lookAtLH(lightPosition, vec3(0.0, 0.0, 0.0), up);
-	float orthoSize = 200.0f;
-	glm::mat4 lightProj = glm::orthoLH_ZO(-orthoSize, orthoSize, -orthoSize, orthoSize, 0.01f, distanceFromOrigin);
+	float orthoSize = 256.0f;
+	glm::mat4 lightProj = glm::orthoLH_ZO(-orthoSize, orthoSize, -orthoSize, orthoSize, 1.0f, distanceFromOrigin);
 	m_lightVP = lightProj * lightView;
 }
 

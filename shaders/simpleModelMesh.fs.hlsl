@@ -64,8 +64,8 @@ float4 main(InputPS input) : SV_Target
 
 
     float3 projCoords = input.positionLS.xyz / input.positionLS.w;
-    projCoords.xy = projCoords.xy * 0.5 + 0.5;
-    projCoords.y = 1.0 - projCoords.y;
+    projCoords.x = projCoords.x * 0.5 + 0.5;
+    projCoords.y = projCoords.y * -0.5 + 0.5;
     float shadow = 1.0;
     
     //part of PBR
@@ -79,18 +79,15 @@ float4 main(InputPS input) : SV_Target
     Texture2D<float> shadowMap = ResourceDescriptorHeap[g_PushConstants.indexGroup.w + 3];
 
     SamplerState g_SamplerBRDF = SamplerDescriptorHeap[2];
-    #ifdef SHADOW
+    #ifndef SHADOW
     SamplerState g_SamplerShadow = SamplerDescriptorHeap[3];
     #else 
     SamplerComparisonState g_SamplerShadow = SamplerDescriptorHeap[3];
     #endif
     float bias = max(0.0005 * (1.0 - dot(normal, ligDir)), 0.00005);
-    // shadow = shadowMap.SampleCmpLevelZero(g_SamplerShadow, projCoords.xy, projCoords.z);
-    shadow = shadowMap.Sample(g_SamplerShadow, projCoords.xy).x;
-    shadow = shadow > projCoords.z ? 0.0 : 1.0;
-    // baseColor.xyz = clamp(saturate(1.0 - shadow), 0.0, 1.0);
+    shadow = shadowMap.SampleCmpLevelZero(g_SamplerShadow, projCoords.xy, projCoords.z - 0.002);
     float4 outPosLS = input.positionLS.xyzz;
-    baseColor.xyz = shadow;
+    baseColor.xyz *= clamp(shadow, 0.4, 1.0);
     // baseColor = float4(projCoords.xy, 0.0, 1.0);
     return baseColor;
     color.xyz += IBL(worldNormal, v, R, baseColor.xyz, metallic, roughness, c_F0, BRDFTex, diffuseIBL, specularIBL, g_Sampler, g_SamplerBRDF);
