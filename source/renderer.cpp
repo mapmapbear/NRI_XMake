@@ -12,6 +12,7 @@
 #include "render_pass/instanceMeshPass.h"
 #include "render_pass/presentPass.h"
 #include "render_pass/skyRenderPass.h"
+#include "render_pass/ssaoCompPass.h"
 #include "spdlog/spdlog.h"
 #include "texture.h"
 #include <debugapi.h>
@@ -28,10 +29,11 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	NRI.SetDebugName(m_ComputeQueue, "ComputeQueue");
 
 	nri::DescriptorPoolDesc descriptorPoolDesc = {};
-	descriptorPoolDesc.descriptorSetMaxNum = BUFFERED_FRAME_MAX_NUM + 6;
+	descriptorPoolDesc.descriptorSetMaxNum = BUFFERED_FRAME_MAX_NUM + 20;
 	descriptorPoolDesc.constantBufferMaxNum = BUFFERED_FRAME_MAX_NUM;
-	descriptorPoolDesc.storageBufferMaxNum = 2;
-	descriptorPoolDesc.structuredBufferMaxNum = 2;
+	descriptorPoolDesc.storageBufferMaxNum = 99;
+	descriptorPoolDesc.storageTextureMaxNum = 99;
+	descriptorPoolDesc.structuredBufferMaxNum = 99;
 	descriptorPoolDesc.textureMaxNum = 1024;
 	descriptorPoolDesc.samplerMaxNum = 10;
 
@@ -201,6 +203,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 
 		m_ShadowMap = std::make_shared<Texture>();
 		m_ShadowMap->Create(this, textureDesc, texViewDesc);
+		NRI.SetDebugName(m_ShadowMap->GetTexture(), "m_ShadowMap");
 	}
 
 	std::vector<nri::Texture *> textureArray = { m_DiffuseIrradianceTex, m_SpecularIrradianceTex, m_BRDFTex };
@@ -351,6 +354,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	gridPass = std::make_shared<GridRenderPass>(this);
 	meshPass = std::make_shared<InstanceMeshPass>(this);
 	simplePass = std::make_shared<CommonMeshPass>(this, m_Scene, mesh);
+	ssaoCompPass = std::make_shared<SSAOCompPass>(this);
 }
 
 glm::mat4 Renderer::computeLightSpaceMatrix(float yaw, float pitch, float roll) {

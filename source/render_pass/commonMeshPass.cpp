@@ -541,7 +541,6 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			vertexBufferDesc.offset = node.mesh->vertexOffset;
 			vertexBufferDesc.stride = sizeof(utils::Vertex);
 			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
-
 			NRI.CmdSetIndexBuffer(info.cmdBuffer, *geoBuffer, node.mesh->indexOffset,
 					nri::IndexType::UINT32);
 			uint32_t instanceCount = 1;

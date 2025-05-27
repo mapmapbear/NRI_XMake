@@ -16,6 +16,7 @@ struct RenderInfo {
 class SkyRenderPass;
 class GridRenderPass;
 class InstanceMeshPass;
+class SSAOCompPass;
 class PresentPass;
 class CommonMeshPass;
 class Buffer;
@@ -109,5 +110,6 @@ private:
 	std::shared_ptr<GridRenderPass> gridPass = nullptr;
 	std::shared_ptr<InstanceMeshPass> meshPass = nullptr;
 	std::shared_ptr<CommonMeshPass> simplePass = nullptr;
+	std::shared_ptr<SSAOCompPass> ssaoCompPass = nullptr;
 	std::shared_ptr<PresentPass> presentPass = nullptr;
 };

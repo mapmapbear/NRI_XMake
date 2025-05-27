@@ -1,5 +1,6 @@
 #include "NRICompatibility.hlsli"
 #include "pbrCommon.hlsli"
+#include "shadowCommon.hlsl"
 
 struct InputPS
 {
@@ -84,8 +85,9 @@ float4 main(InputPS input) : SV_Target
     #else 
     SamplerComparisonState g_SamplerShadow = SamplerDescriptorHeap[3];
     #endif
-    float bias = max(0.0005 * (1.0 - dot(normal, ligDir)), 0.00005);
-    shadow = shadowMap.SampleCmpLevelZero(g_SamplerShadow, projCoords.xy, projCoords.z - 0.002);
+    // shadow = hard_shadow(projCoords, g_SamplerShadow, shadowMap, -0.002);
+    // shadow = pcf_shadow(projCoords, g_SamplerShadow, shadowMap, 0.002, 9);
+    shadow = pcf_shadow_poisson(projCoords, g_SamplerShadow, shadowMap);
     float4 outPosLS = input.positionLS.xyzz;
     baseColor.xyz *= clamp(shadow, 0.4, 1.0);
     // baseColor = float4(projCoords.xy, 0.0, 1.0);
