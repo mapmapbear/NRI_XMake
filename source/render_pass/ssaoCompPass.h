@@ -28,6 +28,7 @@ private:
 
 	// nri::Texture *m_DepthTexture = nullptr;
 	nri::Descriptor *m_DepthTextureShaderResource = nullptr;
+	nri::Descriptor *m_Sampler = nullptr;
 	// nri::Texture *m_NormalTexture = nullptr;
 	// nri::Descriptor *m_NormalTextureShaderResource = nullptr;
 	// nri::Texture *m_NoiseTexture = nullptr;

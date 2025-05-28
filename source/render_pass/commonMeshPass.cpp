@@ -225,6 +225,8 @@ void CommonMeshPass::BuildPipeline() {
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
 		rasterizationDesc.cullMode = nri::CullMode::NONE;
 		rasterizationDesc.frontCounterClockwise = false;
+		rasterizationDesc.depthClamp = true;
+		
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 #ifdef HDR_ENABLE
@@ -239,7 +241,7 @@ void CommonMeshPass::BuildPipeline() {
 			nri::BlendFunc::ADD };
 
 		nri::DepthAttachmentDesc depthAttachmentDesc = {};
-		depthAttachmentDesc.write = true;
+		depthAttachmentDesc.write = false;
 		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
 		depthAttachmentDesc.boundsTest = false;
 
@@ -320,6 +322,8 @@ void CommonMeshPass::BuildPipeline() {
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
 		rasterizationDesc.cullMode = nri::CullMode::BACK;
 		rasterizationDesc.frontCounterClockwise = false;
+		rasterizationDesc.depthClamp = true;
+		
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 #ifdef HDR_ENABLE
@@ -413,6 +417,7 @@ void CommonMeshPass::BuildPipeline() {
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
 		rasterizationDesc.cullMode = nri::CullMode::BACK;
 		rasterizationDesc.frontCounterClockwise = false;
+		rasterizationDesc.depthClamp = true;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 #ifdef HDR_ENABLE

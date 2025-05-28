@@ -63,6 +63,18 @@ void SSAOCompPass::AllocGPUMemory() {
 				NRI.CreateTexture2DView(texture2DViewDes, m_DepthTextureShaderResource));
 	}
 
+	{
+		nri::SamplerDesc samplerDesc = {};
+		samplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE,
+			nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
+		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
+			nri::Filter::LINEAR };
+		// samplerDesc.anisotropy = 4;
+		samplerDesc.mipMax = 16.0f;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
+	}
+
 	nri::TextureSubresourceUploadDesc SSAOSubRes = {};
 	SSAOSubRes.rowPitch = 900 * 32;
 	SSAOSubRes.slicePitch = SSAOSubRes.rowPitch * 600;
@@ -98,7 +110,7 @@ void SSAOCompPass::BuildPipeline() {
 		descriptorRangeTexture[0] = { 0, 2, nri::DescriptorType::TEXTURE,
 			nri::StageBits::COMPUTE_SHADER };
 		descriptorRangeTexture[1] = { 1, 1, nri::DescriptorType::STORAGE_TEXTURE, nri::StageBits::COMPUTE_SHADER };
-		descriptorRangeTexture[2] = { 2, 1, nri::DescriptorType::SAMPLER, nri::StageBits::COMPUTE_SHADER };
+		descriptorRangeTexture[2] = { 0, 1, nri::DescriptorType::SAMPLER, nri::StageBits::COMPUTE_SHADER };
 
 		nri::DescriptorSetDesc descriptorSetDescs[] = {
 			{ 1, descriptorRangeTexture, 3 },
@@ -132,12 +144,15 @@ void SSAOCompPass::BuildPipeline() {
 
 		std::vector<nri::Descriptor *> ssaoTexView = { m_SSAOTexture->GetView(), m_DepthTextureShaderResource };
 		nri::Descriptor *rotationTexView = m_RotationTexture->GetView();
-		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
+		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[3] = {};
 		descriptorRangeUpdateDescs[0].descriptorNum = 2;
 		descriptorRangeUpdateDescs[0].descriptors = ssaoTexView.data();
 
 		descriptorRangeUpdateDescs[1].descriptorNum = 1;
 		descriptorRangeUpdateDescs[1].descriptors = &rotationTexView;
+
+		descriptorRangeUpdateDescs[2].descriptorNum = 1;
+		descriptorRangeUpdateDescs[2].descriptors = &m_Sampler;
 
 		NRI.UpdateDescriptorRanges(*m_SSAOTextureDescriptorSet, 0,
 				helper::GetCountOf(descriptorRangeUpdateDescs),
@@ -161,7 +176,7 @@ void SSAOCompPass::Render(struct RenderInfo &info, Camera &camera) {
 		block.texRotation = 1009,
 		block.smpl = m_renderer->testVec.w,
 		block.zNear = 0.01f,
-		block.zFar = 1000.0f,
+		block.zFar = 200.0f,
 		block.radius = 0.03f,
 		block.attScale = 0.95f,
 		block.distScale = 1.7f,

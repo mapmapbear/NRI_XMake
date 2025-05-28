@@ -2,6 +2,7 @@
 
 #include "NRIFramework.h"
 #include "glm/ext/matrix_transform.hpp"
+#include "glm/geometric.hpp"
 #include "spdlog/spdlog.h"
 
 // to get a perspective matrix with reversed z, simply swap the near and far plane
@@ -22,6 +23,21 @@ glm::mat4 infinitePerspectiveFovReverseZLH_ZO(float fov, float width, float heig
 	return result;
 }
 
+glm::mat4 reverseZMat(float fov, float aspect, float zNear, float zFar) {
+	glm::mat4 result = glm::zero<glm::mat4>();
+
+	assert(abs(aspect - std::numeric_limits<float>::epsilon()) > static_cast<float>(0));
+
+	const float tanHalfFovy = tan(fov / static_cast<float>(2));
+
+	result[0][0] = 1.0f / (aspect * tanHalfFovy);
+	result[1][1] = 1.0f / (tanHalfFovy);
+	result[2][2] = -zNear / (zFar - zNear);
+	result[2][3] = 1.0f;
+	result[3][2] = (zFar * zNear) / (zFar - zNear);
+	return result;
+}
+
 void Camera::Initialize(const vec3 &position, const vec3 &lookAt,
 		bool isRelative) {
 	vec3 dir = normalize(lookAt - position);
@@ -33,7 +49,7 @@ void Camera::Initialize(const vec3 &position, const vec3 &lookAt,
 
 	state.globalPosition = vec3(position);
 	state.rotation = glm::degrees(rot);
-	state.mWorldToView = glm::lookAtLH(state.globalPosition, state.globalPosition + dir, glm::vec3(0.0, 1.0, 0.0));
+	state.mWorldToView = glm::lookAtLH(state.globalPosition, state.globalPosition + glm::normalize(dir), glm::vec3(0.0, 1.0, 0.0));
 	m_IsRelative = isRelative;
 }
 
@@ -84,7 +100,7 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 		state.position = vec3(state.globalPosition);
 		statePrev.position = vec3(statePrev.globalPosition);
 
-		state.mWorldToView = glm::lookAtLH(state.globalPosition, state.globalPosition + vForward, glm::vec3(0.0, 1.0, 0.0));
+		state.mWorldToView = glm::lookAtLH(state.globalPosition, state.globalPosition + glm::normalize(vForward), glm::vec3(0.0, 1.0, 0.0));
 	}
 
 	// Rotation
@@ -115,8 +131,8 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 	} else {
 		glm::mat4 projMat = glm::mat4(1.0);
 		if (desc.isReversedZ) {
-			// projMat = glm::perspectiveLH_ZO(desc.horizontalFov, desc.aspectRatio, desc.farZ, desc.nearZ);
-			projMat = infinitePerspectiveFovReverseZLH_ZO(desc.horizontalFov, 900, 600, desc.nearZ);
+			projMat = reverseZMat(desc.horizontalFov, desc.aspectRatio, desc.nearZ, desc.farZ);
+			// projMat = infinitePerspectiveFovReverseZLH_ZO(desc.horizontalFov, 900, 600, desc.nearZ);
 		} else {
 			projMat = glm::perspectiveLH_ZO(desc.horizontalFov, desc.aspectRatio, desc.nearZ, desc.farZ);
 		}
