@@ -88,8 +88,8 @@ void PresentPass::BuildPipeline() {
 		nri::OutputMergerDesc outputMergerDesc = {};
 		outputMergerDesc.colors = &colorAttachmentDesc;
 		outputMergerDesc.colorNum = 1;
-		outputMergerDesc.depth = depthAttachmentDesc;
-		outputMergerDesc.depthStencilFormat = nri::Format::D32_SFLOAT;
+		// outputMergerDesc.depth = depthAttachmentDesc;
+		// outputMergerDesc.depthStencilFormat = nri::Format::D32_SFLOAT;
 		utils::ShaderCodeStorage shaderCodeStorage;
 		nri::ShaderDesc shaderStages[] = {
 			utils::LoadShader(nri::GraphicsAPI::D3D12,

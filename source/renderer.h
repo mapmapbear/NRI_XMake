@@ -30,7 +30,7 @@ public:
 	nri::Queue &GetRenderQueue() { return *m_GraphicsQueue; }
 	nri::DescriptorSet *GetGloablDescriptorSet() { return m_GloablFrameDescriptorSet; }
 
-	void OnStart(nri::DescriptorSet *globalSet);
+	void OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nri::Texture *depthTex);
 	void OnUpdate(float deltaTime);
 	void OnPreRender();
 	void OnRenderDepth(RenderInfo &info, Camera &camera);
@@ -97,6 +97,9 @@ public:
 	nri::Texture *m_DiffuseIrradianceTex = nullptr;
 	nri::Texture *m_SpecularIrradianceTex = nullptr;
 	nri::Texture *m_BRDFTex = nullptr;
+
+	nri::Texture *m_ColorTex = nullptr;
+	nri::Texture *m_DepthTex = nullptr;
 
 	std::shared_ptr<Texture> m_DefaultBlackTex = nullptr;
 	std::shared_ptr<Texture> m_DefaultWhiteTex = nullptr;

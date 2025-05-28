@@ -56,6 +56,12 @@ void SSAOCompPass::AllocGPUMemory() {
 		m_RotationTexture->Create(m_renderer, textureDesc, texViewDesc);
 		NRI.SetDebugName(m_RotationTexture->GetTexture(), "m_RotationTexture");
 	}
+	// DpethBuffer SRV
+	{
+		nri::Texture2DViewDesc texture2DViewDes = { .texture = m_renderer->m_DepthTex, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = nri::Format::D32_SFLOAT };
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateTexture2DView(texture2DViewDes, m_DepthTextureShaderResource));
+	}
 
 	nri::TextureSubresourceUploadDesc SSAOSubRes = {};
 	SSAOSubRes.rowPitch = 900 * 32;
@@ -89,10 +95,10 @@ void SSAOCompPass::BuildPipeline() {
 	// SSAO Compute Pipeline
 	{
 		nri::DescriptorRangeDesc descriptorRangeTexture[3] = {};
-		descriptorRangeTexture[0] = { 0, 1, nri::DescriptorType::TEXTURE,
+		descriptorRangeTexture[0] = { 0, 2, nri::DescriptorType::TEXTURE,
 			nri::StageBits::COMPUTE_SHADER };
 		descriptorRangeTexture[1] = { 1, 1, nri::DescriptorType::STORAGE_TEXTURE, nri::StageBits::COMPUTE_SHADER };
-        descriptorRangeTexture[2] = { 2, 1, nri::DescriptorType::SAMPLER, nri::StageBits::COMPUTE_SHADER };
+		descriptorRangeTexture[2] = { 2, 1, nri::DescriptorType::SAMPLER, nri::StageBits::COMPUTE_SHADER };
 
 		nri::DescriptorSetDesc descriptorSetDescs[] = {
 			{ 1, descriptorRangeTexture, 3 },
@@ -124,11 +130,11 @@ void SSAOCompPass::BuildPipeline() {
 				&m_SSAOTextureDescriptorSet, 1, 0));
 		NRI.SetDebugName(m_SSAOTextureDescriptorSet, "m_SSAOTextureDescriptorSet");
 
-		nri::Descriptor *ssaoTexView = m_SSAOTexture->GetView();
+		std::vector<nri::Descriptor *> ssaoTexView = { m_SSAOTexture->GetView(), m_DepthTextureShaderResource };
 		nri::Descriptor *rotationTexView = m_RotationTexture->GetView();
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
-		descriptorRangeUpdateDescs[0].descriptorNum = 1;
-		descriptorRangeUpdateDescs[0].descriptors = &ssaoTexView;
+		descriptorRangeUpdateDescs[0].descriptorNum = 2;
+		descriptorRangeUpdateDescs[0].descriptors = ssaoTexView.data();
 
 		descriptorRangeUpdateDescs[1].descriptorNum = 1;
 		descriptorRangeUpdateDescs[1].descriptors = &rotationTexView;
@@ -144,5 +150,23 @@ void SSAOCompPass::BindMemory() {
 }
 
 void SSAOCompPass::Render(struct RenderInfo &info, Camera &camera) {
-	// TODO
+	auto NRI = *m_NRI;
+	{
+		helper::Annotation annotation(NRI, info.cmdBuffer, "SSAO Comp Pass");
+		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_SSAOPipelineLayout);
+		NRI.CmdSetPipeline(info.cmdBuffer, *m_SSAOPipeline);
+		PushConstants block = {};
+		block.texOut = 1007,
+		block.texDepth = 1008,
+		block.texRotation = 1009,
+		block.smpl = m_renderer->testVec.w,
+		block.zNear = 0.01f,
+		block.zFar = 1000.0f,
+		block.radius = 0.03f,
+		block.attScale = 0.95f,
+		block.distScale = 1.7f,
+
+		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(PushConstants));
+		NRI.CmdDispatch(info.cmdBuffer, { 900 / 16 + 1, 600 / 16 + 1, 1 });
+	}
 }

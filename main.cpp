@@ -5,6 +5,7 @@
 #include "glm/trigonometric.hpp"
 #include "imgui.h"
 #include "renderer.h"
+#include "texture.h"
 
 // STB
 #include "spdlog/spdlog.h"
@@ -383,7 +384,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	// sceneFile = utils::GetFullPath("test.glb", utils::DataFolder::ROOT);
 	NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene1, false));
 
-	testRenderPtr->OnStart(nullptr);
+	testRenderPtr->OnStart(nullptr, m_ColorTexture, m_DepthTexture);
 	testRenderPtr->InitPresentPass(m_ColorTexture, m_SwapChain);
 
 	// User interface
@@ -421,10 +422,11 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 		ImGui::SliderFloat("Metallic", &testRenderPtr->testMaterial, 0.0, 1.0);
 		ImGui::SliderFloat("Roughness", &testRenderPtr->testRoughness, 0.0, 1.0);
 		// ImGui::SliderFloat4("Mat Debug", &testRenderPtr->testVec.x, 0.0, 1.0);
-		ImGui::Text("Light Rotation");
-		ImGui::SliderFloat("Yaw", &testRenderPtr->testVec.x, 0.0f, 360.0f);
-		ImGui::SliderFloat("Pitch", &testRenderPtr->testVec.y, -90.0f, 90.0f);
-		ImGui::SliderFloat("Roll", &testRenderPtr->testVec.z, 0.0f, 360.0f);
+		// ImGui::Text("Light Rotation");
+		// ImGui::SliderFloat("Yaw", &testRenderPtr->testVec.x, 0.0f, 360.0f);
+		// ImGui::SliderFloat("Pitch", &testRenderPtr->testVec.y, -90.0f, 90.0f);
+		// ImGui::SliderFloat("Roll", &testRenderPtr->testVec.z, 0.0f, 360.0f);
+		ImGui::SliderFloat4("Roll", &testRenderPtr->testVec[0], 0.0f, 360.0f);
 	}
 	ImGui::End();
 
@@ -453,7 +455,7 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	desc.aspectRatio = float(GetWindowResolution().first) / float(GetWindowResolution().second);
 	desc.horizontalFov = glm::radians(m_Fov);
 	desc.nearZ = 0.01f;
-	desc.farZ = 100.0f;
+	desc.farZ = 200.0f;
 	desc.isReversedZ = true;
 	desc.timeScale = 5.0;
 	GetCameraDescFromInputDevices(desc);
@@ -519,6 +521,8 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 			textureBarrierDescs.texture = m_DepthTexture;
 			if (frameIndex == 0) {
 				textureBarrierDescs.before = { nri::AccessBits::COPY_DESTINATION, nri::Layout::COPY_DESTINATION };
+			} else {
+				textureBarrierDescs.before = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT };
 			}
 			textureBarrierDescs.after = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE, nri::Layout::DEPTH_STENCIL_ATTACHMENT };
 
@@ -537,6 +541,8 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 
 		presentDesc = attachmentsDesc;
 		presentDesc.colors = &currentBackBuffer.colorAttachment;
+		presentDesc.depthStencil = nullptr;
+
 
 		nri::AttachmentsDesc depthAttachmentsDesc = attachmentsDesc;
 		depthAttachmentsDesc.colorNum = 0;
@@ -570,6 +576,21 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		RenderInfo info = { .desc = attachmentsDesc, .cmdBuffer = *commandBuffer };
 		testRenderPtr->OnRender(info, m_Camera);
 
+		// Transform Depth RT -> Depth SRV
+		{
+			nri::TextureBarrierDesc textureBarrierDescs = {};
+			textureBarrierDescs.texture = m_DepthTexture;
+			textureBarrierDescs.before = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE,
+				nri::Layout::DEPTH_STENCIL_ATTACHMENT };
+			textureBarrierDescs.after = { nri::AccessBits::SHADER_RESOURCE,
+				nri::Layout::SHADER_RESOURCE };
+			nri::BarrierGroupDesc barrierGroupDesc = {};
+			barrierGroupDesc.textureNum = 1;
+			barrierGroupDesc.textures = &textureBarrierDescs;
+			NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
+		}
+
+		testRenderPtr->OnRenderDepth(info, m_Camera);
 		// Transform Color RT -> Back Buffer
 		{
 			nri::TextureBarrierDesc textureBarrierDescs = {};
@@ -606,6 +627,36 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 			barrierGroupDesc.textures = &textureBarrierDescs;
 			NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
 		}
+
+		// Transform Depth RT -> Next Frame
+		{
+			nri::TextureBarrierDesc textureBarrierDescs = {};
+			textureBarrierDescs.texture = m_DepthTexture;
+			textureBarrierDescs.before = { nri::AccessBits::SHADER_RESOURCE,
+				nri::Layout::SHADER_RESOURCE };
+			textureBarrierDescs.after = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE,
+				nri::Layout::DEPTH_STENCIL_ATTACHMENT };
+
+			nri::BarrierGroupDesc barrierGroupDesc = {};
+			barrierGroupDesc.textureNum = 1;
+			barrierGroupDesc.textures = &textureBarrierDescs;
+			NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
+		}
+
+		// Transform ShadowMap -> Next Frame
+		{
+			nri::TextureBarrierDesc textureBarrierDescs = {};
+			textureBarrierDescs.texture = testRenderPtr->m_ShadowMap->GetTexture();
+			// textureBarrierDescs.before = textureBarrierDescs.after;
+			textureBarrierDescs.after = { nri::AccessBits::DEPTH_STENCIL_ATTACHMENT_WRITE,
+				nri::Layout::DEPTH_STENCIL_ATTACHMENT };
+
+			nri::BarrierGroupDesc barrierGroupDesc = {};
+			barrierGroupDesc.textureNum = 1;
+			barrierGroupDesc.textures = &textureBarrierDescs;
+			NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
+		}
+
 
 		// Transform Back Buffer -> Next Frame
 		{

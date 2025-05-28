@@ -93,9 +93,11 @@ void Renderer::RandomLights() {
 	// }
 }
 
-void Renderer::OnStart(nri::DescriptorSet *globalSet) {
+void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nri::Texture *depthTex) {
 	auto NRI = m_NRI;
-
+	m_ColorTex = colorTex;
+	m_DepthTex = depthTex;
+	
 	{
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
@@ -196,6 +198,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 		textureDesc.width = 2048;
 		textureDesc.height = 2048;
 		textureDesc.mipNum = 1;
+		textureDesc.clearValue = { .depthStencil = { 1.0f, 0 } };
 
 		nri::Texture2DViewDesc texViewDesc = {};
 		texViewDesc.viewType = nri::Texture2DViewType::DEPTH_STENCIL_ATTACHMENT;
@@ -306,7 +309,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet) {
 	nri::TextureSubresourceUploadDesc depthSubRes = {};
 	depthSubRes.rowPitch = 2048 * 4;
 	depthSubRes.slicePitch = depthSubRes.rowPitch * 2048;
-	std::vector<uint8_t> data1(depthSubRes.slicePitch, 1.0);
+	std::vector<float> data1(depthSubRes.slicePitch, 1.0);
 	depthSubRes.sliceNum = 1;
 	depthSubRes.slices = data1.data();
 	nri::TextureUploadDesc textureData6;
@@ -493,7 +496,7 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 }
 
 void Renderer::OnRenderDepth(RenderInfo &info, Camera &camera) {
-	simplePass->Render(info, camera);
+	ssaoCompPass->Render(info, camera);
 }
 
 void Renderer::OnPresent(RenderInfo &info) {
