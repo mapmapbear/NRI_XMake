@@ -426,7 +426,11 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 		// ImGui::SliderFloat("Yaw", &testRenderPtr->testVec.x, 0.0f, 360.0f);
 		// ImGui::SliderFloat("Pitch", &testRenderPtr->testVec.y, -90.0f, 90.0f);
 		// ImGui::SliderFloat("Roll", &testRenderPtr->testVec.z, 0.0f, 360.0f);
-		ImGui::SliderFloat4("Roll", &testRenderPtr->testVec[0], 0.0f, 360.0f);
+		ImGui::SliderFloat("radius", &testRenderPtr->testVec.x, 0.0f, 1.0f);
+		ImGui::SliderFloat("att", &testRenderPtr->testVec.y, 0.0f, 3.0f);
+		ImGui::SliderFloat("dist", &testRenderPtr->testVec.z, 0.0f, 3.0f);
+		// ImGui::SliderFloat("radius", &testRenderPtr->testVec.x, 0.0f, 1.0f);
+		// ImGui::SliderFloat4("Roll", &testRenderPtr->testVec[0], 0.0f, 360.0f);
 	}
 	ImGui::End();
 

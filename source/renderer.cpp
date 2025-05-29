@@ -97,7 +97,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	auto NRI = m_NRI;
 	m_ColorTex = colorTex;
 	m_DepthTex = depthTex;
-	
+
 	{
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
@@ -434,7 +434,7 @@ void Renderer::UploadSceneData() {
 		GetNRI().SetDebugName(buffer->GetBuffer(), std::format("Buffer{}", i).c_str());
 		i++;
 	}
-	i = uploadIndexBufferMap.size();
+	i = static_cast<int>(uploadIndexBufferMap.size());
 	for (auto &node : uploadShadowIndexBufferMap) {
 		std::shared_ptr<Buffer> buffer = node.first;
 		std::shared_ptr<utils::MeshData> meshData = node.second;
@@ -461,7 +461,7 @@ void Renderer::UploadSceneData() {
 
 void Renderer::InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain) {
 	// #ifdef SSAO_DEBUG
-		presentPass = std::make_shared<PresentPass>(this, ssaoCompPass->m_SSAOTexture->GetTexture(), swawpchain);
+	presentPass = std::make_shared<PresentPass>(this, ssaoCompPass->m_SSAOTexture->GetTexture(), swawpchain);
 	// #else
 	// 	presentPass = std::make_shared<PresentPass>(this, colorRT, swawpchain);
 	// #endif
@@ -501,9 +501,34 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 
 void Renderer::OnRenderDepth(RenderInfo &info, Camera &camera) {
 	ssaoCompPass->Render(info, camera);
+	{
+		nri::TextureBarrierDesc textureBarrierDescs = {};
+		textureBarrierDescs.texture = ssaoCompPass->m_SSAOTexture->GetTexture();
+		textureBarrierDescs.before = { nri::AccessBits::SHADER_RESOURCE_STORAGE,
+			nri::Layout::SHADER_RESOURCE_STORAGE };
+		textureBarrierDescs.after = { nri::AccessBits::SHADER_RESOURCE,
+			nri::Layout::SHADER_RESOURCE };
+		nri::BarrierGroupDesc barrierGroupDesc = {};
+		barrierGroupDesc.textureNum = 1;
+		barrierGroupDesc.textures = &textureBarrierDescs;
+		GetNRI().CmdBarrier(info.cmdBuffer, barrierGroupDesc);
+	}
 }
 
 void Renderer::OnPresent(RenderInfo &info) {
 	Camera dummyCamera; // Create a dummy Camera object
 	presentPass->Render(info, dummyCamera);
+
+	{
+		nri::TextureBarrierDesc textureBarrierDescs = {};
+		textureBarrierDescs.texture = ssaoCompPass->m_SSAOTexture->GetTexture();
+		textureBarrierDescs.before = { nri::AccessBits::SHADER_RESOURCE,
+			nri::Layout::SHADER_RESOURCE };
+		textureBarrierDescs.after = { nri::AccessBits::SHADER_RESOURCE_STORAGE,
+			nri::Layout::SHADER_RESOURCE_STORAGE };
+		nri::BarrierGroupDesc barrierGroupDesc = {};
+		barrierGroupDesc.textureNum = 1;
+		barrierGroupDesc.textures = &textureBarrierDescs;
+		GetNRI().CmdBarrier(info.cmdBuffer, barrierGroupDesc);
+	}
 }

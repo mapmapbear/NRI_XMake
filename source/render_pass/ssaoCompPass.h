@@ -1,5 +1,6 @@
 #pragma once
 #include "CommonRenderPass.h"
+#include "NRIDescs.h"
 
 struct PushConstants {
 	uint32_t texDepth;
@@ -11,6 +12,14 @@ struct PushConstants {
 	float radius;
 	float attScale;
 	float distScale;
+};
+
+struct BlurPushConstants {
+	uint32_t texDepth;
+    uint32_t texIn;
+    uint32_t texOut;
+    uint32_t smpl;
+    float depthThreshold;
 };
 
 class Texture;
@@ -27,8 +36,13 @@ private:
 	nri::PipelineLayout *m_SSAOPipelineLayout = nullptr;
 	nri::Pipeline *m_SSAOPipeline = nullptr;
 
+	nri::PipelineLayout *m_BlurPipelineLayout = nullptr;
+	nri::Pipeline *m_BlurPipeline = nullptr;
+	
+
 	// nri::Texture *m_DepthTexture = nullptr;
 	nri::Descriptor *m_DepthTextureShaderResource = nullptr;
+	nri::Descriptor *m_SSAOOutSRV = nullptr;
 	nri::Descriptor *m_Sampler = nullptr;
 	// nri::Texture *m_NormalTexture = nullptr;
 	// nri::Descriptor *m_NormalTextureShaderResource = nullptr;

@@ -1,6 +1,7 @@
 #include "ssaoCompPass.h"
 #include "../renderer.h"
 #include "../texture.h"
+#include "NRIDescs.h"
 
 SSAOCompPass::SSAOCompPass(Renderer *renderer) :
 		CommonRenderPass(renderer) {
@@ -15,7 +16,7 @@ void SSAOCompPass::AllocGPUMemory() {
 	{
 		nri::TextureDesc textureDesc = {};
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
-		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE_STORAGE;
+		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE_STORAGE | nri::TextureUsageBits::SHADER_RESOURCE;
 #ifdef HDR_ENABLE
 		textureDesc.format = nri::Format::R10_G10_B10_A2_UNORM;
 #else
@@ -63,6 +64,20 @@ void SSAOCompPass::AllocGPUMemory() {
 				NRI.CreateTexture2DView(texture2DViewDes, m_DepthTextureShaderResource));
 	}
 
+	// SSAO Out SRV
+	{
+		nri::Texture2DViewDesc texture2DViewDes = {.texture = m_SSAOTexture->GetTexture(),
+			.viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D,
+#ifdef HDR_ENABLE
+			.format = nri::Format::R10_G10_B10_A2_UNORM
+#else
+			.format = nri::Format::RGBA8_UNORM;
+#endif
+		};
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateTexture2DView(texture2DViewDes, m_SSAOOutSRV));
+	}
+
 	{
 		nri::SamplerDesc samplerDesc = {};
 		samplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE,
@@ -107,7 +122,7 @@ void SSAOCompPass::BuildPipeline() {
 	// SSAO Compute Pipeline
 	{
 		nri::DescriptorRangeDesc descriptorRangeTexture[3] = {};
-		descriptorRangeTexture[0] = { 0, 2, nri::DescriptorType::TEXTURE,
+		descriptorRangeTexture[0] = { 0, 3, nri::DescriptorType::TEXTURE,
 			nri::StageBits::COMPUTE_SHADER };
 		descriptorRangeTexture[1] = { 1, 1, nri::DescriptorType::STORAGE_TEXTURE, nri::StageBits::COMPUTE_SHADER };
 		descriptorRangeTexture[2] = { 0, 1, nri::DescriptorType::SAMPLER, nri::StageBits::COMPUTE_SHADER };
@@ -136,20 +151,51 @@ void SSAOCompPass::BuildPipeline() {
 		NRI_ABORT_ON_FAILURE(NRI.CreateComputePipeline(*m_renderer->GetRenderDevice(), computePipelineDesc, m_SSAOPipeline));
 	}
 
+	{
+		nri::DescriptorRangeDesc descriptorRangeTexture[3] = {};
+		descriptorRangeTexture[0] = { 0, 3, nri::DescriptorType::TEXTURE,
+			nri::StageBits::COMPUTE_SHADER };
+		descriptorRangeTexture[1] = { 1, 1, nri::DescriptorType::STORAGE_TEXTURE, nri::StageBits::COMPUTE_SHADER };
+		descriptorRangeTexture[2] = { 0, 1, nri::DescriptorType::SAMPLER, nri::StageBits::COMPUTE_SHADER };
+
+		nri::DescriptorSetDesc descriptorSetDescs[] = {
+			{ 1, descriptorRangeTexture, 3 },
+		};
+
+		nri::RootConstantDesc rootConstant = { 1, sizeof(BlurPushConstants),
+			nri::StageBits::COMPUTE_SHADER };
+
+		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
+		pipelineLayoutDesc.descriptorSetNum =
+				helper::GetCountOf(descriptorSetDescs);
+		pipelineLayoutDesc.descriptorSets = descriptorSetDescs;
+		pipelineLayoutDesc.rootConstants = &rootConstant;
+		pipelineLayoutDesc.rootConstantNum = 1;
+		pipelineLayoutDesc.shaderStages =
+				nri::StageBits::COMPUTE_SHADER;
+		NRI_ABORT_ON_FAILURE(NRI.CreatePipelineLayout(*m_renderer->GetRenderDevice(), pipelineLayoutDesc,
+				m_BlurPipelineLayout));
+		utils::ShaderCodeStorage shaderCodeStorage;
+		nri::ComputePipelineDesc computePipelineDesc = {};
+		computePipelineDesc.pipelineLayout = m_SSAOPipelineLayout;
+		computePipelineDesc.shader = utils::LoadShader(nri::GraphicsAPI::D3D12, "blur.cs", shaderCodeStorage);
+		NRI_ABORT_ON_FAILURE(NRI.CreateComputePipeline(*m_renderer->GetRenderDevice(), computePipelineDesc, m_BlurPipeline));
+	}
+
 	// Descriptor Set
 	{
 		NRI_ABORT_ON_FAILURE(NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_SSAOPipelineLayout, 0,
 				&m_SSAOTextureDescriptorSet, 1, 0));
 		NRI.SetDebugName(m_SSAOTextureDescriptorSet, "m_SSAOTextureDescriptorSet");
 
-		std::vector<nri::Descriptor *> ssaoTexView = { m_SSAOTexture->GetView(), m_DepthTextureShaderResource };
-		nri::Descriptor *rotationTexView = m_RotationTexture->GetView();
+		std::vector<nri::Descriptor *> ssaoTexView = { m_RotationTexture->GetView(), m_DepthTextureShaderResource, m_SSAOOutSRV };
+		nri::Descriptor *SSAOTexView = m_SSAOTexture->GetView();
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[3] = {};
-		descriptorRangeUpdateDescs[0].descriptorNum = 2;
+		descriptorRangeUpdateDescs[0].descriptorNum = 3;
 		descriptorRangeUpdateDescs[0].descriptors = ssaoTexView.data();
 
 		descriptorRangeUpdateDescs[1].descriptorNum = 1;
-		descriptorRangeUpdateDescs[1].descriptors = &rotationTexView;
+		descriptorRangeUpdateDescs[1].descriptors = &SSAOTexView;
 
 		descriptorRangeUpdateDescs[2].descriptorNum = 1;
 		descriptorRangeUpdateDescs[2].descriptors = &m_Sampler;
@@ -171,9 +217,9 @@ void SSAOCompPass::Render(struct RenderInfo &info, Camera &camera) {
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_SSAOPipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_SSAOPipeline);
 		PushConstants block = {};
-		block.texOut = 1007,
+		block.texOut = 1010,
 		block.texDepth = 1008,
-		block.texRotation = 1009,
+		block.texRotation = 1007,
 		block.smpl = 4,
 		block.zNear = 0.01f,
 		block.zFar = 200.0f,
