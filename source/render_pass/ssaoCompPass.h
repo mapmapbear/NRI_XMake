@@ -21,6 +21,7 @@ public:
 	void BuildPipeline() override;
 	void AllocGPUMemory() override;
 	void BindMemory() override;
+	std::shared_ptr<Texture> m_SSAOTexture = nullptr;
 
 private:
 	nri::PipelineLayout *m_SSAOPipelineLayout = nullptr;
@@ -38,6 +39,5 @@ private:
 	// nri::Descriptor *m_Sampler = nullptr;
 	nri::DescriptorSet *m_SSAOTextureDescriptorSet = nullptr;
 
-	std::shared_ptr<Texture> m_SSAOTexture = nullptr;
 	std::shared_ptr<Texture> m_RotationTexture = nullptr;
 };

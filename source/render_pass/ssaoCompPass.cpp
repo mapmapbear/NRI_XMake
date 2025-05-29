@@ -174,7 +174,7 @@ void SSAOCompPass::Render(struct RenderInfo &info, Camera &camera) {
 		block.texOut = 1007,
 		block.texDepth = 1008,
 		block.texRotation = 1009,
-		block.smpl = m_renderer->testVec.w,
+		block.smpl = 4,
 		block.zNear = 0.01f,
 		block.zFar = 200.0f,
 		block.radius = 0.03f,

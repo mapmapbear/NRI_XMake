@@ -14,6 +14,11 @@ struct PushConstants
 };
 NRI_ROOT_CONSTANTS(PushConstants, g_PushConstants, 1, 0);
 
+float linearize_depth(float d,float zNear,float zFar)
+{
+    return zNear * zFar / (zFar + d * (zNear - zFar));
+}
+
 [numthreads(16, 16, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
@@ -26,17 +31,16 @@ void main(uint3 DTid : SV_DispatchThreadID)
     depthTexture.GetDimensions(size.x, size.y);
 
     uint2 xy = DTid.xy;
-    float2 uv = float2(xy) + 0.5 / float2(size);
+    float2 uv = float2(xy) / float2(size);
 
     if (xy.x >= size.x || xy.y >= size.y)
         return;
-
-    // 反转深度线性化
+    
     float depth = depthTexture.SampleLevel(samplerState, uv, 0).x;
-    float Z = (g_PushConstants.zNear * g_PushConstants.zFar) / (g_PushConstants.zFar + depth * (g_PushConstants.zNear - g_PushConstants.zFar));
-
-    float3 plane = rotationTexture.SampleLevel(samplerState, float2(xy) / 4.0, 0).xyz - 1.0;
-
+    float Z = linearize_depth(1.0 - depth, g_PushConstants.zNear, g_PushConstants.zFar);
+    
+    float3 plane = rotationTexture.Sample(samplerState, float2(xy) / 4.0).xyz - 1.0;
+    
     static const float3 offsets[8] = {
         float3(-0.5, -0.5, -0.5),
         float3( 0.5, -0.5, -0.5),
@@ -50,19 +54,17 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     float att = 0.0;
 
-    // SSAO采样循环
     [unroll]
     for (int i = 0; i < 8; i++)
     {
         float3 rSample = reflect(offsets[i], plane);
-        // 反转深度线性化
-        float zSample = (g_PushConstants.zNear * g_PushConstants.zFar) / (g_PushConstants.zFar + depthTexture.SampleLevel(samplerState, uv + g_PushConstants.radius * rSample.xy / Z, 0).x * (g_PushConstants.zNear - g_PushConstants.zFar));
+        float newDepth = depthTexture.SampleLevel(samplerState, uv + g_PushConstants.radius * rSample.xy / Z, 0).x;
+        float zSample = linearize_depth(1.0 - newDepth, g_PushConstants.zNear, g_PushConstants.zFar);
         float dist = max(zSample - Z, 0.0) / g_PushConstants.distScale;
         float occl = 15.0 * max(dist * (2.0 - dist), 0.0);
         att += 1.0 / (1.0 + occl * occl);
     }
 
-    // 后处理并写入结果
     att = clamp(att * att / 64.0 + 0.45, 0.0, 1.0) * g_PushConstants.attScale;
     outTexture[xy] = float4(att, att, att, 1.0);
 }
