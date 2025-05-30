@@ -179,7 +179,8 @@ void SSAOCompPass::BuildPipeline() {
 		nri::ComputePipelineDesc computePipelineDesc = {};
 		computePipelineDesc.pipelineLayout = m_SSAOPipelineLayout;
 		computePipelineDesc.shader = utils::LoadShader(nri::GraphicsAPI::D3D12, "blur.cs", shaderCodeStorage);
-		NRI_ABORT_ON_FAILURE(NRI.CreateComputePipeline(*m_renderer->GetRenderDevice(), computePipelineDesc, m_BlurPipeline));
+		NRI_ABORT_ON_FAILURE(NRI.CreateComputePipeline(*m_renderer->GetRenderDevice(), computePipelineDesc, m_BlurPipelineX));
+		NRI_ABORT_ON_FAILURE(NRI.CreateComputePipeline(*m_renderer->GetRenderDevice(), computePipelineDesc, m_BlurPipelineY));
 	}
 
 	// Descriptor Set
@@ -216,18 +217,90 @@ void SSAOCompPass::Render(struct RenderInfo &info, Camera &camera) {
 		helper::Annotation annotation(NRI, info.cmdBuffer, "SSAO Comp Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_SSAOPipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_SSAOPipeline);
-		PushConstants block = {};
-		block.texOut = 1010,
-		block.texDepth = 1008,
-		block.texRotation = 1007,
-		block.smpl = 4,
-		block.zNear = 0.01f,
-		block.zFar = 200.0f,
-		block.radius = 0.03f,
-		block.attScale = 0.95f,
-		block.distScale = 1.7f,
+		PushConstants block = {
+			.texDepth = 1008,
+			.texRotation = 1007,
+			.texOut = 1010,
+			.smpl = 4,
+			.zNear = 0.01f,
+			.zFar = 200.0f,
+			.radius = 0.03f,
+			.attScale = 0.95f,
+			.distScale = 1.7f,
+		};
 
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(PushConstants));
 		NRI.CmdDispatch(info.cmdBuffer, { 900 / 16 + 1, 600 / 16 + 1, 1 });
+	}
+
+	// {
+	// 	nri::TextureBarrierDesc textureBarrierDescs = {};
+	// 	textureBarrierDescs.texture = m_SSAOTexture->GetTexture();
+	// 	textureBarrierDescs.before = { nri::AccessBits::SHADER_RESOURCE_STORAGE,
+	// 		nri::Layout::SHADER_RESOURCE_STORAGE };
+	// 	textureBarrierDescs.after = { nri::AccessBits::SHADER_RESOURCE,
+	// 		nri::Layout::SHADER_RESOURCE };
+	// 	nri::BarrierGroupDesc barrierGroupDesc = {};
+	// 	barrierGroupDesc.textureNum = 1;
+	// 	barrierGroupDesc.textures = &textureBarrierDescs;
+	// 	NRI.CmdBarrier(info.cmdBuffer, barrierGroupDesc);
+	// }
+
+	{
+		helper::Annotation annotation(NRI, info.cmdBuffer, "SSAO Blur X Pass");
+		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_BlurPipelineLayout);
+		NRI.CmdSetPipeline(info.cmdBuffer, *m_BlurPipelineX);
+		BlurPushConstants block = {
+			.texDepth = 1008,
+			.texIn = 1009,
+			.texOut = 1010,
+			.smpl = 4,
+			.depthThreshold = 200.0f,
+			.isHorizontal = 0.5f,
+		};
+		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(BlurPushConstants));
+		NRI.CmdDispatch(info.cmdBuffer, { 900 / 16 + 1, 600 / 16 + 1, 1 });
+	}
+
+	// {
+	// 	nri::TextureBarrierDesc textureBarrierDescs = {};
+	// 	textureBarrierDescs.texture = m_SSAOTexture->GetTexture();
+	// 	textureBarrierDescs.before = { nri::AccessBits::SHADER_RESOURCE_STORAGE,
+	// 		nri::Layout::SHADER_RESOURCE_STORAGE };
+	// 	textureBarrierDescs.after = { nri::AccessBits::SHADER_RESOURCE,
+	// 		nri::Layout::SHADER_RESOURCE };
+	// 	nri::BarrierGroupDesc barrierGroupDesc = {};
+	// 	barrierGroupDesc.textureNum = 1;
+	// 	barrierGroupDesc.textures = &textureBarrierDescs;
+	// 	NRI.CmdBarrier(info.cmdBuffer, barrierGroupDesc);
+	// }
+
+	{
+		helper::Annotation annotation(NRI, info.cmdBuffer, "SSAO Blur Y Pass");
+		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_BlurPipelineLayout);
+		NRI.CmdSetPipeline(info.cmdBuffer, *m_BlurPipelineY);
+		BlurPushConstants block = {
+			.texDepth = 1008,
+			.texIn = 1009,
+			.texOut = 1010,
+			.smpl = 4,
+			.depthThreshold = 200.0f,
+			.isHorizontal = 0.0f,
+		};
+		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(BlurPushConstants));
+		NRI.CmdDispatch(info.cmdBuffer, { 900 / 16 + 1, 600 / 16 + 1, 1 });
+	}
+
+	{
+		nri::TextureBarrierDesc textureBarrierDescs = {};
+		textureBarrierDescs.texture = m_SSAOTexture->GetTexture();
+		textureBarrierDescs.before = { nri::AccessBits::SHADER_RESOURCE,
+			nri::Layout::SHADER_RESOURCE };
+		textureBarrierDescs.after = { nri::AccessBits::SHADER_RESOURCE_STORAGE,
+			nri::Layout::SHADER_RESOURCE_STORAGE };
+		nri::BarrierGroupDesc barrierGroupDesc = {};
+		barrierGroupDesc.textureNum = 1;
+		barrierGroupDesc.textures = &textureBarrierDescs;
+		NRI.CmdBarrier(info.cmdBuffer, barrierGroupDesc);
 	}
 }

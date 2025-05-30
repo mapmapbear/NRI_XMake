@@ -20,6 +20,7 @@ struct BlurPushConstants {
     uint32_t texOut;
     uint32_t smpl;
     float depthThreshold;
+	float isHorizontal;
 };
 
 class Texture;
@@ -37,7 +38,9 @@ private:
 	nri::Pipeline *m_SSAOPipeline = nullptr;
 
 	nri::PipelineLayout *m_BlurPipelineLayout = nullptr;
-	nri::Pipeline *m_BlurPipeline = nullptr;
+	// nri::PipelineLayout *m_BlurPipelineLayout = nullptr;
+	nri::Pipeline *m_BlurPipelineX = nullptr;
+	nri::Pipeline *m_BlurPipelineY = nullptr;
 	
 
 	// nri::Texture *m_DepthTexture = nullptr;

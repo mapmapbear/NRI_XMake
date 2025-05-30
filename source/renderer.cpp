@@ -463,7 +463,7 @@ void Renderer::InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain
 	// #ifdef SSAO_DEBUG
 	presentPass = std::make_shared<PresentPass>(this, ssaoCompPass->m_SSAOTexture->GetTexture(), swawpchain);
 	// #else
-	// 	presentPass = std::make_shared<PresentPass>(this, colorRT, swawpchain);
+		// presentPass = std::make_shared<PresentPass>(this, colorRT, swawpchain);
 	// #endif
 }
 

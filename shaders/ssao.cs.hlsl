@@ -23,7 +23,6 @@ void main(uint3 DTid : SV_DispatchThreadID) {
     Texture2D<float3> rotationTexture = ResourceDescriptorHeap[g_PushConstants.texRotation];
     RWTexture2D<float4> outTexture = ResourceDescriptorHeap[g_PushConstants.texOut];
     SamplerState samplerState = SamplerDescriptorHeap[g_PushConstants.smpl];
-
     uint2 size;
     depthTexture.GetDimensions(size.x, size.y);
 
