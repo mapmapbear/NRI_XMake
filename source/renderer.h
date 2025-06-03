@@ -3,6 +3,7 @@
 #include "NRIDescs.h"
 #include "NRIFramework.h"
 #include "mesh.h"
+#include "render_pass/debugDrawPass.h"
 #include <future>
 #include <memory>
 #include <unordered_map>
@@ -17,6 +18,7 @@ class SkyRenderPass;
 class GridRenderPass;
 class InstanceMeshPass;
 class SSAOCompPass;
+class DebugDrawPass;
 class PresentPass;
 class CommonMeshPass;
 class Buffer;
@@ -114,5 +116,6 @@ private:
 	std::shared_ptr<InstanceMeshPass> meshPass = nullptr;
 	std::shared_ptr<CommonMeshPass> simplePass = nullptr;
 	std::shared_ptr<SSAOCompPass> ssaoCompPass = nullptr;
+	std::shared_ptr<DebugDrawPass> debugdrawPass = nullptr;
 	std::shared_ptr<PresentPass> presentPass = nullptr;
 };

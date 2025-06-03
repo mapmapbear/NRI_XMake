@@ -12,6 +12,7 @@
 #include "render_pass/instanceMeshPass.h"
 #include "render_pass/presentPass.h"
 #include "render_pass/skyRenderPass.h"
+#include "render_pass/debugDrawPass.h"
 #include "render_pass/ssaoCompPass.h"
 #include "spdlog/spdlog.h"
 #include "texture.h"
@@ -358,6 +359,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	meshPass = std::make_shared<InstanceMeshPass>(this);
 	simplePass = std::make_shared<CommonMeshPass>(this, m_Scene, mesh);
 	ssaoCompPass = std::make_shared<SSAOCompPass>(this);
+	debugdrawPass = std::make_shared<DebugDrawPass>(this);
 }
 
 glm::mat4 Renderer::computeLightSpaceMatrix(float yaw, float pitch, float roll) {
@@ -461,9 +463,9 @@ void Renderer::UploadSceneData() {
 
 void Renderer::InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain) {
 	// #ifdef SSAO_DEBUG
-	presentPass = std::make_shared<PresentPass>(this, ssaoCompPass->m_SSAOTexture->GetTexture(), swawpchain);
+	// presentPass = std::make_shared<PresentPass>(this, ssaoCompPass->m_SSAOTexture->GetTexture(), swawpchain);
 	// #else
-		// presentPass = std::make_shared<PresentPass>(this, colorRT, swawpchain);
+		presentPass = std::make_shared<PresentPass>(this, colorRT, swawpchain);
 	// #endif
 }
 
@@ -495,6 +497,7 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 		meshPass->Render(info, camera);
 		simplePass->SetTestIndex(testIndex);
 		simplePass->Render(info, camera);
+		debugdrawPass->Render(info, camera);
 	}
 	GetNRI().CmdEndRendering(info.cmdBuffer);
 }

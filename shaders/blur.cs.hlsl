@@ -48,7 +48,6 @@ void main(uint2 DTid : SV_DispatchThreadID) {
     if (DTid.x >= (uint)size.x || DTid.y >= (uint)size.y) {
         return;
     }
-    
     const float2 texCoord = (float2(DTid.xy) + float2(0.5f, 0.5f)) / size;
     const float texScaler = 1.0f / (g_PushConstants.isHorizontal ? size.x : size.y);
 
@@ -57,25 +56,23 @@ void main(uint2 DTid : SV_DispatchThreadID) {
     float3 fragColor = colorTexture.SampleLevel(samplerState, texCoord, 0).rgb;
     float  fragDepth = depthTexture.SampleLevel(samplerState, texCoord, 0).r;
     float3 beforeColor = outTexture[DTid.xy].xyz;
-    if(g_PushConstants.isHorizontal > 0.5)
-    {
-        outTexture[DTid.xy] = float4(float3(1.0, 0.0, 0.0), 1.0);
-        return ;
-    }
-    else 
-    {
-        outTexture[DTid.xy] = float4(beforeColor + float3(0.0, 1.0, 0.0), 1.0);
-        return ;
-    }
+    // if(g_PushConstants.isHorizontal > 0.5) {
+    //     outTexture[DTid.xy] = float4(float3(1.0, 0.0, 0.0), 1.0);
+    //     return ;
+    // }
+    // else {
+    //     outTexture[DTid.xy] = float4(beforeColor + float3(0.0, 1.0, 0.0), 1.0);
+    //     return ;
+    // }
 
     for (int i = 0; i < kFilterSize; ++i) {
         float offset = float(i - kFilterSize / 2);
-        float2 uv_offset = texCoord + texScaler * (g_PushConstants.isHorizontal  ? float2(offset, 0.0f) : float2(0.0f, offset));
+        float2 uv_offset = texCoord + texScaler * (g_PushConstants.isHorizontal > 0.5f  ? float2(offset, 0.0f) : float2(0.0f, offset));
         float3 color = colorTexture.SampleLevel(samplerState, uv_offset, 0).rgb;
         float  depth = depthTexture.SampleLevel(samplerState, uv_offset, 0).r;
 
         float weight = clamp(abs(depth - fragDepth) * g_PushConstants.depthThreshold, 0.0f, 1.0f);
-        c += lerp(color, fragColor, weight) * gaussWeights[i];
+        c += lerp(color, beforeColor, weight) * gaussWeights[i];
     }
 
     outTexture[DTid.xy] = float4(c, 1.0f);

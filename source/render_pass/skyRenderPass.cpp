@@ -10,6 +10,86 @@ SkyRenderPass::SkyRenderPass(Renderer *renderer) :
 	BuildPipeline();
 }
 
+void SkyRenderPass::AllocGPUMemory() {
+	auto NRI = *m_NRI;
+	std::string path = utils::GetFullPath("barcelona.dds", utils::DataFolder::TEXTURES);
+#ifdef PBR_TEST
+	path = utils::GetFullPath("PBRTest/GrayHDR.dds", utils::DataFolder::TEXTURES);
+#endif
+	if (!utils::LoadTexture(path, m_texture, true)) {
+		printf("Can not found this texture %s", path.c_str());
+	}
+
+	{
+		nri::TextureDesc textureDesc = {};
+		textureDesc.type = nri::TextureType::TEXTURE_2D;
+		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
+		textureDesc.format = m_texture.GetFormat();
+		textureDesc.width = m_texture.GetWidth();
+		textureDesc.height = m_texture.GetHeight();
+		textureDesc.mipNum = 1;
+
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateTexture(*m_renderer->GetRenderDevice(), textureDesc, m_HDRTexture));
+	}
+
+	std::vector<nri::Texture *> textureArray = { m_HDRTexture };
+	nri::ResourceGroupDesc resourceGroupDesc = {};
+	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
+	resourceGroupDesc.textureNum = textureArray.size();
+	resourceGroupDesc.textures = textureArray.data();
+
+	m_MemoryAllocations.resize(
+			1 + NRI.CalculateAllocationNumber(*m_renderer->GetRenderDevice(), resourceGroupDesc), nullptr);
+	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(
+			*m_renderer->GetRenderDevice(), resourceGroupDesc, m_MemoryAllocations.data() + 1));
+
+	NRI.SetDebugName(m_HDRTexture, "m_HDRTexture");
+}
+
+void SkyRenderPass::BindMemory() {
+	auto NRI = *m_NRI;
+
+	// Descriptors
+	{
+		nri::SamplerDesc samplerDesc = {};
+		samplerDesc.addressModes = { nri::AddressMode::REPEAT,
+			nri::AddressMode::REPEAT, nri::AddressMode::REPEAT };
+		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
+			nri::Filter::LINEAR };
+		// samplerDesc.anisotropy = 4;
+		samplerDesc.mipMax = 16.0f;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
+	}
+
+	{
+		nri::Texture2DViewDesc textureViewDesc = { .texture = m_HDRTexture, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = m_texture.GetFormat() };
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateTexture2DView(textureViewDesc, m_HDRTextureShaderResource));
+		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
+	}
+
+	// Upload data
+	const tinyddsloader::DDSFile::ImageData *imgData = m_texture.data.GetImageData(0, 0);
+
+	nri::TextureSubresourceUploadDesc hdrSubresources;
+	hdrSubresources.slices = imgData->m_mem;
+	hdrSubresources.sliceNum = 1;
+	hdrSubresources.rowPitch = imgData->m_memPitch;
+	hdrSubresources.slicePitch = imgData->m_memSlicePitch;
+
+	nri::TextureUploadDesc textureData;
+	textureData.subresources = &hdrSubresources;
+	textureData.texture = m_HDRTexture;
+	textureData.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
+	textureData.planes = nri::PlaneBits::ALL;
+	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData };
+	NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), texUploadDescArray.data(), texUploadDescArray.size(),
+			nullptr,
+			0));
+}
+
 void SkyRenderPass::BuildPipeline() {
 	auto NRI = *m_NRI;
 	// SKyBox Pipeline
@@ -108,86 +188,6 @@ void SkyRenderPass::BuildPipeline() {
 				helper::GetCountOf(descriptorRangeUpdateDescs),
 				descriptorRangeUpdateDescs);
 	}
-}
-
-void SkyRenderPass::AllocGPUMemory() {
-	auto NRI = *m_NRI;
-	std::string path = utils::GetFullPath("barcelona.dds", utils::DataFolder::TEXTURES);
-#ifdef PBR_TEST
-	path = utils::GetFullPath("PBRTest/GrayHDR.dds", utils::DataFolder::TEXTURES);
-#endif
-	if (!utils::LoadTexture(path, m_texture, true)) {
-		printf("Can not found this texture %s", path.c_str());
-	}
-
-	{
-		nri::TextureDesc textureDesc = {};
-		textureDesc.type = nri::TextureType::TEXTURE_2D;
-		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
-		textureDesc.format = m_texture.GetFormat();
-		textureDesc.width = m_texture.GetWidth();
-		textureDesc.height = m_texture.GetHeight();
-		textureDesc.mipNum = 1;
-
-		NRI_ABORT_ON_FAILURE(
-				NRI.CreateTexture(*m_renderer->GetRenderDevice(), textureDesc, m_HDRTexture));
-	}
-
-	std::vector<nri::Texture *> textureArray = { m_HDRTexture };
-	nri::ResourceGroupDesc resourceGroupDesc = {};
-	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
-	resourceGroupDesc.textureNum = textureArray.size();
-	resourceGroupDesc.textures = textureArray.data();
-
-	m_MemoryAllocations.resize(
-			1 + NRI.CalculateAllocationNumber(*m_renderer->GetRenderDevice(), resourceGroupDesc), nullptr);
-	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(
-			*m_renderer->GetRenderDevice(), resourceGroupDesc, m_MemoryAllocations.data() + 1));
-
-	NRI.SetDebugName(m_HDRTexture, "m_HDRTexture");
-}
-
-void SkyRenderPass::BindMemory() {
-	auto NRI = *m_NRI;
-
-	// Descriptors
-	{
-		nri::SamplerDesc samplerDesc = {};
-		samplerDesc.addressModes = { nri::AddressMode::REPEAT,
-			nri::AddressMode::REPEAT, nri::AddressMode::REPEAT };
-		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
-			nri::Filter::LINEAR };
-		// samplerDesc.anisotropy = 4;
-		samplerDesc.mipMax = 16.0f;
-		NRI_ABORT_ON_FAILURE(
-				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_Sampler));
-	}
-
-	{
-		nri::Texture2DViewDesc textureViewDesc = { .texture = m_HDRTexture, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = m_texture.GetFormat() };
-		NRI_ABORT_ON_FAILURE(
-				NRI.CreateTexture2DView(textureViewDesc, m_HDRTextureShaderResource));
-		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
-	}
-
-	// Upload data
-	const tinyddsloader::DDSFile::ImageData *imgData = m_texture.data.GetImageData(0, 0);
-
-	nri::TextureSubresourceUploadDesc hdrSubresources;
-	hdrSubresources.slices = imgData->m_mem;
-	hdrSubresources.sliceNum = 1;
-	hdrSubresources.rowPitch = imgData->m_memPitch;
-	hdrSubresources.slicePitch = imgData->m_memSlicePitch;
-
-	nri::TextureUploadDesc textureData;
-	textureData.subresources = &hdrSubresources;
-	textureData.texture = m_HDRTexture;
-	textureData.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
-	textureData.planes = nri::PlaneBits::ALL;
-	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData };
-	NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), texUploadDescArray.data(), texUploadDescArray.size(),
-			nullptr,
-			0));
 }
 
 void SkyRenderPass::Render(RenderInfo &info, Camera &camera) {

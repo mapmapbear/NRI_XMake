@@ -291,16 +291,16 @@ void SSAOCompPass::Render(struct RenderInfo &info, Camera &camera) {
 		NRI.CmdDispatch(info.cmdBuffer, { 900 / 16 + 1, 600 / 16 + 1, 1 });
 	}
 
-	{
-		nri::TextureBarrierDesc textureBarrierDescs = {};
-		textureBarrierDescs.texture = m_SSAOTexture->GetTexture();
-		textureBarrierDescs.before = { nri::AccessBits::SHADER_RESOURCE,
-			nri::Layout::SHADER_RESOURCE };
-		textureBarrierDescs.after = { nri::AccessBits::SHADER_RESOURCE_STORAGE,
-			nri::Layout::SHADER_RESOURCE_STORAGE };
-		nri::BarrierGroupDesc barrierGroupDesc = {};
-		barrierGroupDesc.textureNum = 1;
-		barrierGroupDesc.textures = &textureBarrierDescs;
-		NRI.CmdBarrier(info.cmdBuffer, barrierGroupDesc);
-	}
+	// {
+	// 	nri::TextureBarrierDesc textureBarrierDescs = {};
+	// 	textureBarrierDescs.texture = m_SSAOTexture->GetTexture();
+	// 	textureBarrierDescs.before = { nri::AccessBits::SHADER_RESOURCE,
+	// 		nri::Layout::SHADER_RESOURCE };
+	// 	textureBarrierDescs.after = { nri::AccessBits::SHADER_RESOURCE_STORAGE,
+	// 		nri::Layout::SHADER_RESOURCE_STORAGE };
+	// 	nri::BarrierGroupDesc barrierGroupDesc = {};
+	// 	barrierGroupDesc.textureNum = 1;
+	// 	barrierGroupDesc.textures = &textureBarrierDescs;
+	// 	NRI.CmdBarrier(info.cmdBuffer, barrierGroupDesc);
+	// }
 }
