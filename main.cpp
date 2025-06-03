@@ -18,11 +18,6 @@
 constexpr uint32_t VIEW_MASK = 0b11;
 constexpr nri::Color32f COLOR_0 = { 0.0f, 0.0f, 0.0f, 0.0f };
 constexpr nri::Color32f COLOR_1 = { 0.46f, 0.72f, 0.0f, 1.0f };
-struct ConstantBufferLayout {
-	glm::mat4 modelMat;
-	glm::mat4 viewMat;
-	glm::mat4 projectMat;
-};
 
 struct Vertex {
 	vec3 position;
