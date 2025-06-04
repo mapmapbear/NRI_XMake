@@ -37,7 +37,8 @@ private:
 	nri::PipelineLayout *m_SSAOPipelineLayout = nullptr;
 	nri::Pipeline *m_SSAOPipeline = nullptr;
 
-	nri::PipelineLayout *m_BlurPipelineLayout = nullptr;
+	nri::PipelineLayout *m_BlurPipelineLayoutX = nullptr;
+	nri::PipelineLayout *m_BlurPipelineLayoutY = nullptr;
 	// nri::PipelineLayout *m_BlurPipelineLayout = nullptr;
 	nri::Pipeline *m_BlurPipelineX = nullptr;
 	nri::Pipeline *m_BlurPipelineY = nullptr;

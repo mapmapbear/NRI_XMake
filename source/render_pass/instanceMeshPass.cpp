@@ -410,7 +410,7 @@ void InstanceMeshPass::BindMemory() {
 
 		NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), texUploadDescArray.data(), (uint32_t)texUploadDescArray.size(),
 				uploadDescArray.data(),
-				uploadDescArray.size()));
+				(uint32_t)uploadDescArray.size()));
 	}
 }
 

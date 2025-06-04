@@ -28,6 +28,7 @@ public:
 	uint32_t indexOffset = 0;
 	glm::mat4 globalTransform;
 	std::pair<glm::vec3, glm::vec3> aabb = { glm::vec3(0.0f), glm::vec3(0.0f) };
+	std::pair<glm::vec3, glm::vec3> aabb2 = { glm::vec3(0.0f), glm::vec3(0.0f) };
 };
 
 class Material {

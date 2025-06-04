@@ -178,7 +178,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	deviceCreationDesc.graphicsAPI = graphicsAPI;
 	deviceCreationDesc.queueFamilies = queueFamilies;
 	deviceCreationDesc.queueFamilyNum = helper::GetCountOf(queueFamilies);
-#ifndef DEBUG
+#ifdef DEBUG
 	deviceCreationDesc.enableGraphicsAPIValidation = true;
 	deviceCreationDesc.enableNRIValidation = true;
 #else
@@ -312,7 +312,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	nri::ResourceGroupDesc resourceGroupDesc = {};
 	std::vector<nri::Texture *> textureArray = { m_DepthTexture, m_ColorTexture };
 	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
-	resourceGroupDesc.textureNum = textureArray.size();
+	resourceGroupDesc.textureNum = (uint32_t)textureArray.size();
 	resourceGroupDesc.textures = textureArray.data();
 
 	m_MemoryAllocations.resize(
@@ -351,7 +351,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	nri::TextureSubresourceUploadDesc depthSubRes = {};
 	depthSubRes.rowPitch = width * 4;
 	depthSubRes.slicePitch = depthSubRes.rowPitch * height;
-	std::vector<uint8_t> data1(colorSubRes.slicePitch, 1.0);
+	std::vector<uint8_t> data1(colorSubRes.slicePitch, 1u);
 	depthSubRes.sliceNum = 1;
 	depthSubRes.slices = data1.data();
 
@@ -371,7 +371,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 
 	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData1, textureData };
 
-	NRI_ABORT_ON_FAILURE(NRI.UploadData(*m_GraphicsQueue, texUploadDescArray.data(), texUploadDescArray.size(),
+	NRI_ABORT_ON_FAILURE(NRI.UploadData(*m_GraphicsQueue, texUploadDescArray.data(), (uint32_t)texUploadDescArray.size(),
 			nullptr,
 			0));
 
@@ -460,7 +460,7 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	GetCameraDescFromInputDevices(desc);
 	m_Camera.Update(desc, frameIndex);
 
-	float deltaTime = deltaTime = glfwGetTime();
+	float deltaTime = (float)glfwGetTime();
 	testRenderPtr->OnUpdate(deltaTime);
 }
 

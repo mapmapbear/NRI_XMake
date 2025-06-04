@@ -174,7 +174,10 @@ void SSAOCompPass::BuildPipeline() {
 		pipelineLayoutDesc.shaderStages =
 				nri::StageBits::COMPUTE_SHADER;
 		NRI_ABORT_ON_FAILURE(NRI.CreatePipelineLayout(*m_renderer->GetRenderDevice(), pipelineLayoutDesc,
-				m_BlurPipelineLayout));
+				m_BlurPipelineLayoutX));
+		NRI_ABORT_ON_FAILURE(NRI.CreatePipelineLayout(*m_renderer->GetRenderDevice(), pipelineLayoutDesc,
+				m_BlurPipelineLayoutY));
+				
 		utils::ShaderCodeStorage shaderCodeStorage;
 		nri::ComputePipelineDesc computePipelineDesc = {};
 		computePipelineDesc.pipelineLayout = m_SSAOPipelineLayout;
@@ -248,7 +251,7 @@ void SSAOCompPass::Render(struct RenderInfo &info, Camera &camera) {
 
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "SSAO Blur X Pass");
-		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_BlurPipelineLayout);
+		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_BlurPipelineLayoutX);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_BlurPipelineX);
 		BlurPushConstants block = {
 			.texDepth = 1008,
@@ -277,7 +280,7 @@ void SSAOCompPass::Render(struct RenderInfo &info, Camera &camera) {
 
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "SSAO Blur Y Pass");
-		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_BlurPipelineLayout);
+		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_BlurPipelineLayoutY);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_BlurPipelineY);
 		BlurPushConstants block = {
 			.texDepth = 1008,

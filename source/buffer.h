@@ -8,6 +8,7 @@ public:
 	void Create(Renderer *renderer, nri::BufferDesc &bufferDesc, nri::BufferViewDesc &viewDesc);
 	uint32_t GetViewIndex() { return m_viewIndex; }
 	nri::Buffer *GetBuffer() { return m_buffer; }
+	nri::Descriptor *GetView() { return m_view; }
 
 private:
 	nri::Buffer *m_buffer;

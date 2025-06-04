@@ -10,6 +10,8 @@ class Renderer;
 class Texture;
 class Buffer;
 class CommonMeshPass : public CommonRenderPass {
+	friend class DebugDrawPass;
+
 public:
 	CommonMeshPass(Renderer *renderer, utils::Scene &scene, std::shared_ptr<Mesh> &rootMesh);
 	void Render(struct RenderInfo &info, Camera &camera) override;

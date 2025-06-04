@@ -14,7 +14,7 @@ void Buffer::Create(Renderer *renderer, nri::BufferDesc &bufferDesc, nri::Buffer
 				&m_mem));
 	}
 
-	if (viewDesc.format != nri::Format::UNKNOWN) {
+	if (viewDesc.size > 0) {
 		viewDesc.buffer = m_buffer;
 		NRI_ABORT_ON_FAILURE(
 				renderer->GetNRI().CreateBufferView(viewDesc, m_view));

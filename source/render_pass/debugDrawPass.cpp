@@ -1,6 +1,7 @@
 #include "debugDrawPass.h"
 #include "NRIDescs.h"
 #include "buffer.h"
+#include "glm/ext/matrix_transform.hpp"
 #include "renderer.h"
 #include <cstdint>
 #include <memory>
@@ -22,36 +23,50 @@ DebugDrawPass::DebugDrawPass(Renderer *renderer) :
 }
 
 void DebugDrawPass::AllocGPUMemory() {
+	auto NRI = *m_NRI;
+
+	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
+	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
+			deviceDesc.memoryAlignment.constantBufferOffset);
+
+	// {
+	// 	nri::BufferDesc bufferDesc = {};
+	// 	bufferDesc.size = constantBufferSize * BUFFERED_FRAME_MAX_NUM;
+	// 	bufferDesc.usage = nri::BufferUsageBits::CONSTANT_BUFFER;
+	// 	NRI_ABORT_ON_FAILURE(
+	// 			NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_ConstantBuffer));
+	// }
+
+	// std::vector<nri::Buffer *> constantBufferArray = { m_ConstantBuffer };
+
+	// nri::ResourceGroupDesc resourceGroupDesc = {};
+	// resourceGroupDesc.memoryLocation = nri::MemoryLocation::HOST_UPLOAD;
+	// resourceGroupDesc.bufferNum = 1;
+	// resourceGroupDesc.buffers = &m_ConstantBuffer;
+
+	// m_MemoryAllocations.resize(1, nullptr);
+	// NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(*m_renderer->GetRenderDevice(), resourceGroupDesc,
+	// 		m_MemoryAllocations.data()));
 }
 
 void DebugDrawPass::BindMemory() {
 	auto NRI = *m_NRI;
-	{
-		m_GeometryBuffer = std::make_shared<Buffer>();
-		nri::BufferDesc desc = {};
-		desc.size = 1024 * 1024;
-		desc.usage = nri::BufferUsageBits::VERTEX_BUFFER | nri::BufferUsageBits::INDEX_BUFFER;
-
-		nri::BufferViewDesc viewDesc = {};
-		m_GeometryBuffer->Create(m_renderer, desc, viewDesc);
-	}
-
-	float minX = -5.0f;
-	float minY = -5.0f;
-	float minZ = -5.0f;
-	float maxX = 5.0f;
-	float maxY = 5.0f;
-	float maxZ = 5.0f;
+	float minX = -1.0f;
+	float minY = -1.0f;
+	float minZ = -1.0f;
+	float maxX = 1.0f;
+	float maxY = 1.0f;
+	float maxZ = 1.0f;
 	glm::vec4 color = { 1.0f, 0.0f, 0.0f, 1.0f };
 	m_positions = {
-		{ { minX, minY, minZ },{ minX, minY, minZ, 1.0 }}, // color }, // 0
-		{ { maxX, minY, minZ },{ maxX, minY, minZ, 1.0 }}, // color }, // 1
-		{ { maxX, maxY, minZ },{ maxX, maxY, minZ, 1.0 }}, // color }, // 2
-		{ { minX, maxY, minZ },{ minX, maxY, minZ, 1.0 }}, // color }, // 3
-		{ { minX, minY, maxZ },{ minX, minY, maxZ, 1.0 }}, // color }, // 4
-		{ { maxX, minY, maxZ },{ maxX, minY, maxZ, 1.0 }}, // color }, // 5
-		{ { maxX, maxY, maxZ },{ maxX, maxY, maxZ, 1.0 }}, // color }, // 6
-		{ { minX, maxY, maxZ },{ minX, maxY, maxZ, 1.0 }}  // color } // 7
+		{ { minX, minY, minZ }, { minX, minY, minZ, 1.0 } }, // color }, // 0
+		{ { maxX, minY, minZ }, { maxX, minY, minZ, 1.0 } }, // color }, // 1
+		{ { maxX, maxY, minZ }, { maxX, maxY, minZ, 1.0 } }, // color }, // 2
+		{ { minX, maxY, minZ }, { minX, maxY, minZ, 1.0 } }, // color }, // 3
+		{ { minX, minY, maxZ }, { minX, minY, maxZ, 1.0 } }, // color }, // 4
+		{ { maxX, minY, maxZ }, { maxX, minY, maxZ, 1.0 } }, // color }, // 5
+		{ { maxX, maxY, maxZ }, { maxX, maxY, maxZ, 1.0 } }, // color }, // 6
+		{ { minX, maxY, maxZ }, { minX, maxY, maxZ, 1.0 } } // color } // 7
 	};
 
 	m_indices = {
@@ -64,6 +79,17 @@ void DebugDrawPass::BindMemory() {
 	const uint64_t indexDataSize = helper::GetByteSizeOf(m_indices);
 	const uint64_t indexDataAlignedSize = helper::Align(indexDataSize, 32);
 	const uint64_t vertexDataSize = helper::GetByteSizeOf(m_positions);
+
+	{
+		m_GeometryBuffer = std::make_shared<Buffer>();
+		nri::BufferDesc desc = {};
+		desc.size = indexDataAlignedSize + vertexDataSize;
+		desc.usage = nri::BufferUsageBits::VERTEX_BUFFER | nri::BufferUsageBits::INDEX_BUFFER;
+
+		nri::BufferViewDesc viewDesc = {};
+		m_GeometryBuffer->Create(m_renderer, desc, viewDesc);
+	}
+
 	m_indicesOffset = indexDataAlignedSize;
 	std::vector<uint8_t> geometryBufferData(indexDataAlignedSize +
 			vertexDataSize);
@@ -89,12 +115,24 @@ void DebugDrawPass::BuildPipeline() {
 	// Pipeline
 	utils::ShaderCodeStorage shaderCodeStorage;
 	{
-		nri::RootConstantDesc rootConstant = { 1, sizeof(glm::vec4) + sizeof(uint32_t),
+		nri::DescriptorRangeDesc descriptorRangeConstant[2];
+		descriptorRangeConstant[0] = { 0, 1, nri::DescriptorType::CONSTANT_BUFFER, nri::StageBits::VERTEX_SHADER },
+		descriptorRangeConstant[1] = { 0, 1, nri::DescriptorType::STRUCTURED_BUFFER,
+			nri::StageBits::VERTEX_SHADER };
+
+		nri::DescriptorSetDesc descriptorSetDescs[] = {
+			{ 0, descriptorRangeConstant,
+					helper::GetCountOf(descriptorRangeConstant) }
+		};
+
+		nri::RootConstantDesc rootConstant = { 1, sizeof(CBlock),
 			nri::StageBits::VERTEX_SHADER };
 
 		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
 		pipelineLayoutDesc.rootConstantNum = 1;
 		pipelineLayoutDesc.rootConstants = &rootConstant;
+		pipelineLayoutDesc.descriptorSetNum = helper::GetCountOf(descriptorSetDescs);
+		pipelineLayoutDesc.descriptorSets = descriptorSetDescs;
 		pipelineLayoutDesc.shaderStages =
 				nri::StageBits::VERTEX_SHADER | nri::StageBits::FRAGMENT_SHADER;
 
@@ -215,4 +253,50 @@ void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
 		uint32_t instanceCount = 1;
 		NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(m_indices.size()), instanceCount, 0, 0, 0 });
 	}
+}
+
+void DebugDrawPass::DrawBox(const glm::vec3 &center, const glm::vec3 &extent, const glm::vec4 &color) {
+	glm::mat4 scaleMat = glm::scale(glm::mat4(1.0), extent);
+	glm::mat4 translateMat = glm::translate(glm::mat4(1.0), center);
+	glm::mat4 worldMat = translateMat * scaleMat;
+	boxWorldMats.push_back(worldMat);
+}
+
+void DebugDrawPass::GenerateBoxBuffer() {
+	auto NRI = *m_NRI;
+	{
+		m_boxDataBuffer = std::make_shared<Buffer>();
+		nri::BufferDesc desc = {};
+		desc.size = boxWorldMats.size() * sizeof(BoxMeshData);
+		desc.usage = nri::BufferUsageBits::SHADER_RESOURCE;
+		desc.structureStride = sizeof(BoxMeshData);
+
+		nri::BufferViewDesc viewDesc = {};
+		viewDesc.viewType = nri::BufferViewType::SHADER_RESOURCE;
+		viewDesc.size = desc.size;
+		viewDesc.format = nri::Format::UNKNOWN;
+
+		m_boxDataBuffer->Create(m_renderer, desc, viewDesc);
+	}
+
+	NRI_ABORT_ON_FAILURE(
+			NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_PipelineLayout, 0,
+					&m_DescriptorSet, 1, 0));
+	nri::Descriptor *view = m_boxDataBuffer->GetView();
+	nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs = {};
+	descriptorRangeUpdateDescs.descriptorNum = 1;
+	descriptorRangeUpdateDescs.descriptors = &view;
+	NRI.UpdateDescriptorRanges(*m_DescriptorSet, 0, 1, &descriptorRangeUpdateDescs);
+
+	struct BoxMeshData data = {};
+	data.worldMat = glm::mat4(1.0);
+
+	nri::BufferUploadDesc desc = {};
+	desc.buffer = m_boxDataBuffer->GetBuffer();
+	desc.data = &data;
+	desc.dataSize = sizeof(data);
+	desc.after = { nri::AccessBits::SHADER_RESOURCE,
+		nri::StageBits::VERTEX_SHADER };
+
+	NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), nullptr, 0, &desc, 1));
 }

@@ -121,7 +121,7 @@ void PresentPass::BuildPipeline() {
 		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_ColorRTShaderResource };
 
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
-		descriptorRangeUpdateDescs[0].descriptorNum = shaderResoruceViewArray.size();
+		descriptorRangeUpdateDescs[0].descriptorNum = (uint32_t)shaderResoruceViewArray.size();
 		descriptorRangeUpdateDescs[0].descriptors = shaderResoruceViewArray.data();
 
 		descriptorRangeUpdateDescs[1].descriptorNum = 1;

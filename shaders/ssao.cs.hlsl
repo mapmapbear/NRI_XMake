@@ -17,6 +17,14 @@ float linearize_depth(float d,float zNear,float zFar) {
     return zNear * zFar / (zFar + d * (zNear - zFar));
 }
 
+Texture2D<float4> texture0 : register(t0); 
+Texture2D<float4> texture1 : register(t1); 
+Texture2D<float4> texture2 : register(t2); 
+
+RWTexture2D<float4> storageTexture : register(u1);
+
+SamplerState sampler0 : register(s0);
+
 [numthreads(16, 16, 1)]
 void main(uint3 DTid : SV_DispatchThreadID) {
     Texture2D<float> depthTexture = ResourceDescriptorHeap[g_PushConstants.texDepth];

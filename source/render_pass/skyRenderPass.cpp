@@ -36,7 +36,7 @@ void SkyRenderPass::AllocGPUMemory() {
 	std::vector<nri::Texture *> textureArray = { m_HDRTexture };
 	nri::ResourceGroupDesc resourceGroupDesc = {};
 	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
-	resourceGroupDesc.textureNum = textureArray.size();
+	resourceGroupDesc.textureNum = (uint32_t)textureArray.size();
 	resourceGroupDesc.textures = textureArray.data();
 
 	m_MemoryAllocations.resize(
@@ -85,7 +85,7 @@ void SkyRenderPass::BindMemory() {
 	textureData.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
 	textureData.planes = nri::PlaneBits::ALL;
 	std::vector<nri::TextureUploadDesc> texUploadDescArray = { textureData };
-	NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), texUploadDescArray.data(), texUploadDescArray.size(),
+	NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), texUploadDescArray.data(), (uint32_t)texUploadDescArray.size(),
 			nullptr,
 			0));
 }
@@ -178,7 +178,7 @@ void SkyRenderPass::BuildPipeline() {
 		std::vector<nri::Descriptor *> shaderResoruceViewArray = { m_HDRTextureShaderResource };
 
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
-		descriptorRangeUpdateDescs[0].descriptorNum = shaderResoruceViewArray.size();
+		descriptorRangeUpdateDescs[0].descriptorNum = (uint32_t)shaderResoruceViewArray.size();
 		descriptorRangeUpdateDescs[0].descriptors = shaderResoruceViewArray.data();
 
 		descriptorRangeUpdateDescs[1].descriptorNum = 1;

@@ -172,6 +172,13 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 	std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
 	{
 		pSubMesh->aabb = std::make_pair(glm::make_vec3((float*)&aabb.mMin.x), glm::make_vec3((float*)&aabb.mMax));
+		// 计算center+extend格式的包围盒
+		glm::vec3 min = glm::make_vec3((float*)&aabb.mMin.x);
+		glm::vec3 max = glm::make_vec3((float*)&aabb.mMax);
+		glm::vec3 center = (min + max) * 0.5f;
+		glm::vec3 extent = (max - min) * 0.5f;
+		pSubMesh->aabb2 = std::make_pair(center, extent);
+		
 		pSubMesh->m_indexCount = (int)meshdata->indices.size();
 		pSubMesh->m_indexbuffer = std::make_unique<Buffer>();
 		pSubMesh->m_vertexbuffer = std::make_unique<Buffer>();

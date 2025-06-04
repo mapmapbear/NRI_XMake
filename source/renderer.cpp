@@ -8,11 +8,11 @@
 #include "glm/matrix.hpp"
 #include "mesh.h"
 #include "render_pass/commonMeshPass.h"
+#include "render_pass/debugDrawPass.h"
 #include "render_pass/gridRenderPass.h"
 #include "render_pass/instanceMeshPass.h"
 #include "render_pass/presentPass.h"
 #include "render_pass/skyRenderPass.h"
-#include "render_pass/debugDrawPass.h"
 #include "render_pass/ssaoCompPass.h"
 #include "spdlog/spdlog.h"
 #include "texture.h"
@@ -31,7 +31,7 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 
 	nri::DescriptorPoolDesc descriptorPoolDesc = {};
 	descriptorPoolDesc.descriptorSetMaxNum = BUFFERED_FRAME_MAX_NUM + 20;
-	descriptorPoolDesc.constantBufferMaxNum = BUFFERED_FRAME_MAX_NUM;
+	descriptorPoolDesc.constantBufferMaxNum = BUFFERED_FRAME_MAX_NUM + 3;
 	descriptorPoolDesc.storageBufferMaxNum = 99;
 	descriptorPoolDesc.storageTextureMaxNum = 99;
 	descriptorPoolDesc.structuredBufferMaxNum = 99;
@@ -354,12 +354,14 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 	RandomLights();
 	UploadSceneData();
+	// debugdrawPass = std::make_shared<DebugDrawPass>(this);
 	skyPass = std::make_shared<SkyRenderPass>(this);
 	gridPass = std::make_shared<GridRenderPass>(this);
 	meshPass = std::make_shared<InstanceMeshPass>(this);
 	simplePass = std::make_shared<CommonMeshPass>(this, m_Scene, mesh);
 	ssaoCompPass = std::make_shared<SSAOCompPass>(this);
-	debugdrawPass = std::make_shared<DebugDrawPass>(this);
+	// debugdrawPass->DrawBox(glm::vec3(1.0f), glm::vec3(1.0f), glm::vec4(1.0));
+	// debugdrawPass->GenerateBoxBuffer();
 }
 
 glm::mat4 Renderer::computeLightSpaceMatrix(float yaw, float pitch, float roll) {
@@ -465,7 +467,7 @@ void Renderer::InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain
 	// #ifdef SSAO_DEBUG
 	// presentPass = std::make_shared<PresentPass>(this, ssaoCompPass->m_SSAOTexture->GetTexture(), swawpchain);
 	// #else
-		presentPass = std::make_shared<PresentPass>(this, colorRT, swawpchain);
+	presentPass = std::make_shared<PresentPass>(this, colorRT, swawpchain);
 	// #endif
 }
 
@@ -497,7 +499,7 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 		meshPass->Render(info, camera);
 		simplePass->SetTestIndex(testIndex);
 		simplePass->Render(info, camera);
-		debugdrawPass->Render(info, camera);
+		// debugdrawPass->Render(info, camera);
 	}
 	GetNRI().CmdEndRendering(info.cmdBuffer);
 }
