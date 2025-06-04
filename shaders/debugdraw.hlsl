@@ -18,6 +18,7 @@ NRI_RESOURCE(cbuffer, CommonConstants, b, 0, 0) {
 struct inputVS {
     float3 in_position : POSITION;
     float4 in_color : COLOR;
+    uint instanceID : SV_InstanceID;
 };
 
 struct outputVS {
@@ -30,17 +31,16 @@ struct InputPS {
     float4 color : COLOR;
 };
 
-struct BoxMesh
-{
+struct BoxMesh {
     float4x4 worldMat;
 };
 
 outputVS vs_main(inputVS input) {
     outputVS output;
-    StructuredBuffer<BoxMesh> BoxMats = ResourceDescriptorHeap[0];
-    float4x4 testMat = mul(BoxMats[0].worldMat, g_PushConstants.modelMat1);
+    StructuredBuffer<BoxMesh> BoxMats = ResourceDescriptorHeap[1011];
+    float4x4 testMat = mul(g_PushConstants.modelMat1, BoxMats[input.instanceID].worldMat);
     output.position = mul(testMat, float4(input.in_position.xyz, 1.0));
-    output.color = input.in_color;
+    output.color = mul(BoxMats[input.instanceID].worldMat, input.in_color);
     return output;
 }
 

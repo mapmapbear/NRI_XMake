@@ -464,6 +464,7 @@ bool SampleBase::InitUI(const nri::CoreInterface &NRI,
 	io.BackendFlags |=
 			ImGuiBackendFlags_HasSetMousePos; // We can honor io.WantSetMousePos
 											  // requests (optional, rarely used)
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	io.IniFilename = nullptr;
 
 	m_MouseCursors[ImGuiMouseCursor_Arrow] =
@@ -729,7 +730,7 @@ void SampleBase::BeginUI() {
 	}
 
 	ImGuiIO &io = ImGui::GetIO();
-
+	
 	// Setup time step
 	double timeCur = glfwGetTime();
 	io.DeltaTime = (float)(timeCur - m_TimePrev);

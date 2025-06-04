@@ -328,6 +328,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	std::string meshFile = utils::GetFullPath("USD_Sponza/sponza.usdc", utils::DataFolder::ROOT);
 	meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this);
+	debugdrawPass = std::make_shared<DebugDrawPass>(this);
 
 	glm::vec3 sceneMin = glm::vec3(std::numeric_limits<float>::max());
 	glm::vec3 sceneMax = glm::vec3(std::numeric_limits<float>::lowest());
@@ -338,6 +339,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		node.globalTransform = mesh->results.at(i);
 
 		auto submeshAABB = node.mesh->aabb;
+		SPDLOG_INFO("center:{},{},{}  extent:{},{},{}", node.mesh->aabb2.first.x, node.mesh->aabb2.first.y, node.mesh->aabb2.first.z, 
+		node.mesh->aabb2.second.x, node.mesh->aabb2.second.y, node.mesh->aabb2.second.z);
 		glm::vec3 transformedMin = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.first, 1.0f));
 		glm::vec3 transformedMax = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.second, 1.0f));
 
@@ -350,18 +353,28 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 			m_OpaqueRenderNodes.push_back(node);
 		}
 	}
+	for(int i = 0; i < m_OpaqueRenderNodes.size(); ++i)
+	{
+		RenderNode& node = m_OpaqueRenderNodes[i];
+		glm::mat4 transMat = mesh->results.at(i);
+		glm::vec4 center = glm::vec4(node.mesh->aabb2.first, 1.0);
+		center = transMat * center;
+		glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
+		extent = transMat * extent;
+		debugdrawPass->DrawBox(center, extent, glm::vec4(1.0));
+	}
 	m_SceneAABB = std::make_pair(sceneMin, sceneMax);
 
 	RandomLights();
 	UploadSceneData();
-	// debugdrawPass = std::make_shared<DebugDrawPass>(this);
 	skyPass = std::make_shared<SkyRenderPass>(this);
 	gridPass = std::make_shared<GridRenderPass>(this);
 	meshPass = std::make_shared<InstanceMeshPass>(this);
 	simplePass = std::make_shared<CommonMeshPass>(this, m_Scene, mesh);
 	ssaoCompPass = std::make_shared<SSAOCompPass>(this);
 	// debugdrawPass->DrawBox(glm::vec3(1.0f), glm::vec3(1.0f), glm::vec4(1.0));
-	// debugdrawPass->GenerateBoxBuffer();
+	// debugdrawPass->DrawBox(glm::vec3(1.0f), glm::vec3(3.0f), glm::vec4(1.0));
+	debugdrawPass->GenerateBoxBuffer();
 }
 
 glm::mat4 Renderer::computeLightSpaceMatrix(float yaw, float pitch, float roll) {
@@ -499,7 +512,7 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 		meshPass->Render(info, camera);
 		simplePass->SetTestIndex(testIndex);
 		simplePass->Render(info, camera);
-		// debugdrawPass->Render(info, camera);
+		debugdrawPass->Render(info, camera);
 	}
 	GetNRI().CmdEndRendering(info.cmdBuffer);
 }

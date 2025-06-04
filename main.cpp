@@ -178,7 +178,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	deviceCreationDesc.graphicsAPI = graphicsAPI;
 	deviceCreationDesc.queueFamilies = queueFamilies;
 	deviceCreationDesc.queueFamilyNum = helper::GetCountOf(queueFamilies);
-#ifdef DEBUG
+#ifndef DEBUG
 	deviceCreationDesc.enableGraphicsAPIValidation = true;
 	deviceCreationDesc.enableNRIValidation = true;
 #else
@@ -404,26 +404,63 @@ void ShowNode(utils::NodeData node) {
 	}
 }
 
+// void ShowFrameTimeGraph(size_t frameCount)
+// {
+//     const float width = ImGui::GetWindowWidth();
+//     // const size_t frameCount = m_FrameTimeHistory.GetCount();
+//     if(width > 0.f && frameCount > 0)
+//     {
+//         ImDrawList* drawList = ImGui::GetWindowDrawList();
+//         ImVec2 basePos = ImGui::GetCursorScreenPos();
+//         constexpr float minHeight = 2.f;
+//         constexpr float maxHeight = 64.f;
+//         float endX = width;
+//         constexpr float dtMin = 1.f / 120.f;
+//         constexpr float dtMax = 1.f / 15.f;
+//         const float dtMin_Log2 = log2(dtMin);
+//         const float dtMax_Log2 = log2(dtMax);
+//         drawList->AddRectFilled(basePos, ImVec2(basePos.x + width, basePos.y + maxHeight), 0xFF404040);
+//         for(size_t frameIndex = 0; frameIndex < frameCount && endX > 0.f; ++frameIndex)
+//         {
+//             const FrameTimeHistory::Entry dt = m_FrameTimeHistory.Get(frameIndex);
+//             const float frameWidth = dt.m_DT / dtMin;
+//             const float frameHeightFactor = (dt.m_DT_Log2 - dtMin_Log2) / (dtMax_Log2 - dtMin_Log2);
+//             const float frameHeightFactor_Nrm = std::min(std::max(0.f, frameHeightFactor), 1.f);
+//             const float frameHeight = glm::mix(minHeight, maxHeight, frameHeightFactor_Nrm);
+//             const float begX = endX - frameWidth;
+//             const uint32_t color = glm::packUnorm4x8(DeltaTimeToColor(dt.m_DT));
+//             drawList->AddRectFilled(
+//                 ImVec2(basePos.x + std::max(0.f, floor(begX)), basePos.y + maxHeight - frameHeight),
+//                 ImVec2(basePos.x + ceil(endX), basePos.y + maxHeight),
+//                 color);
+//             endX = begX;
+//         }
+//         ImGui::Dummy(ImVec2(width, maxHeight));
+//     }
+// }
+
 void Sample::PrepareFrame(uint32_t frameIndex) {
 	BeginUI();
 	ImGui::SetNextWindowPos(ImVec2(30, 30), ImGuiCond_Once);
 	ImGui::SetNextWindowSize(ImVec2(0, 0));
-	ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_NoResize);
+	ImGui::Begin("Render Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 	{
-		ImGui::SliderFloat("Transparency", &m_Transparency, 0.0f, 1.0f);
-		ImGui::SliderFloat("Scale", &m_Scale, 0.75f, 1.25f);
-		ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f, "%.0f");
-		ImGui::SliderInt("Tex Index", &testRenderPtr->testIndex, 0, 10);
-		ImGui::SliderFloat("Metallic", &testRenderPtr->testMaterial, 0.0, 1.0);
-		ImGui::SliderFloat("Roughness", &testRenderPtr->testRoughness, 0.0, 1.0);
+		ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+		ImGui::Text("Frame: %u", frameIndex);
+		// ImGui::SliderFloat("Transparency", &m_Transparency, 0.0f, 1.0f);
+		// ImGui::SliderFloat("Scale", &m_Scale, 0.75f, 1.25f);
+		// ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f, "%.0f");
+		// ImGui::SliderInt("Tex Index", &testRenderPtr->testIndex, 0, 10);
+		// ImGui::SliderFloat("Metallic", &testRenderPtr->testMaterial, 0.0, 1.0);
+		// ImGui::SliderFloat("Roughness", &testRenderPtr->testRoughness, 0.0, 1.0);
 		// ImGui::SliderFloat4("Mat Debug", &testRenderPtr->testVec.x, 0.0, 1.0);
 		// ImGui::Text("Light Rotation");
 		// ImGui::SliderFloat("Yaw", &testRenderPtr->testVec.x, 0.0f, 360.0f);
 		// ImGui::SliderFloat("Pitch", &testRenderPtr->testVec.y, -90.0f, 90.0f);
 		// ImGui::SliderFloat("Roll", &testRenderPtr->testVec.z, 0.0f, 360.0f);
-		ImGui::SliderFloat("radius", &testRenderPtr->testVec.x, 0.0f, 1.0f);
-		ImGui::SliderFloat("att", &testRenderPtr->testVec.y, 0.0f, 3.0f);
-		ImGui::SliderFloat("dist", &testRenderPtr->testVec.z, 0.0f, 3.0f);
+		// ImGui::SliderFloat("radius", &testRenderPtr->testVec.x, 0.0f, 1.0f);
+		// ImGui::SliderFloat("att", &testRenderPtr->testVec.y, 0.0f, 3.0f);
+		// ImGui::SliderFloat("dist", &testRenderPtr->testVec.z, 0.0f, 3.0f);
 		// ImGui::SliderFloat("radius", &testRenderPtr->testVec.x, 0.0f, 1.0f);
 		// ImGui::SliderFloat4("Roll", &testRenderPtr->testVec[0], 0.0f, 360.0f);
 	}

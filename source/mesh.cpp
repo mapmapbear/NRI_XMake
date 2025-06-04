@@ -176,7 +176,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 		glm::vec3 min = glm::make_vec3((float*)&aabb.mMin.x);
 		glm::vec3 max = glm::make_vec3((float*)&aabb.mMax);
 		glm::vec3 center = (min + max) * 0.5f;
-		glm::vec3 extent = (max - min) * 0.5f;
+		glm::vec3 extent = (max - min) * 0.5f; 
 		pSubMesh->aabb2 = std::make_pair(center, extent);
 		
 		pSubMesh->m_indexCount = (int)meshdata->indices.size();

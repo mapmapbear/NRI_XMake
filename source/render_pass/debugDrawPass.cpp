@@ -250,7 +250,7 @@ void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
 		vertexBufferDesc.offset = m_indicesOffset;
 		vertexBufferDesc.stride = sizeof(VertexA);
 		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
-		uint32_t instanceCount = 1;
+		uint32_t instanceCount = boxWorldMats.size();
 		NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(m_indices.size()), instanceCount, 0, 0, 0 });
 	}
 }
@@ -293,8 +293,8 @@ void DebugDrawPass::GenerateBoxBuffer() {
 
 	nri::BufferUploadDesc desc = {};
 	desc.buffer = m_boxDataBuffer->GetBuffer();
-	desc.data = &data;
-	desc.dataSize = sizeof(data);
+	desc.data = boxWorldMats.data();
+	desc.dataSize = helper::GetByteSizeOf(boxWorldMats);
 	desc.after = { nri::AccessBits::SHADER_RESOURCE,
 		nri::StageBits::VERTEX_SHADER };
 
