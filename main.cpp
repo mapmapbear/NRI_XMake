@@ -103,7 +103,7 @@ private:
 	bool m_Multiview = false;
 	float m_Transparency = 1.0f;
 	float m_Scale = 1.0f;
-	float m_Fov = 45.0f;
+	float m_Fov = 90.0f;
 	vec4 skyParams;
 
 	Renderer *testRenderPtr;
@@ -389,7 +389,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 
 	// User interface
 	bool initialized = InitUI(NRI, NRI, *m_Device, swapChainFormat);
-	m_Camera.Initialize(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(-1.0f, 1.0f, 0.0));
+	m_Camera.Initialize(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.f, 1.0f, 1.0f));
 	return initialized;
 }
 
@@ -460,8 +460,8 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 		// ImGui::SliderFloat("Roughness", &testRenderPtr->testRoughness, 0.0, 1.0);
 		// ImGui::SliderFloat4("Mat Debug", &testRenderPtr->testVec.x, 0.0, 1.0);
 		// ImGui::Text("Light Rotation");
-		// ImGui::SliderFloat("Yaw", &testRenderPtr->testVec.x, 0.0f, 360.0f);
-		// ImGui::SliderFloat("Pitch", &testRenderPtr->testVec.y, -90.0f, 90.0f);
+		ImGui::SliderFloat("Yaw", &testRenderPtr->testVec.x, 0.0f, 1.0f);
+		ImGui::SliderFloat("Pitch", &testRenderPtr->testVec.y, 0.0f, 1.0f);
 		// ImGui::SliderFloat("Roll", &testRenderPtr->testVec.z, 0.0f, 360.0f);
 		// ImGui::SliderFloat("radius", &testRenderPtr->testVec.x, 0.0f, 1.0f);
 		// ImGui::SliderFloat("att", &testRenderPtr->testVec.y, 0.0f, 3.0f);
@@ -495,8 +495,8 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	CameraDesc desc = {};
 	desc.aspectRatio = float(GetWindowResolution().first) / float(GetWindowResolution().second);
 	desc.horizontalFov = glm::radians(m_Fov);
-	desc.nearZ = 0.01f;
-	desc.farZ = 200.0f;
+	desc.nearZ = 1.0f;
+	desc.farZ = 2000.0f;
 #ifdef RZ
 	desc.isReversedZ = true;
 #else

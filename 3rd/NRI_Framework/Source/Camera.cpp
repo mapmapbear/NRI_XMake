@@ -65,17 +65,17 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 	projFlags |= 0;
 
 	// Position
-	const vec3 vRight = vec3(state.mWorldToView[0][0], state.mWorldToView[1][0],
-			state.mWorldToView[2][0]);
-	const vec3 vUp = vec3(state.mWorldToView[0][1], state.mWorldToView[1][1],
-			state.mWorldToView[2][1]);
-	const vec3 vForward = vec3(state.mWorldToView[0][2], state.mWorldToView[1][2],
-			state.mWorldToView[2][2]);
+	// const vec3 vRight = vec3(state.mWorldToView[0][0], state.mWorldToView[1][0],
+	// 		state.mWorldToView[2][0]);
+	// const vec3 vUp = vec3(state.mWorldToView[0][1], state.mWorldToView[1][1],
+	// 		state.mWorldToView[2][1]);
+	// const vec3 vForward = vec3(state.mWorldToView[0][2], state.mWorldToView[1][2],
+	// 		state.mWorldToView[2][2]);
 
 	vec3 delta = desc.dLocal * desc.timeScale;
 	delta.z *= desc.isPositiveZ ? 1.0f : -1.0f;
 
-	state.globalPosition += vec3(vRight * delta.x);
+	state.globalPosition += vec3(vRight * -delta.x);
 	state.globalPosition += vec3(vUp * delta.y);
 	state.globalPosition += vec3(vForward * delta.z);
 	state.globalPosition += vec3(desc.dUser);
@@ -99,7 +99,6 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 	} else {
 		state.position = vec3(state.globalPosition);
 		statePrev.position = vec3(statePrev.globalPosition);
-
 		state.mWorldToView = glm::lookAtLH(state.globalPosition, state.globalPosition + glm::normalize(vForward), glm::vec3(0.0, 1.0, 0.0));
 	}
 
@@ -118,6 +117,17 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 #if 1
 		state.mViewToWorld = glm::rotate(glm::mat4(1.0), glm::radians(state.rotation.x), vUp);
 		state.mViewToWorld = glm::rotate(state.mViewToWorld, glm::radians(state.rotation.y), vRight);
+
+		glm::quat yawRotation = glm::angleAxis(glm::radians(-state.rotation.x), vUp);
+		vForward = glm::normalize(yawRotation * vForward);
+		vRight = glm::normalize(yawRotation * vRight);
+
+		glm::quat pitchRotation = glm::angleAxis(glm::radians(state.rotation.y), vRight);
+		vForward = glm::normalize(pitchRotation * vForward); // 再次旋转 forward 向量
+		vUp = glm::normalize(pitchRotation * vUp);
+
+		vRight = glm::normalize(glm::cross(vForward, vUp));
+		vUp = glm::normalize(glm::cross(vRight, vForward));
 #endif
 		state.mWorldToView = state.mWorldToView * state.mViewToWorld;
 	}
@@ -164,6 +174,9 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 	statePrev.rotation.x = state.rotation.x;
 	statePrev.rotation.y = state.rotation.y;
 	statePrev.rotation.z = state.rotation.z;
+
+	statePrev.globalPosition = state.globalPosition;
+	statePrev.mViewToClip = state.mViewToClip;
 	state.rotation.x = 0;
 	state.rotation.y = 0;
 	state.rotation.z = 0;

@@ -325,8 +325,8 @@ void CommonMeshPass::BuildPipeline() {
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
 		rasterizationDesc.cullMode = nri::CullMode::BACK;
 		rasterizationDesc.frontCounterClockwise = false;
-		// rasterizationDesc.depthClamp = true;
-		// rasterizationDesc.conservativeRaster = false;
+		rasterizationDesc.depthClamp = true;
+		
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 #ifdef HDR_ENABLE
@@ -564,8 +564,8 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 
 void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 	auto NRI = *m_NRI;
-	const glm::mat4 p = camera.state.mViewToClip;
-	const glm::vec3 cameraPos = camera.state.globalPosition;
+	const glm::mat4 p = camera.statePrev.mViewToClip;
+	const glm::vec3 cameraPos = camera.statePrev.position;
 
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Depth PreZ Pass");
@@ -586,7 +586,7 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 			CBlock block = {};
 			block.modelMat = m_rootMesh->results.at(index);
 			// block.modelMat = glm::scale(block.modelMat, glm::vec3(0.01f));
-			block.modelMat = camera.state.mWorldToView* block.modelMat;
+			block.modelMat = camera.state.mWorldToView * block.modelMat;
 			block.modelMat = (p * block.modelMat);
 
 			block.camPos = vec4(cameraPos, 1.0);
@@ -610,7 +610,7 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 
 void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 	auto NRI = *m_NRI;
-	const glm::vec3 cameraPos = camera.state.globalPosition;
+	const glm::vec3 cameraPos = camera.statePrev.position;
 
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Shadow Pass");
