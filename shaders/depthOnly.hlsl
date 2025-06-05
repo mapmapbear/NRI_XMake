@@ -7,7 +7,7 @@ NRI_RESOURCE(cbuffer, CommonConstants, b, 0, 0) {
 };
 
 struct PushConstants {
-    float4x4 modelMat1;
+    float4x4 mvpMat;
     float4 camPos;
     float4 testVec;
     uint4 indexGroup;
@@ -39,12 +39,9 @@ struct InputPS {
 
 outputVS vs_main(inputVS input) {
     outputVS output;
-    float4x4 testMat = g_PushConstants.modelMat1;
-    float4x4 vpMat = mul(viewMat, testMat);
-    float4x4 mvpMat = mul(projectMat, vpMat);
-    float4x4 lightMVP = mul(lightVP, testMat);
+    float4x4 lightMVP = mul(lightVP, g_PushConstants.mvpMat);
     output.testVS = mul(lightVP, float4(0.0, 65.0, 0.0, 1.0));
-    output.position = mul(testMat, float4(input.in_position.xyz, 1.0));
+    output.position = mul(g_PushConstants.mvpMat, float4(input.in_position.xyz, 1.0));
     if(g_PushConstants.testVec.y > 0) {
         output.position = mul(lightMVP, float4(input.in_position.xyz, 1.0));
     }

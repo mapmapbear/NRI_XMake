@@ -178,7 +178,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	deviceCreationDesc.graphicsAPI = graphicsAPI;
 	deviceCreationDesc.queueFamilies = queueFamilies;
 	deviceCreationDesc.queueFamilyNum = helper::GetCountOf(queueFamilies);
-#ifndef DEBUG
+#ifdef DEBUG
 	deviceCreationDesc.enableGraphicsAPIValidation = true;
 	deviceCreationDesc.enableNRIValidation = true;
 #else
@@ -305,6 +305,11 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		textureDesc.width = (uint16_t)GetWindowResolution().first;
 		textureDesc.height = (uint16_t)GetWindowResolution().second;
 		textureDesc.mipNum = 1;
+#ifdef RZ
+		textureDesc.clearValue = { { 0.0f, 0u } };
+#else
+		textureDesc.clearValue = { { 1.0f, 0u } };
+#endif
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture(*m_Device, textureDesc, m_DepthTexture));
 	}
@@ -492,7 +497,11 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	desc.horizontalFov = glm::radians(m_Fov);
 	desc.nearZ = 0.01f;
 	desc.farZ = 200.0f;
+#ifdef RZ
 	desc.isReversedZ = true;
+#else
+	desc.isReversedZ = false;
+#endif
 	desc.timeScale = 5.0;
 	GetCameraDescFromInputDevices(desc);
 	m_Camera.Update(desc, frameIndex);
@@ -579,7 +588,6 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		presentDesc.colors = &currentBackBuffer.colorAttachment;
 		presentDesc.depthStencil = nullptr;
 
-
 		nri::AttachmentsDesc depthAttachmentsDesc = attachmentsDesc;
 		depthAttachmentsDesc.colorNum = 0;
 		depthAttachmentsDesc.colors = nullptr;
@@ -603,7 +611,11 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 				NRI.CmdClearAttachments(*commandBuffer, &clearDesc, 1, nullptr, 0);
 				clearDesc = {};
 				clearDesc.planes = nri::PlaneBits::DEPTH;
+#ifdef RZ
 				clearDesc.value.depthStencil.depth = 0.0;
+#else
+				clearDesc.value.depthStencil.depth = 1.0;
+#endif
 				NRI.CmdClearAttachments(*commandBuffer, &clearDesc, 1, nullptr, 0);
 			}
 		}
@@ -692,7 +704,6 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 			barrierGroupDesc.textures = &textureBarrierDescs;
 			NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
 		}
-
 
 		// Transform Back Buffer -> Next Frame
 		{

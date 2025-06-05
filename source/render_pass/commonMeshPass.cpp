@@ -223,10 +223,9 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::RasterizationDesc rasterizationDesc = {};
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
-		rasterizationDesc.cullMode = nri::CullMode::NONE;
+		rasterizationDesc.cullMode = nri::CullMode::BACK;
 		rasterizationDesc.frontCounterClockwise = false;
 		rasterizationDesc.depthClamp = true;
-		
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 #ifdef HDR_ENABLE
@@ -242,7 +241,11 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::DepthAttachmentDesc depthAttachmentDesc = {};
 		depthAttachmentDesc.write = false;
+#ifdef RZ
 		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
+#else
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::LESS_EQUAL;
+#endif
 		depthAttachmentDesc.boundsTest = false;
 
 		nri::OutputMergerDesc outputMergerDesc = {};
@@ -322,8 +325,8 @@ void CommonMeshPass::BuildPipeline() {
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
 		rasterizationDesc.cullMode = nri::CullMode::BACK;
 		rasterizationDesc.frontCounterClockwise = false;
-		rasterizationDesc.depthClamp = true;
-		
+		// rasterizationDesc.depthClamp = true;
+		// rasterizationDesc.conservativeRaster = false;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 #ifdef HDR_ENABLE
@@ -339,7 +342,11 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::DepthAttachmentDesc depthAttachmentDesc = {};
 		depthAttachmentDesc.write = true;
-		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER;
+#ifdef RZ
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
+#else
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::LESS_EQUAL;
+#endif
 		depthAttachmentDesc.boundsTest = false;
 
 		nri::OutputMergerDesc outputMergerDesc = {};
@@ -535,6 +542,7 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
 			block.modelMat = m_rootMesh->results.at(index);
+			// block.modelMat = glm::scale(block.modelMat, glm::vec3(0.01f));
 			block.camPos = vec4(cameraPos, 1.0);
 			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
 			block.index[1] = block.index[2] = 0u;
@@ -577,8 +585,9 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
 			block.modelMat = m_rootMesh->results.at(index);
-			block.modelMat = camera.state.mWorldToView * block.modelMat;
-			block.modelMat = p * block.modelMat;
+			// block.modelMat = glm::scale(block.modelMat, glm::vec3(0.01f));
+			block.modelMat = camera.state.mWorldToView* block.modelMat;
+			block.modelMat = (p * block.modelMat);
 
 			block.camPos = vec4(cameraPos, 1.0);
 			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
@@ -623,7 +632,7 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
 			block.modelMat = m_rootMesh->results.at(index);
-			// block.modelMat = m_renderer->m_lightVP * block.modelMat;
+			// block.modelMat = glm::scale(block.modelMat, glm::vec3(0.01f));
 			block.camPos = vec4(cameraPos, 1.0);
 			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
 			block.index[1] = block.index[2] = block.index[3] = 1u;
