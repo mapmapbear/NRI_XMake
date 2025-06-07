@@ -14,6 +14,7 @@
 #include "render_pass/presentPass.h"
 #include "render_pass/skyRenderPass.h"
 #include "render_pass/ssaoCompPass.h"
+#include "render_pass/boxCullingPass.h"
 #include "spdlog/spdlog.h"
 #include "texture.h"
 #include <debugapi.h>
@@ -372,9 +373,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	meshPass = std::make_shared<InstanceMeshPass>(this);
 	simplePass = std::make_shared<CommonMeshPass>(this, m_Scene, mesh);
 	ssaoCompPass = std::make_shared<SSAOCompPass>(this);
-	// debugdrawPass->DrawBox(glm::vec3(1.0f), glm::vec3(1.0f), glm::vec4(1.0));
-	// debugdrawPass->DrawBox(glm::vec3(1.0f), glm::vec3(3.0f), glm::vec4(1.0));
 	debugdrawPass->GenerateBoxBuffer();
+	boxCullingPass = std::make_shared<BoxCullingPass>(this);
 }
 
 glm::mat4 Renderer::computeLightSpaceMatrix(float yaw, float pitch, float roll) {
@@ -511,8 +511,9 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 		gridPass->Render(info, camera);
 		meshPass->Render(info, camera);
 		simplePass->SetTestIndex(testIndex);
-		simplePass->Render(info, camera);
-		debugdrawPass->Render(info, camera);
+		//simplePass->Render(info, camera);
+		//debugdrawPass->Render(info, camera);
+		boxCullingPass->Render(info, camera);
 	}
 	GetNRI().CmdEndRendering(info.cmdBuffer);
 }

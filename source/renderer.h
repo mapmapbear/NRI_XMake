@@ -20,6 +20,7 @@ class InstanceMeshPass;
 class SSAOCompPass;
 class DebugDrawPass;
 class PresentPass;
+class BoxCullingPass;
 class CommonMeshPass;
 class Buffer;
 class Texture;
@@ -57,6 +58,7 @@ private:
 public:
 	int testIndex = 0;
 	int texViewOffset = 0;
+	bool testIndirectDrawState = false;
 	glm::vec4 testVec = glm::vec4{ 0.0 };
 	float testMaterial = 0.0;
 	float testRoughness = 0.0;
@@ -117,5 +119,6 @@ private:
 	std::shared_ptr<CommonMeshPass> simplePass = nullptr;
 	std::shared_ptr<SSAOCompPass> ssaoCompPass = nullptr;
 	std::shared_ptr<DebugDrawPass> debugdrawPass = nullptr;
+	std::shared_ptr<BoxCullingPass> boxCullingPass = nullptr;
 	std::shared_ptr<PresentPass> presentPass = nullptr;
 };

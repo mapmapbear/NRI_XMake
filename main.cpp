@@ -103,7 +103,7 @@ private:
 	bool m_Multiview = false;
 	float m_Transparency = 1.0f;
 	float m_Scale = 1.0f;
-	float m_Fov = 90.0f;
+	float m_Fov = 45.0f;
 	vec4 skyParams;
 
 	Renderer *testRenderPtr;
@@ -452,6 +452,7 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	{
 		ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
 		ImGui::Text("Frame: %u", frameIndex);
+		ImGui::Checkbox("Show Indirect", &testRenderPtr->testIndirectDrawState);
 		// ImGui::SliderFloat("Transparency", &m_Transparency, 0.0f, 1.0f);
 		// ImGui::SliderFloat("Scale", &m_Scale, 0.75f, 1.25f);
 		// ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f, "%.0f");
