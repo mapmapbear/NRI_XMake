@@ -3,6 +3,7 @@
 #include "NRIFramework.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/geometric.hpp"
+#include "glm/trigonometric.hpp"
 #include "spdlog/spdlog.h"
 
 // to get a perspective matrix with reversed z, simply swap the near and far plane
@@ -64,14 +65,6 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 	uint32_t projFlags = 0;
 	projFlags |= 0;
 
-	// Position
-	// const vec3 vRight = vec3(state.mWorldToView[0][0], state.mWorldToView[1][0],
-	// 		state.mWorldToView[2][0]);
-	// const vec3 vUp = vec3(state.mWorldToView[0][1], state.mWorldToView[1][1],
-	// 		state.mWorldToView[2][1]);
-	// const vec3 vForward = vec3(state.mWorldToView[0][2], state.mWorldToView[1][2],
-	// 		state.mWorldToView[2][2]);
-
 	vec3 delta = desc.dLocal * desc.timeScale;
 	delta.z *= desc.isPositiveZ ? 1.0f : -1.0f;
 
@@ -80,28 +73,10 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 	state.globalPosition += vec3(vForward * delta.z);
 	state.globalPosition += vec3(desc.dUser);
 
-	//   if (desc.limits.IsValid())
-	//     state.globalPosition = clamp(state.globalPosition,
-	//     vec3(desc.limits.vMin),
-	//                                  vec3(desc.limits.vMax));
-
-	if (desc.isCustomMatrixSet) {
-		const vec3 vCustomRight = vec3(
-				desc.customMatrix[3].x, desc.customMatrix[3].y, desc.customMatrix[3].z);
-		state.globalPosition = vec3(vCustomRight);
-	}
-
-	if (m_IsRelative) {
-		state.position = vec3(0.0);
-		statePrev.position = vec3(statePrev.globalPosition - state.globalPosition);
-		// statePrev.mWorldToView.PreTranslation(-statePrev.position);
-		statePrev.mViewToWorld = glm::translate(statePrev.mViewToWorld, -statePrev.position);
-	} else {
-		state.position = vec3(state.globalPosition);
-		statePrev.position = vec3(statePrev.globalPosition);
-		state.mWorldToView = glm::lookAtLH(state.globalPosition, state.globalPosition + glm::normalize(vForward), glm::vec3(0.0, 1.0, 0.0));
-	}
-
+	state.position = vec3(state.globalPosition);
+	statePrev.position = vec3(statePrev.globalPosition);
+	state.mWorldToView = glm::lookAtLH(state.globalPosition, state.globalPosition + vForward, vUp);
+	// SPDLOG_INFO("forward: {}, {}, {}", vForward.x, vForward.y, vForward.z);
 	// Rotation
 	float angularSpeed = 10.0f * clamp(desc.horizontalFov * 0.5f / 90.0f, 0.0f, 1.0f);
 
@@ -110,27 +85,34 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 
 	state.rotation.x = fmodf(state.rotation.x, 360.0f);
 	state.rotation.y = clamp(state.rotation.y, -90.0f, 90.0f);
-	if (desc.isCustomMatrixSet) {
-		state.mViewToWorld = desc.customMatrix;
-		state.rotation.z = 0.0f;
-	} else {
 #if 1
-		state.mViewToWorld = glm::rotate(glm::mat4(1.0), glm::radians(state.rotation.x), vUp);
-		state.mViewToWorld = glm::rotate(state.mViewToWorld, glm::radians(state.rotation.y), vRight);
 
-		glm::quat yawRotation = glm::angleAxis(glm::radians(-state.rotation.x), vUp);
-		vForward = glm::normalize(yawRotation * vForward);
-		vRight = glm::normalize(yawRotation * vRight);
+	// 计算yaw旋转（绕Y轴）
+	glm::quat yawRotation = glm::angleAxis(glm::radians(-state.rotation.x), vUp);
+	glm::vec3 rotatedForward = glm::normalize(yawRotation * vForward);
+	glm::vec3 rotatedRight = glm::normalize(yawRotation * vRight);
+	glm::vec3 rotatedUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-		glm::quat pitchRotation = glm::angleAxis(glm::radians(state.rotation.y), vRight);
-		vForward = glm::normalize(pitchRotation * vForward); // 再次旋转 forward 向量
-		vUp = glm::normalize(pitchRotation * vUp);
+	// 计算pitch旋转（绕X轴）
+	glm::quat pitchRotation = glm::angleAxis(glm::radians(state.rotation.y), rotatedRight);
+	rotatedForward = glm::normalize(pitchRotation * rotatedForward);
+	rotatedUp = glm::normalize(pitchRotation * rotatedUp);
 
-		vRight = glm::normalize(glm::cross(vForward, vUp));
-		vUp = glm::normalize(glm::cross(vRight, vForward));
+	// 确保正交性
+	rotatedRight = glm::normalize(glm::cross(rotatedForward, rotatedUp));
+	rotatedUp = glm::normalize(glm::cross(rotatedRight, rotatedForward));
+
+	vForward = rotatedForward;
+	vRight = rotatedRight;
+	vUp = rotatedUp;
+
+	// // 构建视图矩阵
+	// state.mWorldToView = glm::mat4(
+	// 		glm::vec4(rotatedRight, 0.0f),
+	// 		glm::vec4(rotatedUp, 0.0f),
+	// 		glm::vec4(rotatedForward, 0.0f),
+	// 		glm::vec4(state.position, 1.0f));
 #endif
-		state.mWorldToView = state.mWorldToView * state.mViewToWorld;
-	}
 
 	// Projection
 	if (desc.orthoRange > 0.0f) {

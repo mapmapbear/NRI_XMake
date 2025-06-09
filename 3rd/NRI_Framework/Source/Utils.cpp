@@ -26,10 +26,11 @@ struct Shader {
 	nri::StageBits stage;
 };
 
-constexpr std::array<Shader, 15> gShaderExts = { {
+constexpr std::array<Shader, 16> gShaderExts = { {
 		{ "", nri::StageBits::NONE },
 		{ "vs_main", nri::StageBits::VERTEX_SHADER },
 		{ "ps_main", nri::StageBits::FRAGMENT_SHADER },
+		{ ".vs_", nri::StageBits::VERTEX_SHADER },
 		{ ".vs.", nri::StageBits::VERTEX_SHADER },
 		{ ".tcs.", nri::StageBits::TESS_CONTROL_SHADER },
 		{ ".tes.", nri::StageBits::TESS_EVALUATION_SHADER },

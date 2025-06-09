@@ -23,16 +23,40 @@ void TraverseNodes(const aiScene *scene, const aiNode *node, const glm::mat4 &pa
 			nodeTransform.a2, nodeTransform.b2, nodeTransform.c2, nodeTransform.d2,
 			nodeTransform.a3, nodeTransform.b3, nodeTransform.c3, nodeTransform.d3,
 			nodeTransform.a4, nodeTransform.b4, nodeTransform.c4, nodeTransform.d4);
-	glm::mat4 globalTransform = parentTransform * glmNodeTransform; // 全局变换 = 父节点变换 * 当前节点局部变换
+	glm::mat4 globalTransform = parentTransform * glmNodeTransform;
 	for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
-		unsigned int meshID = node->mMeshes[i]; // 获取 meshID
-		results.insert({ meshID, globalTransform }); // 存储结果
+		unsigned int meshID = node->mMeshes[i];
+		results.insert({ meshID, globalTransform });
 	}
 
 	for (unsigned int i = 0; i < node->mNumChildren; ++i) {
 		TraverseNodes(scene, node->mChildren[i], globalTransform, results);
 	}
 }
+void TraverseNodesWithMesh(const aiScene *scene, const aiNode *node, const glm::mat4 &parentTransform, std::vector<std::pair<uint32_t, glm::mat4>> &meshTransforms) {
+    // 将aiMatrix4x4转换为glm::mat4
+    aiMatrix4x4 nodeTransform = node->mTransformation;
+    glm::mat4 glmNodeTransform = glm::mat4(
+        nodeTransform.a1, nodeTransform.b1, nodeTransform.c1, nodeTransform.d1,
+        nodeTransform.a2, nodeTransform.b2, nodeTransform.c2, nodeTransform.d2,
+        nodeTransform.a3, nodeTransform.b3, nodeTransform.c3, nodeTransform.d3,
+        nodeTransform.a4, nodeTransform.b4, nodeTransform.c4, nodeTransform.d4);
+
+    // 计算当前节点的全局变换
+    glm::mat4 globalTransform = parentTransform * glmNodeTransform;
+
+    // 如果当前节点包含mesh，存储mesh ID和对应的全局变换
+    for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
+        unsigned int meshID = node->mMeshes[i];
+        meshTransforms.push_back({meshID, globalTransform});
+    }
+
+    // 递归处理所有子节点
+    for (unsigned int i = 0; i < node->mNumChildren; ++i) {
+        TraverseNodesWithMesh(scene, node->mChildren[i], globalTransform, meshTransforms);
+    }
+}
+
 
 void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 	struct Vertex {
@@ -40,7 +64,6 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 		glm::vec2 TexCoord;
 		glm::vec3 Normal;
 	};
-
 	Assimp::Importer importer;
 	const aiScene *pScene = importer.ReadFile(path,
 			aiProcess_Triangulate | aiProcess_ConvertToLeftHanded | aiProcess_CalcTangentSpace | aiProcess_GenUVCoords | aiProcess_GenBoundingBoxes);
@@ -48,8 +71,11 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 	glm::mat4 identity = glm::mat4(1.0f);
 	TraverseNodes(pScene, pScene->mRootNode, identity, results);
 
-	for (uint32 i = 0; i < pScene->mNumMeshes; ++i) {
-		m_Meshes.push_back(LoadMesh(pScene->mMeshes[i], renderer));
+	std::vector<std::pair<uint32_t, glm::mat4>> meshTransforms;
+	TraverseNodesWithMesh(pScene, pScene->mRootNode, identity, meshTransforms);
+
+	for (uint32 i = 0; i < meshTransforms.size(); ++i) {
+		m_Meshes.push_back(LoadMesh(pScene->mMeshes[meshTransforms[i].first], renderer));
 	}
 
 	auto loadTexture = [renderer](std::string &basepath, aiMaterial *mat, aiTextureType type) {
@@ -96,6 +122,17 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 	m_Materials.resize(pScene->mNumMaterials);
 	for (uint32 i = 0; i < pScene->mNumMaterials; ++i) {
 		Material &m = m_Materials[i];
+		// taskflow.emplace([&m, &dirPath, &loadTexture, mat = pScene->mMaterials[i]]() {
+		// 	m.m_BaseTexture = loadTexture(dirPath, mat, aiTextureType_BASE_COLOR);
+		// });
+
+		// taskflow.emplace([&m, &dirPath, &loadTexture, mat = pScene->mMaterials[i]]() {
+		// 	m.m_NormalTexture = loadTexture(dirPath, mat, aiTextureType_NORMAL_CAMERA);
+		// });
+
+		// taskflow.emplace([&m, &dirPath, &loadTexture, mat = pScene->mMaterials[i]]() {
+		// 	m.m_MetallicTexture = loadTexture(dirPath, mat, aiTextureType_METALNESS);
+		// });
 		m.m_BaseTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_BASE_COLOR);
 		m.m_NormalTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_NORMAL_CAMERA);
 		m.m_MetallicTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_METALNESS);
@@ -118,6 +155,7 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 			m.IsTransparent = false;
 		}
 	}
+	executor.run(taskflow).wait();
 }
 
 std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
@@ -171,14 +209,14 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 
 	std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
 	{
-		pSubMesh->aabb = std::make_pair(glm::make_vec3((float*)&aabb.mMin.x), glm::make_vec3((float*)&aabb.mMax));
+		pSubMesh->aabb = std::make_pair(glm::make_vec3((float *)&aabb.mMin.x), glm::make_vec3((float *)&aabb.mMax));
 		// 计算center+extend格式的包围盒
-		glm::vec3 min = glm::make_vec3((float*)&aabb.mMin.x);
-		glm::vec3 max = glm::make_vec3((float*)&aabb.mMax);
+		glm::vec3 min = glm::make_vec3((float *)&aabb.mMin.x);
+		glm::vec3 max = glm::make_vec3((float *)&aabb.mMax);
 		glm::vec3 center = (min + max) * 0.5f;
-		glm::vec3 extent = (max - min) * 0.5f; 
+		glm::vec3 extent = (max - min) * 0.5f;
 		pSubMesh->aabb2 = std::make_pair(center, extent);
-		
+
 		pSubMesh->m_indexCount = (int)meshdata->indices.size();
 		pSubMesh->m_indexbuffer = std::make_unique<Buffer>();
 		pSubMesh->m_vertexbuffer = std::make_unique<Buffer>();

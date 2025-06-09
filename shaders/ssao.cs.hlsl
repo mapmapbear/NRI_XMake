@@ -41,6 +41,8 @@ void main(uint3 DTid : SV_DispatchThreadID) {
     return;
 
     float depth = depthTexture.SampleLevel(samplerState, uv, 0).x;
+    outTexture[xy] = depth;
+    return ;
     float Z = linearize_depth(1.0 - depth, g_PushConstants.zNear, g_PushConstants.zFar);
 
     float3 plane = rotationTexture.Sample(samplerState, float2(xy) / 4.0).xyz - 1.0;

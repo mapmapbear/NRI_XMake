@@ -72,6 +72,10 @@ public:
 	CameraState statePrev = {};
 	std::pair<int, int> viewport;
 
+	// vec3 vRight = vec3(0.0, 0.0, -1.0);
+	// vec3 vUp = vec3(0.0, 1.0, 0.0);
+	// vec3 vForward = vec3(1.0, 0.0, 0.0);
+
 	vec3 vRight = vec3(1.0, 0.0, 0.0);
 	vec3 vUp = vec3(0.0, 1.0, 0.0);
 	vec3 vForward = vec3(0.0, 0.0, 1.0);

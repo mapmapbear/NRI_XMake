@@ -1,34 +1,37 @@
 // © 2021 NVIDIA Corporation
 
 #include "NRICompatibility.hlsli"
-NRI_RESOURCE( cbuffer, CommonConstants, b, 0, 0 )
-{
+NRI_RESOURCE(cbuffer, CommonConstants, b, 0, 0) {
     float4x4 modelMat;
-	float4x4 viewMat;
-	float4x4 projectMat;
+    float4x4 viewMat;
+    float4x4 projectMat;
     float4x4 lightVP;
 };
 
-struct PushConstants
-{
+struct PushConstants {
     float4x4 modelMat;
     float4 camPos;
     float4 testVec;
     uint4 indexGroup;
 };
-NRI_ROOT_CONSTANTS( PushConstants, g_PushConstants, 1, 0 );
+NRI_ROOT_CONSTANTS(PushConstants, g_PushConstants, 1, 0);
 
-struct inputVS
-{
+struct inputVS {
+#ifdef DEPTH_ONLY
+    float3 in_position : POSITION0;
+#else
     float3 in_position : POSITION0;
     float2 in_texcoord : TEXCOORD0;
     float3 in_normal   : NORMAL;
     float3 in_tangent  : TANGENT;
     uint instanceID    : SV_InstanceID;
+#endif
 };
 
-struct outputVS 
-{
+struct outputVS {
+#ifdef DEPTH_ONLY
+    float4 position   : SV_Position;
+#else
     float4 position   : SV_Position;
     float2 texCoord   : TEXCOORD0;
     float3 positionWS : TEXCOORD1;
@@ -36,6 +39,7 @@ struct outputVS
     float4 positionLS1 : TEXCOORD3;
     float3 normalWS   : NORMAL;
     float3 tangentWS  : TANGENT;
+#endif
 };
 
 float4x4 inverse(float4x4 m) {
@@ -77,19 +81,22 @@ float4x4 inverse(float4x4 m) {
     return ret;
 }
 
-outputVS main(inputVS input)
-{
+outputVS main(inputVS input) {
     outputVS output;
     float4x4 testMat = g_PushConstants.modelMat;
     float4x4 vpMat = mul(viewMat, testMat);
-	float4x4 mvpMat = mul(projectMat, vpMat);
-	output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));
+    float4x4 mvpMat = mul(projectMat, vpMat);
+#ifdef DEPTH_ONLY
+    output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));
+#else
+    output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));
     output.texCoord = input.in_texcoord;
     float4x4 normalMatrix = transpose(inverse(g_PushConstants.modelMat));
     output.normalWS  = normalize(mul(normalMatrix, float4(input.in_normal, 0.0)).xyz);
     output.positionWS = mul(testMat, float4(input.in_position, 1.0)).xyz; 
     output.positionLS = mul(lightVP, float4(output.positionWS, 1.0));
-    output.positionLS1 = mul(lightVP, float4(0.0, 50.0, 0.0, 1.0));
+    output.positionLS1 = saturate(output.position.z / output.position.w);
     output.tangentWS = normalize(mul(normalMatrix, float4(input.in_tangent, 1.0))).xyz;
+#endif
     return output;
 }

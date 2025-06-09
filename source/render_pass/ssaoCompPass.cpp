@@ -22,8 +22,8 @@ void SSAOCompPass::AllocGPUMemory() {
 #else
 		textureDesc.format = nri::Format::RGBA8_UNORM;
 #endif
-		textureDesc.width = 900;
-		textureDesc.height = 600;
+		textureDesc.width = m_renderer->m_OutputResolution.first;
+		textureDesc.height = m_renderer->m_OutputResolution.second;
 		textureDesc.mipNum = 1;
 
 		nri::Texture2DViewDesc texture2DViewDesc = {};
@@ -91,8 +91,8 @@ void SSAOCompPass::AllocGPUMemory() {
 	}
 
 	nri::TextureSubresourceUploadDesc SSAOSubRes = {};
-	SSAOSubRes.rowPitch = 900 * 32;
-	SSAOSubRes.slicePitch = SSAOSubRes.rowPitch * 600;
+	SSAOSubRes.rowPitch = m_renderer->m_OutputResolution.first * 32;
+	SSAOSubRes.slicePitch = SSAOSubRes.rowPitch * m_renderer->m_OutputResolution.second;
 	std::vector<uint8_t> data1(SSAOSubRes.slicePitch, 0u);
 	SSAOSubRes.sliceNum = 1;
 	SSAOSubRes.slices = data1.data();
@@ -233,7 +233,7 @@ void SSAOCompPass::Render(struct RenderInfo &info, Camera &camera) {
 		};
 
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(PushConstants));
-		NRI.CmdDispatch(info.cmdBuffer, { 900 / 16 + 1, 600 / 16 + 1, 1 });
+		NRI.CmdDispatch(info.cmdBuffer, { m_renderer->m_OutputResolution.first / 16 + 1, m_renderer->m_OutputResolution.second / 16 + 1, 1 });
 	}
 
 	// {
@@ -262,7 +262,7 @@ void SSAOCompPass::Render(struct RenderInfo &info, Camera &camera) {
 			.isHorizontal = 0.5f,
 		};
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(BlurPushConstants));
-		NRI.CmdDispatch(info.cmdBuffer, { 900 / 16 + 1, 600 / 16 + 1, 1 });
+		NRI.CmdDispatch(info.cmdBuffer, { m_renderer->m_OutputResolution.first / 16 + 1, m_renderer->m_OutputResolution.second / 16 + 1, 1 });
 	}
 
 	// {
@@ -291,7 +291,7 @@ void SSAOCompPass::Render(struct RenderInfo &info, Camera &camera) {
 			.isHorizontal = 0.0f,
 		};
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(BlurPushConstants));
-		NRI.CmdDispatch(info.cmdBuffer, { 900 / 16 + 1, 600 / 16 + 1, 1 });
+		NRI.CmdDispatch(info.cmdBuffer, { m_renderer->m_OutputResolution.first / 16 + 1, m_renderer->m_OutputResolution.second / 16 + 1, 1 });
 	}
 
 	// {

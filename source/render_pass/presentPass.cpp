@@ -1,6 +1,7 @@
 #include "presentPass.h"
 #include "../renderer.h"
 #include <stddef.h>
+#include <cstdint>
 
 PresentPass::PresentPass(Renderer *renderer, nri::Texture *colorRT, nri::SwapChain *swapchain) :
 		CommonRenderPass(renderer) {
@@ -143,11 +144,11 @@ void PresentPass::Render(RenderInfo &info, Camera &camera) {
 		NRI.CmdSetDescriptorSet(commandBuffer, 0, *m_presentTextureDescriptorSet,
 				nullptr);
 		{
-			const nri::Viewport viewport = { 0.0f, 0.0f, (float)900.f,
-				(float)600.f, 0.0f, 1.0f };
+			const nri::Viewport viewport = { 0.0f, 0.0f, (float)m_renderer->m_OutputResolution.first,
+				(float)m_renderer->m_OutputResolution.second, 0.0f, 1.0f };
 			NRI.CmdSetViewports(commandBuffer, &viewport, 1);
 
-			nri::Rect scissor = { 0, 0, 900, 600 };
+			nri::Rect scissor = { 0, 0, (uint16_t)m_renderer->m_OutputResolution.first, (uint16_t)m_renderer->m_OutputResolution.second };
 			NRI.CmdSetScissors(commandBuffer, &scissor, 1);
 		}
 		NRI.CmdDraw(commandBuffer, { 3, 1, 0, 0 });

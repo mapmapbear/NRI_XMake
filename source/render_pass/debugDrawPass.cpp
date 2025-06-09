@@ -227,11 +227,11 @@ void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
 		{
-			const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
-				600.f, 0.0f, 1.0f };
+			const nri::Viewport viewport = { 0.0f, 0.0f, (float)m_renderer->m_OutputResolution.first,
+				(float)m_renderer->m_OutputResolution.second, 0.0f, 1.0f };
 			NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
 
-			nri::Rect scissor = { 0, 0, 900, 600 };
+			nri::Rect scissor = { 0, 0, (uint16_t)m_renderer->m_OutputResolution.first, (uint16_t)m_renderer->m_OutputResolution.second };
 			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
 		}
 
@@ -281,7 +281,7 @@ void DebugDrawPass::GenerateBoxBuffer() {
 
 	NRI_ABORT_ON_FAILURE(
 			NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_PipelineLayout, 0,
-					&m_DescriptorSet, 1, 0));
+				&m_DescriptorSet, 1, 0));
 	nri::Descriptor *view = m_boxDataBuffer->GetView();
 	nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs = {};
 	descriptorRangeUpdateDescs.descriptorNum = 1;

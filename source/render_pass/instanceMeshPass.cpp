@@ -616,11 +616,11 @@ void InstanceMeshPass::Render(RenderInfo &info, Camera &camera) {
 		NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_TextureDescriptorSet,
 				nullptr);
 		{
-			const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
-				600.f, 0.0f, 1.0f };
+			const nri::Viewport viewport = { 0.0f, 0.0f, (float)m_renderer->m_OutputResolution.first,
+				(float)m_renderer->m_OutputResolution.second, 0.0f, 1.0f };
 			NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
 
-			nri::Rect scissor = { 0, 0, 900, 600 };
+			nri::Rect scissor = { 0, 0, (uint16_t)m_renderer->m_OutputResolution.first, (uint16_t)m_renderer->m_OutputResolution.second };
 			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
 		}
 		uint32_t instanceCount = 1;

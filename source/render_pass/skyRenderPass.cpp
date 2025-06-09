@@ -200,18 +200,18 @@ void SkyRenderPass::Render(RenderInfo &info, Camera &camera) {
 	auto NRI = *m_NRI;
 	nri::CommandBuffer &commandBuffer = info.cmdBuffer;
 	{
-		helper::Annotation annotation(NRI, commandBuffer, "SkyBoxTEST");
+		helper::Annotation annotation(NRI, commandBuffer, "SkyBox Pass");
 		NRI.CmdSetPipelineLayout(commandBuffer, *m_SkyPipelineLayout);
 		NRI.CmdSetPipeline(commandBuffer, *m_SkyPipeline);
 		NRI.CmdSetRootConstants(commandBuffer, 0, &skyParams, sizeof(vec4));
 		NRI.CmdSetDescriptorSet(commandBuffer, 0, *m_SkyTextureDescriptorSet,
 				nullptr);
 		{
-			const nri::Viewport viewport = { 0.0f, 0.0f, (float)900.f,
-				(float)600.f, 0.0f, 1.0f };
+			const nri::Viewport viewport = { 0.0f, 0.0f, (float)m_renderer->m_OutputResolution.first,
+				(float)m_renderer->m_OutputResolution.second, 0.0f, 1.0f };
 			NRI.CmdSetViewports(commandBuffer, &viewport, 1);
 
-			nri::Rect scissor = { 0, 0, 900, 600 };
+			nri::Rect scissor = { 0, 0, (uint16_t)m_renderer->m_OutputResolution.first, (uint16_t)m_renderer->m_OutputResolution.second };
 			NRI.CmdSetScissors(commandBuffer, &scissor, 1);
 		}
 		NRI.CmdDraw(commandBuffer, { 3, 1, 0, 0 });

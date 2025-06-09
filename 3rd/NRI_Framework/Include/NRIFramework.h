@@ -146,6 +146,10 @@ public:
 		return m_WindowResolution;
 	}
 
+	inline void SetWindowResolution(const std::pair<uint32_t, uint32_t> &resolution) {
+		m_WindowResolution = resolution;
+	}
+
 	inline std::pair<uint32_t, uint32_t> GetOutputResolution() const {
 		return m_OutputResolution;
 	}
@@ -164,7 +168,7 @@ protected:
 	GLFWwindow *m_Window = nullptr;
 	Camera m_Camera;
 	Timer m_Timer;
-	std::pair<uint32_t, uint32_t> m_OutputResolution = { 900, 600 };
+	std::pair<uint32_t, uint32_t> m_OutputResolution = { 1920, 1080 };//{ 900, 600 };
 	std::pair<uint32_t, uint32_t> m_WindowResolution = {};
 	uint8_t m_VsyncInterval = 0;
 	uint32_t m_DpiMode = 0;

@@ -334,6 +334,26 @@ static void GLFW_CursorPosCallback(GLFWwindow *window, double x, double y) {
 	p->m_MouseDelta = curPos - p->m_MousePosPrev;
 }
 
+static void GLFW_WindowSizeCallback(GLFWwindow* window, int32_t width, int32_t height) {
+    SampleBase* p = (SampleBase*)glfwGetWindowUserPointer(window);
+    
+    static bool resizing = false;
+    static double lastResizeTime = 0.0;
+    const double currentTime = glfwGetTime();
+    const double resizeDelay = 0.1; // 100ms延迟
+    
+    if (width != p->GetOutputResolution().first || height != p->GetOutputResolution().second) {
+        resizing = true;
+        lastResizeTime = currentTime;
+    }
+    
+    if (resizing && (currentTime - lastResizeTime) > resizeDelay) {
+        resizing = false;
+        p->SetWindowResolution(std::make_pair(width, height));
+    }
+}
+
+
 static void GLFW_ScrollCallback(GLFWwindow *window, double xoffset,
 		double yoffset) {
 	SampleBase *p = (SampleBase *)glfwGetWindowUserPointer(window);
@@ -1006,7 +1026,7 @@ bool SampleBase::Create(int32_t argc, char **argv, const char *windowTitle) {
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_VISIBLE, 0);
 	glfwWindowHint(GLFW_DECORATED, decorated ? 1 : 0);
-	glfwWindowHint(GLFW_RESIZABLE, 0);
+	glfwWindowHint(GLFW_RESIZABLE, 1);
 
 	char windowName[256];
 	snprintf(windowName, sizeof(windowName), "%s [%s]", windowTitle,
@@ -1052,6 +1072,7 @@ bool SampleBase::Create(int32_t argc, char **argv, const char *windowTitle) {
 	glfwSetMouseButtonCallback(m_Window, GLFW_ButtonCallback);
 	glfwSetCursorPosCallback(m_Window, GLFW_CursorPosCallback);
 	glfwSetScrollCallback(m_Window, GLFW_ScrollCallback);
+	glfwSetWindowSizeCallback(m_Window, GLFW_WindowSizeCallback);
 	glfwShowWindow(m_Window);
 
 	return result;

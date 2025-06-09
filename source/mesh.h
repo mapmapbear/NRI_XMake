@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <taskflow/taskflow.hpp>
 
 class Buffer;
 class Texture;
@@ -56,4 +57,7 @@ public:
 
 	std::vector<std::unique_ptr<SubMesh>> m_Meshes;
 	std::vector<Material> m_Materials;
+
+	tf::Executor executor;
+	tf::Taskflow taskflow;
 };

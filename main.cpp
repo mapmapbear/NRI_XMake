@@ -178,7 +178,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	deviceCreationDesc.graphicsAPI = graphicsAPI;
 	deviceCreationDesc.queueFamilies = queueFamilies;
 	deviceCreationDesc.queueFamilyNum = helper::GetCountOf(queueFamilies);
-#ifdef DEBUG
+#ifndef DEBUG
 	deviceCreationDesc.enableGraphicsAPIValidation = true;
 	deviceCreationDesc.enableNRIValidation = true;
 #else
@@ -389,7 +389,12 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 
 	// User interface
 	bool initialized = InitUI(NRI, NRI, *m_Device, swapChainFormat);
-	m_Camera.Initialize(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.f, 1.0f, 1.0f));
+	m_Camera.Initialize(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) + glm::vec3(0.f, 1.0f, 1.0f));
+
+	// DepthTest BUG Angle
+	m_Camera.vForward = { 0.905398309, 0.0342303626, 0.423181087 };
+	m_Camera.vUp = { -0.0310102850, 0.999414027, -0.0144941369 };
+	m_Camera.vRight = { -0.423429251, 0.00000000, 0.905929208 };
 	return initialized;
 }
 
@@ -452,7 +457,9 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	{
 		ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
 		ImGui::Text("Frame: %u", frameIndex);
-		ImGui::Checkbox("Show Indirect", &testRenderPtr->testIndirectDrawState);
+		ImGui::Checkbox("Show Indirect", &testRenderPtr->m_config.IndirectDrawState);
+		ImGui::Checkbox("Show BoundingBox", &testRenderPtr->m_config.DebugBoxState);
+		ImGui::Checkbox("Show SSAO", &testRenderPtr->m_config.DebugSSAOState);
 		// ImGui::SliderFloat("Transparency", &m_Transparency, 0.0f, 1.0f);
 		// ImGui::SliderFloat("Scale", &m_Scale, 0.75f, 1.25f);
 		// ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f, "%.0f");
@@ -494,10 +501,10 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	NRI.CopyStreamerUpdateRequests(*m_Streamer);
 
 	CameraDesc desc = {};
-	desc.aspectRatio = float(GetWindowResolution().first) / float(GetWindowResolution().second);
+	desc.aspectRatio = float(testRenderPtr->m_OutputResolution.first) / float(testRenderPtr->m_OutputResolution.second);
 	desc.horizontalFov = glm::radians(m_Fov);
 	desc.nearZ = 1.0f;
-	desc.farZ = 2000.0f;
+	desc.farZ = 200.0f;
 #ifdef RZ
 	desc.isReversedZ = true;
 #else
@@ -509,6 +516,8 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 
 	float deltaTime = (float)glfwGetTime();
 	testRenderPtr->OnUpdate(deltaTime);
+
+	testRenderPtr->m_OutputResolution = GetWindowResolution();
 }
 
 void Sample::RenderFrame(uint32_t frameIndex) {

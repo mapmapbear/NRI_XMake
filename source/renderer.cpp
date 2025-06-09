@@ -7,6 +7,7 @@
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/matrix.hpp"
 #include "mesh.h"
+#include "render_pass/boxCullingPass.h"
 #include "render_pass/commonMeshPass.h"
 #include "render_pass/debugDrawPass.h"
 #include "render_pass/gridRenderPass.h"
@@ -14,7 +15,6 @@
 #include "render_pass/presentPass.h"
 #include "render_pass/skyRenderPass.h"
 #include "render_pass/ssaoCompPass.h"
-#include "render_pass/boxCullingPass.h"
 #include "spdlog/spdlog.h"
 #include "texture.h"
 #include <debugapi.h>
@@ -326,8 +326,12 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 			0));
 
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
-	std::string meshFile = utils::GetFullPath("USD_Sponza/sponza.usdc", utils::DataFolder::ROOT);
-	meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
+	std::string meshFile = {};
+	// meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("plane.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S1.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this);
 	debugdrawPass = std::make_shared<DebugDrawPass>(this);
 
@@ -340,8 +344,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		node.globalTransform = mesh->results.at(i);
 
 		auto submeshAABB = node.mesh->aabb;
-		SPDLOG_INFO("center:{},{},{}  extent:{},{},{}", node.mesh->aabb2.first.x, node.mesh->aabb2.first.y, node.mesh->aabb2.first.z, 
-		node.mesh->aabb2.second.x, node.mesh->aabb2.second.y, node.mesh->aabb2.second.z);
+		SPDLOG_INFO("center:{},{},{}  extent:{},{},{}", node.mesh->aabb2.first.x, node.mesh->aabb2.first.y, node.mesh->aabb2.first.z,
+				node.mesh->aabb2.second.x, node.mesh->aabb2.second.y, node.mesh->aabb2.second.z);
 		glm::vec3 transformedMin = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.first, 1.0f));
 		glm::vec3 transformedMax = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.second, 1.0f));
 
@@ -354,14 +358,13 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 			m_OpaqueRenderNodes.push_back(node);
 		}
 	}
-	for(int i = 0; i < m_OpaqueRenderNodes.size(); ++i)
-	{
-		RenderNode& node = m_OpaqueRenderNodes[i];
-		glm::mat4 transMat = mesh->results.at(i);
+	for (int i = 0; i < m_OpaqueRenderNodes.size(); ++i) {
+		RenderNode &node = m_OpaqueRenderNodes[i];
+		glm::mat4 transMat = node.globalTransform;
 		glm::vec4 center = glm::vec4(node.mesh->aabb2.first, 1.0);
 		center = transMat * center;
 		glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
-		extent = transMat * extent;
+		//extent = transMat * extent;
 		debugdrawPass->DrawBox(center, extent, glm::vec4(1.0));
 	}
 	m_SceneAABB = std::make_pair(sceneMin, sceneMax);
@@ -478,10 +481,11 @@ void Renderer::UploadSceneData() {
 
 void Renderer::InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain) {
 	// #ifdef SSAO_DEBUG
-	// presentPass = std::make_shared<PresentPass>(this, ssaoCompPass->m_SSAOTexture->GetTexture(), swawpchain);
-	// #else
-	presentPass = std::make_shared<PresentPass>(this, colorRT, swawpchain);
-	// #endif
+	if (m_config.DebugSSAOState) {
+		presentPass = std::make_shared<PresentPass>(this, ssaoCompPass->m_SSAOTexture->GetTexture(), swawpchain);
+	} else {
+		presentPass = std::make_shared<PresentPass>(this, colorRT, swawpchain);
+	}
 }
 
 void Renderer::OnRender(RenderInfo &info, Camera &camera) {
@@ -511,9 +515,11 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 		gridPass->Render(info, camera);
 		meshPass->Render(info, camera);
 		simplePass->SetTestIndex(testIndex);
-		//simplePass->Render(info, camera);
-		//debugdrawPass->Render(info, camera);
-		boxCullingPass->Render(info, camera);
+		simplePass->Render(info, camera);
+		if (m_config.DebugBoxState) {
+			debugdrawPass->Render(info, camera);
+		}
+		// boxCullingPass->Render(info, camera);
 	}
 	GetNRI().CmdEndRendering(info.cmdBuffer);
 }

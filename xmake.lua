@@ -10,7 +10,7 @@ if is_mode("debug") then
     set_optimize("none")
 end
 
-add_requires("glfw", "glm", "assimp", "spdlog")
+add_requires("glfw", "glm", "assimp", "spdlog", "taskflow")
 add_requires("meshoptimizer", {debug = true})
 
 target("Detex")
@@ -107,12 +107,12 @@ target("NRIFramework")
 
 target("DemoApp")
     set_kind("binary")
-    add_defines("HDR_ENABLE")
+    add_defines("HDR_ENABLE", "RZZ")
     add_deps("NRIFramework", "Detex", "NRI", "ImGUI")
     add_includedirs("3rd/NRI_Framework/Include", {public = true})
     add_includedirs("3rd/Detex", {public = true})
     add_includedirs("source/", {public = true})
-    add_packages("glfw", "glm", "assimp", "spdlog", "meshoptimizer")
+    add_packages("glfw", "glm", "assimp", "spdlog", "meshoptimizer", "taskflow")
     add_files("main.cpp", "source/**.cpp")
     set_warnings("all")
     
@@ -129,7 +129,7 @@ target("ShaderCompiler")
         os.mkdir(shader_output_path)
         local args = {
             "--useAPI", "--binary", "--flatten", "--stripReflection", "--WX", "--PDB",
-            "--sRegShift", "100", "--tRegShift", "200", "--bRegShift", "300", "--uRegShift", "400",
+            "--sRegShift", "100", "--tRegShift", "200", "--bRegShift", "300", "--uRegShift", "400", "-X", " -Gis",
             "--sourceDir", path.join(os.scriptdir(), "Shaders"),
             "-c", path.join(os.scriptdir(), "Shaders.cfg"),
             "-o", shader_output_path,

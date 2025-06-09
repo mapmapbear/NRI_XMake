@@ -38,8 +38,8 @@ struct BoxMesh {
 outputVS vs_main(inputVS input) {
     outputVS output;
     StructuredBuffer<BoxMesh> BoxMats = ResourceDescriptorHeap[1011];
-    float4x4 testMat = mul(g_PushConstants.modelMat1, BoxMats[input.instanceID].worldMat);
-    output.position = mul(testMat, float4(input.in_position.xyz, 1.0));
+    float4x4 worldMat = mul(g_PushConstants.modelMat1, BoxMats[input.instanceID].worldMat);
+    output.position = mul(worldMat, float4(input.in_position.xyz, 1.0));
     output.color = mul(BoxMats[input.instanceID].worldMat, input.in_color);
     return output;
 }

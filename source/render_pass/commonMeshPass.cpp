@@ -4,6 +4,7 @@
 #include "assimp/scene.h"
 #include "buffer.h"
 #include "glm/ext/matrix_clip_space.hpp"
+#include "glm/ext/matrix_projection.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/matrix.hpp"
 #include "mesh.h"
@@ -223,8 +224,8 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::RasterizationDesc rasterizationDesc = {};
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
-		rasterizationDesc.cullMode = nri::CullMode::BACK;
-		rasterizationDesc.frontCounterClockwise = false;
+		rasterizationDesc.cullMode = nri::CullMode::NONE;
+		// rasterizationDesc.frontCounterClockwise = true;
 		rasterizationDesc.depthClamp = true;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
@@ -323,10 +324,9 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::RasterizationDesc rasterizationDesc = {};
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
-		rasterizationDesc.cullMode = nri::CullMode::BACK;
-		rasterizationDesc.frontCounterClockwise = false;
-		rasterizationDesc.depthClamp = true;
-		
+		rasterizationDesc.cullMode = nri::CullMode::NONE;
+		// rasterizationDesc.frontCounterClockwise = false;
+		// rasterizationDesc.depthClamp = true;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 #ifdef HDR_ENABLE
@@ -357,7 +357,7 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::ShaderDesc shaderStages[] = {
 			utils::LoadShader(deviceDesc.graphicsAPI,
-					"depthOnly", shaderCodeStorage, "vs_main"),
+					"simpleModelMesh.vs_7AE4B116", shaderCodeStorage),
 			utils::LoadShader(deviceDesc.graphicsAPI, "depthOnly",
 					shaderCodeStorage, "ps_main")
 		};
@@ -423,7 +423,7 @@ void CommonMeshPass::BuildPipeline() {
 		nri::RasterizationDesc rasterizationDesc = {};
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
 		rasterizationDesc.cullMode = nri::CullMode::BACK;
-		rasterizationDesc.frontCounterClockwise = false;
+		// rasterizationDesc.frontCounterClockwise = false;
 		rasterizationDesc.depthClamp = true;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
@@ -512,18 +512,6 @@ void CommonMeshPass::BuildPipeline() {
 void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 	auto NRI = *m_NRI;
 	const glm::vec3 cameraPos = camera.state.globalPosition;
-
-	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
-			*m_ConstantBuffer, 0,
-			sizeof(ConstantBufferLayout));
-	if (commonConstants) {
-		commonConstants->modelMat = glm::mat4(1.0);
-		commonConstants->viewMat = camera.state.mWorldToView;
-		commonConstants->projectMat = camera.state.mViewToClip;
-		commonConstants->lightVP = m_renderer->m_lightVP;
-		NRI.UnmapBuffer(*m_ConstantBuffer);
-	}
-
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "GLTF Mesh Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
@@ -531,17 +519,17 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
 				*m_ConstantBufferDescriptorSet, nullptr);
 		{
-			const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
-				600.f, 0.0f, 1.0f };
+			const nri::Viewport viewport = { 0.0f, 0.0f, (float)m_renderer->m_OutputResolution.first,
+				(float)m_renderer->m_OutputResolution.second, 0.0f, 1.0f };
 			NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
 
-			nri::Rect scissor = { 0, 0, 900, 600 };
+			nri::Rect scissor = { 0, 0, (uint16_t)m_renderer->m_OutputResolution.first, (uint16_t)m_renderer->m_OutputResolution.second };
 			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
 		}
 		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
-			block.modelMat = m_rootMesh->results.at(index);
+			block.modelMat = node.globalTransform; //m_rootMesh->results.at(index);
 			// block.modelMat = glm::scale(block.modelMat, glm::vec3(0.01f));
 			block.camPos = vec4(cameraPos, 1.0);
 			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
@@ -567,6 +555,17 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 	const glm::mat4 p = camera.statePrev.mViewToClip;
 	const glm::vec3 cameraPos = camera.statePrev.position;
 
+	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
+			*m_ConstantBuffer, 0,
+			sizeof(ConstantBufferLayout));
+	if (commonConstants) {
+		commonConstants->modelMat = glm::mat4(1.0);
+		commonConstants->viewMat = camera.state.mWorldToView;
+		commonConstants->projectMat = camera.state.mViewToClip;
+		commonConstants->lightVP = m_renderer->m_lightVP;
+		NRI.UnmapBuffer(*m_ConstantBuffer);
+	}
+
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Depth PreZ Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_DepthPipelineLayout);
@@ -574,24 +573,24 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
 				*m_ConstantBufferDescriptorSet, nullptr);
 		{
-			const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
-				600.f, 0.0f, 1.0f };
+			const nri::Viewport viewport = { 0.0f, 0.0f, (float)m_renderer->m_OutputResolution.first,
+				(float)m_renderer->m_OutputResolution.second, 0.0f, 1.0f };
 			NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
 
-			nri::Rect scissor = { 0, 0, 900, 600 };
+			nri::Rect scissor = { 0, 0, (uint16_t)m_renderer->m_OutputResolution.first, (uint16_t)m_renderer->m_OutputResolution.second };
 			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
 		}
 		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
-			block.modelMat = m_rootMesh->results.at(index);
+			block.modelMat = node.globalTransform;
 			// block.modelMat = glm::scale(block.modelMat, glm::vec3(0.01f));
-			block.modelMat = camera.state.mWorldToView * block.modelMat;
-			block.modelMat = (p * block.modelMat);
-
+			// block.modelMat = camera.state.mWorldToView * block.modelMat;
+			// block.modelMat = (p * block.modelMat);
 			block.camPos = vec4(cameraPos, 1.0);
 			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
 			block.index[1] = block.index[2] = block.index[3] = 0u;
+			block.testVec.y = 0.0;
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
 			nri::Buffer *geoBuffer = node.mesh->m_indexbuffer->GetBuffer();
 			nri::VertexBufferDesc vertexBufferDesc = {};
@@ -631,7 +630,7 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
-			block.modelMat = m_rootMesh->results.at(index);
+			block.modelMat = node.globalTransform;
 			// block.modelMat = glm::scale(block.modelMat, glm::vec3(0.01f));
 			block.camPos = vec4(cameraPos, 1.0);
 			block.index[0] = node.material->m_BaseTexture->GetViewIndex();

@@ -14,6 +14,13 @@ struct RenderInfo {
 	nri::CommandBuffer &cmdBuffer;
 };
 
+struct RenderSetting 
+{
+	bool IndirectDrawState = false;
+	bool DebugBoxState = false;
+	bool DebugSSAOState = false;
+};
+
 class SkyRenderPass;
 class GridRenderPass;
 class InstanceMeshPass;
@@ -58,8 +65,8 @@ private:
 public:
 	int testIndex = 0;
 	int texViewOffset = 0;
-	bool testIndirectDrawState = false;
 	glm::vec4 testVec = glm::vec4{ 0.0 };
+	RenderSetting m_config;
 	float testMaterial = 0.0;
 	float testRoughness = 0.0;
 	void SetTestIndex(int index) { testIndex = index; }
@@ -79,6 +86,8 @@ private:
 public:
 	utils::Scene m_Scene;
 	std::pair<glm::vec3, glm::vec3> m_SceneAABB;
+	std::pair<uint32_t, uint32_t> m_OutputResolution = { 1920, 1080 };
+
 	glm::mat4 m_lightVP = glm::mat4(1.0);
 	glm::vec3 m_lightPos = glm::vec3(0.2, 100.0, 0.2);
 	struct RenderNode {

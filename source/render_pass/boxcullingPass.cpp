@@ -4,7 +4,7 @@
 #include <memory>
 #include <random>
 
-#define INSTANCE_COUNT 5000
+#define INSTANCE_COUNT 50000
 
 BoxCullingPass::BoxCullingPass(Renderer *renderer) :
 		CommonRenderPass(renderer) {
@@ -27,7 +27,7 @@ void BoxCullingPass::BindMemory() {
 
 	std::vector<float3> instancePositions(INSTANCE_COUNT);
 	std::mt19937 gen(std::random_device{}());
-	std::uniform_real_distribution<> distrib(0, 200);
+	std::uniform_real_distribution<> distrib(-200, 200);
 	for (uint32_t i = 0; i < INSTANCE_COUNT; ++i) {
 		instancePositions[i] = { (float)distrib(gen), (float)distrib(gen), (float)distrib(gen) };
 	}
@@ -231,12 +231,12 @@ void BoxCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
 		{
-			const nri::Viewport viewport = { 0.0f, 0.0f, 900.f,
-				600.f, 0.0f, 1.0f };
+			const nri::Viewport viewport = { 0.0f, 0.0f, (float)m_renderer->m_OutputResolution.first,
+				(float)m_renderer->m_OutputResolution.second, 0.0f, 1.0f };
 			NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
 
-			nri::Rect scissor = { 0, 0, 900, 600 };
-			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
+			nri::Rect scissor = { 0, 0, (uint16_t)m_renderer->m_OutputResolution.first, (uint16_t)m_renderer->m_OutputResolution.second };
+			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);	
 		}
 		glm::mat4 vpMat = camera.state.mViewToClip * camera.state.mWorldToView;
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &vpMat, sizeof(glm::mat4));
@@ -246,7 +246,7 @@ void BoxCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 		vertexBufferDesc.offset = 0;
 		vertexBufferDesc.stride = sizeof(glm::vec3);
 		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
-		if (m_renderer->testIndirectDrawState) {
+		if (m_renderer->m_config.IndirectDrawState) {
 			NRI.CmdDrawIndirect(info.cmdBuffer, *m_indirectBuffer->GetBuffer(), 0, 1, sizeof(nri::DrawBaseDesc), nullptr, 0);
 		} else {
 			NRI.CmdDraw(info.cmdBuffer, { 3, INSTANCE_COUNT, 0, 0 });
