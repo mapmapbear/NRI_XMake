@@ -3,12 +3,15 @@
 #include "assimp/GltfMaterial.h"
 #include "assimp/material.h"
 #include "assimp/postprocess.h"
+#include "assimp/scene.h"
 #include "assimp/types.h"
 #include "buffer.h"
 #include "glm/gtc/type_ptr.hpp"
 #include "renderer.h"
 #include "texture.h"
 #include <meshoptimizer.h>
+#include <stdint.h>
+#include <string.h>
 #include <assimp/Importer.hpp>
 #include <map>
 #include <memory>
@@ -34,29 +37,28 @@ void TraverseNodes(const aiScene *scene, const aiNode *node, const glm::mat4 &pa
 	}
 }
 void TraverseNodesWithMesh(const aiScene *scene, const aiNode *node, const glm::mat4 &parentTransform, std::vector<std::pair<uint32_t, glm::mat4>> &meshTransforms) {
-    // 将aiMatrix4x4转换为glm::mat4
-    aiMatrix4x4 nodeTransform = node->mTransformation;
-    glm::mat4 glmNodeTransform = glm::mat4(
-        nodeTransform.a1, nodeTransform.b1, nodeTransform.c1, nodeTransform.d1,
-        nodeTransform.a2, nodeTransform.b2, nodeTransform.c2, nodeTransform.d2,
-        nodeTransform.a3, nodeTransform.b3, nodeTransform.c3, nodeTransform.d3,
-        nodeTransform.a4, nodeTransform.b4, nodeTransform.c4, nodeTransform.d4);
+	// 将aiMatrix4x4转换为glm::mat4
+	aiMatrix4x4 nodeTransform = node->mTransformation;
+	glm::mat4 glmNodeTransform = glm::mat4(
+			nodeTransform.a1, nodeTransform.b1, nodeTransform.c1, nodeTransform.d1,
+			nodeTransform.a2, nodeTransform.b2, nodeTransform.c2, nodeTransform.d2,
+			nodeTransform.a3, nodeTransform.b3, nodeTransform.c3, nodeTransform.d3,
+			nodeTransform.a4, nodeTransform.b4, nodeTransform.c4, nodeTransform.d4);
 
-    // 计算当前节点的全局变换
-    glm::mat4 globalTransform = parentTransform * glmNodeTransform;
+	// 计算当前节点的全局变换
+	glm::mat4 globalTransform = parentTransform * glmNodeTransform;
 
-    // 如果当前节点包含mesh，存储mesh ID和对应的全局变换
-    for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
-        unsigned int meshID = node->mMeshes[i];
-        meshTransforms.push_back({meshID, globalTransform});
-    }
+	// 如果当前节点包含mesh，存储mesh ID和对应的全局变换
+	for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
+		unsigned int meshID = node->mMeshes[i];
+		meshTransforms.push_back({ meshID, globalTransform });
+	}
 
-    // 递归处理所有子节点
-    for (unsigned int i = 0; i < node->mNumChildren; ++i) {
-        TraverseNodesWithMesh(scene, node->mChildren[i], globalTransform, meshTransforms);
-    }
+	// 递归处理所有子节点
+	for (unsigned int i = 0; i < node->mNumChildren; ++i) {
+		TraverseNodesWithMesh(scene, node->mChildren[i], globalTransform, meshTransforms);
+	}
 }
-
 
 void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 	struct Vertex {
@@ -77,6 +79,8 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 	for (uint32 i = 0; i < meshTransforms.size(); ++i) {
 		m_Meshes.push_back(LoadMesh(pScene->mMeshes[meshTransforms[i].first], renderer));
 	}
+
+	m_GPUMesh = LoadGPUMesh(pScene, (uint32_t)meshTransforms.size(), renderer);
 
 	auto loadTexture = [renderer](std::string &basepath, aiMaterial *mat, aiTextureType type) {
 		std::shared_ptr<Texture> tex = std::make_shared<Texture>();
@@ -239,4 +243,137 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 	pSubMesh->m_materialID = pMesh->mMaterialIndex;
 
 	return pSubMesh;
+}
+
+std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMeshes, Renderer *renderer) {
+	std::unique_ptr<SubMesh> pGPUMesh = std::make_unique<SubMesh>();
+	std::vector<std::shared_ptr<utils::MeshData>> meshDatas;
+
+	uint64_t previousIndexAndVertexSize = 0;
+
+	uint64_t indicesDataTotalAlignedSize = 0u;
+	uint64_t vertexDataTotalSize = 0u;
+
+	uint32_t preBaseIndex = 0;
+	uint32_t preBaseVertex = 0;
+
+	uint32_t preIndexOffset = 0;
+	uint32_t preVertexOffset = 0;
+
+	for (uint32_t i = 0; i < numMeshes; ++i) {
+		aiMesh *pMesh = pScene->mMeshes[i];
+		std::shared_ptr<utils::MeshData> meshdata = std::make_shared<utils::MeshData>();
+		meshdata->m_vertexesData.resize(pMesh->mNumVertices);
+		meshdata->vertices.resize(pMesh->mNumVertices);
+		meshdata->indices.resize(pMesh->mNumFaces * 3);
+
+		// Indices Data
+		{
+			for (uint32 j = 0; j < pMesh->mNumFaces; ++j) {
+				const aiFace &face = pMesh->mFaces[j];
+				for (uint32 k = 0; k < 3; ++k) {
+					assert(face.mNumIndices == 3);
+					meshdata->indices[j * 3 + k] = face.mIndices[k];
+				}
+			}
+		}
+
+		// Vertices Data
+		{
+			for (uint32 j = 0; j < pMesh->mNumVertices; ++j) {
+				utils::Vertex &vertex = meshdata->m_vertexesData[j];
+				vertex.position = *reinterpret_cast<glm::vec3 *>(&pMesh->mVertices[j]);
+				meshdata->vertices[j] = *reinterpret_cast<glm::vec3 *>(&pMesh->mVertices[j]);
+				if (pMesh->HasTextureCoords(0)) {
+					vertex.uv = *reinterpret_cast<glm::vec2 *>(&pMesh->mTextureCoords[0][j]);
+				}
+				vertex.normal = *reinterpret_cast<glm::vec3 *>(&pMesh->mNormals[j]);
+				if (pMesh->HasTangentsAndBitangents()) {
+					vertex.tangent = *reinterpret_cast<glm::vec3 *>(&pMesh->mTangents[j]);
+					vertex.bitangent = *reinterpret_cast<glm::vec3 *>(&pMesh->mBitangents[j]);
+				}
+			}
+		}
+
+		uint32_t indicesSize = static_cast<uint32_t>(helper::GetByteSizeOf(meshdata->indices));
+		uint32_t indicesAlignSize = static_cast<uint32_t>(helper::Align(indicesSize, 32));
+		uint32_t vertexSize = static_cast<uint32_t>(helper::GetByteSizeOf(meshdata->m_vertexesData));
+
+		uint64_t indexOffset = preIndexOffset;
+		uint64_t vertexOffset = preVertexOffset;
+
+		DrawArgs drawArgs = {};
+		drawArgs.offset.indexNum = (uint32_t)meshdata->indices.size();
+		drawArgs.offset.vertexNum = (uint32_t)meshdata->m_vertexesData.size();
+		drawArgs.offset.indexOffset = (uint32_t)indexOffset;
+		drawArgs.offset.vertexOffset = (uint32_t)vertexOffset;
+
+#if 1
+		drawArgs.base.indexNum = (uint32_t)meshdata->indices.size();
+		drawArgs.base.vertexNum = (uint32_t)meshdata->m_vertexesData.size();
+
+		drawArgs.base.baseIndex = preBaseIndex;
+		drawArgs.base.baseVertex = preBaseVertex;
+
+		preBaseIndex += (uint32_t)meshdata->indices.size();
+		preBaseVertex += (uint32_t)meshdata->m_vertexesData.size();
+#endif
+		m_drawArgs.push_back(drawArgs);
+
+		indicesDataTotalAlignedSize += indicesSize;
+		vertexDataTotalSize += vertexSize;
+
+		preIndexOffset += indicesSize;
+		preVertexOffset += vertexSize;
+
+		meshDatas.push_back(meshdata);
+	}
+
+	// indicesDataTotalAlignedSize = helper::Align(indicesDataTotalAlignedSize, 32);
+
+	nri::BufferDesc vertexBufferDesc = {};
+	vertexBufferDesc.size = vertexDataTotalSize;
+	vertexBufferDesc.usage = nri::BufferUsageBits::VERTEX_BUFFER;
+	nri::BufferViewDesc viewDesc{};
+
+	pGPUMesh->m_vertexbuffer = std::make_unique<Buffer>();
+	pGPUMesh->m_vertexbuffer->Create(renderer, vertexBufferDesc, viewDesc);
+	renderer->GetNRI().SetDebugName(pGPUMesh->m_vertexbuffer->GetBuffer(), "GPUMesh VB");
+
+	nri::BufferDesc indexBufferDesc = {};
+	indexBufferDesc.size = indicesDataTotalAlignedSize;
+	indexBufferDesc.usage = nri::BufferUsageBits::INDEX_BUFFER;
+
+	pGPUMesh->m_indexbuffer = std::make_unique<Buffer>();
+	pGPUMesh->m_indexbuffer->Create(renderer, indexBufferDesc, viewDesc);
+	renderer->GetNRI().SetDebugName(pGPUMesh->m_indexbuffer->GetBuffer(), "GPUMesh IB");
+
+	std::vector<uint8_t> geometryData(indicesDataTotalAlignedSize);
+	for (uint32_t i = 0; i < meshDatas.size(); ++i) {
+		memcpy(geometryData.data() + m_drawArgs[i].offset.indexOffset, meshDatas[i]->indices.data(), helper::GetByteSizeOf(meshDatas[i]->indices));
+	}
+
+	std::vector<uint8_t> vertexData(vertexDataTotalSize);
+	for (uint32_t i = 0; i < meshDatas.size(); ++i) {
+		memcpy(vertexData.data() + m_drawArgs[i].offset.vertexOffset, meshDatas[i]->m_vertexesData.data(), helper::GetByteSizeOf(meshDatas[i]->m_vertexesData));
+	}
+
+	nri::BufferUploadDesc indexBufferUploadDesc = {};
+	indexBufferUploadDesc.dataSize = geometryData.size();
+	indexBufferUploadDesc.data = geometryData.data();
+	indexBufferUploadDesc.buffer = pGPUMesh->m_indexbuffer->GetBuffer();
+	indexBufferUploadDesc.after = { nri::AccessBits::INDEX_BUFFER };
+
+	nri::BufferUploadDesc vertexBufferUploadDesc = {};
+	vertexBufferUploadDesc.dataSize = vertexData.size();
+	vertexBufferUploadDesc.data = vertexData.data();
+	vertexBufferUploadDesc.buffer = pGPUMesh->m_vertexbuffer->GetBuffer();
+	vertexBufferUploadDesc.after = { nri::AccessBits::VERTEX_BUFFER };
+
+	std::vector<nri::BufferUploadDesc> uploadDescs = { vertexBufferUploadDesc, indexBufferUploadDesc };
+
+	NRI_ABORT_ON_FAILURE(renderer->GetNRI().UploadData(renderer->GetRenderQueue(), nullptr, 0,
+			uploadDescs.data(), (uint32_t)uploadDescs.size()));
+
+	return pGPUMesh;
 }

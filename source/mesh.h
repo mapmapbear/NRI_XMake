@@ -10,6 +10,7 @@ class Buffer;
 class Texture;
 class Renderer;
 struct aiMesh;
+struct aiScene;
 class SubMesh {
 	friend class Mesh;
 
@@ -51,12 +52,36 @@ public:
 	Mesh(const Mesh &) = default;
 	std::map<uint32_t, glm::mat4> results = {};
 
+	struct DrawArgsOffset {
+		uint32_t indexNum;
+		uint32_t vertexNum;
+		uint32_t indexOffset;
+		uint32_t vertexOffset;
+	};
+
+	struct DrawArgsBase {
+		uint32_t indexNum;
+		uint32_t vertexNum;
+		uint32_t baseIndex;
+		uint32_t baseVertex;
+	};
+
+	union DrawArgs {
+		DrawArgsOffset offset;
+		DrawArgsBase base;
+	};
+
+
 	// private:
 public:
 	std::unique_ptr<SubMesh> LoadMesh(aiMesh *pMesh, Renderer *renderer);
+	std::unique_ptr<SubMesh> LoadGPUMesh(const aiScene* scene, uint32_t numMeshes, Renderer* renderer);
 
 	std::vector<std::unique_ptr<SubMesh>> m_Meshes;
+	std::unique_ptr<SubMesh> m_GPUMesh;
 	std::vector<Material> m_Materials;
+	std::vector<DrawArgs> m_drawArgs;
+
 
 	tf::Executor executor;
 	tf::Taskflow taskflow;

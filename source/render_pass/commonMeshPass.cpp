@@ -536,6 +536,7 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			block.index[1] = block.index[2] = 0u;
 			block.index[3] = m_brdfTexIndex;
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+#if 0 //NORMAL_BUFFER_ENABLE
 			nri::Buffer *geoBuffer = node.mesh->m_indexbuffer->GetBuffer();
 			nri::VertexBufferDesc vertexBufferDesc = {};
 			vertexBufferDesc.buffer = geoBuffer;
@@ -545,7 +546,30 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			NRI.CmdSetIndexBuffer(info.cmdBuffer, *geoBuffer, node.mesh->indexOffset,
 					nri::IndexType::UINT32);
 			uint32_t instanceCount = 1;
-			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.mesh->m_indexCount), instanceCount, 0, 0, 0 });
+			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, 0, 0, 0 });
+#else
+			nri::Buffer *geoBuffer = node.meshGPU->m_vertexbuffer->GetBuffer();
+			nri::VertexBufferDesc vertexBufferDesc = {};
+			vertexBufferDesc.buffer = geoBuffer;
+			vertexBufferDesc.stride = sizeof(utils::Vertex);
+#ifdef BUFFER_OFFSET_ENABLE
+			vertexBufferDesc.offset = node.drawArgs.baseVertex;
+			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+			nri::Buffer *indexGeoBuffer = node.meshGPU->m_indexbuffer->GetBuffer();
+			NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, node.drawArgs.baseIndex,
+					nri::IndexType::UINT32);
+			uint32_t instanceCount = 1;
+			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, 0, 0, 0 });
+#else
+			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+			nri::Buffer *indexGeoBuffer = node.meshGPU->m_indexbuffer->GetBuffer();
+			NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, 0,
+					nri::IndexType::UINT32);
+			uint32_t instanceCount = 1;
+			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, 0 });
+#endif // BUFFER_OFFSET_ENABLE
+
+#endif // NORMAL_BUFFER_ENABLE
 		}
 	}
 }

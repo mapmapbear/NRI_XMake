@@ -90,8 +90,12 @@ public:
 
 	glm::mat4 m_lightVP = glm::mat4(1.0);
 	glm::vec3 m_lightPos = glm::vec3(0.2, 100.0, 0.2);
+
 	struct RenderNode {
 		const SubMesh *mesh;
+		const SubMesh *meshGPU;
+		// std::pair<uint64_t, uint64_t> meshOffsets;
+		nri::DrawIndexedDesc drawArgs;
 		const Material *material;
 		glm::mat4 globalTransform;
 	};
