@@ -327,9 +327,9 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = {};
-	meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("plane.gltf", utils::DataFolder::ROOT);
-	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S1.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this);
@@ -341,7 +341,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		RenderNode node;
 		node.mesh = mesh->GetMesh(i);
 		node.meshGPU = mesh->m_GPUMesh.get();
-#if 1
+#if 0
 		node.drawArgs = {};
 		node.drawArgs.indexNum = mesh->m_drawArgs[i].offset.indexNum;
 		node.drawArgs.baseIndex = mesh->m_drawArgs[i].offset.indexOffset;
@@ -349,11 +349,10 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		node.drawArgs.baseInstance = 0;
 #else
 		node.drawArgs = {};
-		node.drawArgs.indexNum = mesh->m_drawArgs[i].indexNum;
-		if (i != 0) {
-			node.drawArgs.baseIndex = mesh->m_drawArgs[i - 1].base.indexNum;
-			node.drawArgs.baseVertex = mesh->m_drawArgs[i - 1].base.vertexNum;
-		}
+		node.drawArgs.indexNum = mesh->m_drawArgs[i].base.indexNum;
+
+		node.drawArgs.baseIndex = mesh->m_drawArgs[i].base.baseIndex;
+		node.drawArgs.baseVertex = mesh->m_drawArgs[i].base.baseVertex;
 
 #endif
 		node.material = &mesh->GetMaterial(node.mesh->GetMaterialID());

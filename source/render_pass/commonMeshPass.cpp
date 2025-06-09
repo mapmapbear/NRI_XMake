@@ -56,6 +56,45 @@ void CommonMeshPass::AllocGPUMemory() {
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_ConstantBuffer));
 	}
+
+	{
+		m_indirectBuffer = std::make_shared<Buffer>();
+
+		nri::BufferDesc bufferDesc = {};
+		bufferDesc.size = sizeof(nri::DrawIndexedDesc) * m_renderer->m_OpaqueRenderNodes.size();
+		bufferDesc.usage = nri::BufferUsageBits::ARGUMENT_BUFFER | nri::BufferUsageBits::SHADER_RESOURCE;
+
+		nri::BufferViewDesc viewDesc = {};
+		viewDesc.viewType = nri::BufferViewType::SHADER_RESOURCE;
+		viewDesc.format = nri::Format::R32_UINT;
+
+		m_indirectBuffer->Create(m_renderer, bufferDesc, viewDesc);
+		NRI.SetDebugName(m_indirectBuffer->GetBuffer(), "indirectBuffer_GPUScene");
+	}
+
+	{
+		std::vector<nri::DrawIndexedDesc> indirectBufferData;
+		indirectBufferData.resize(m_renderer->m_OpaqueRenderNodes.size());
+		for (size_t i = 0; i < m_renderer->m_OpaqueRenderNodes.size(); ++i) {
+			Renderer::RenderNode node = m_renderer->m_OpaqueRenderNodes[i];
+			indirectBufferData[i].indexNum = node.drawArgs.indexNum;
+			indirectBufferData[i].instanceNum = 1;
+			indirectBufferData[i].baseIndex = node.drawArgs.baseIndex;
+			indirectBufferData[i].baseVertex = node.drawArgs.baseVertex;
+			indirectBufferData[i].baseInstance = i;
+		}
+		nri::BufferUploadDesc bufferData = {};
+		bufferData.buffer = m_indirectBuffer->GetBuffer();
+		bufferData.data = indirectBufferData.data();
+		bufferData.dataSize = sizeof(nri::DrawIndexedDesc) * indirectBufferData.size();
+		bufferData.after = { .access = nri::AccessBits::ARGUMENT_BUFFER, .stages = nri::StageBits::INDIRECT };
+
+		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData };
+
+		NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), nullptr, 0,
+				uploadDescArray.data(),
+				(uint32_t)uploadDescArray.size()));
+	}
 }
 
 void CommonMeshPass::BindMemory() {
@@ -526,6 +565,16 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			nri::Rect scissor = { 0, 0, (uint16_t)m_renderer->m_OutputResolution.first, (uint16_t)m_renderer->m_OutputResolution.second };
 			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
 		}
+
+		nri::Buffer *geoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_vertexbuffer->GetBuffer();
+		nri::VertexBufferDesc vertexBufferDesc = {};
+		vertexBufferDesc.buffer = geoBuffer;
+		vertexBufferDesc.stride = sizeof(utils::Vertex);
+		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+		nri::Buffer *indexGeoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_indexbuffer->GetBuffer();
+		NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, 0,
+				nri::IndexType::UINT32);
+
 		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
@@ -536,41 +585,16 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			block.index[1] = block.index[2] = 0u;
 			block.index[3] = m_brdfTexIndex;
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
-#if 0 //NORMAL_BUFFER_ENABLE
-			nri::Buffer *geoBuffer = node.mesh->m_indexbuffer->GetBuffer();
-			nri::VertexBufferDesc vertexBufferDesc = {};
-			vertexBufferDesc.buffer = geoBuffer;
-			vertexBufferDesc.offset = node.mesh->vertexOffset;
-			vertexBufferDesc.stride = sizeof(utils::Vertex);
-			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
-			NRI.CmdSetIndexBuffer(info.cmdBuffer, *geoBuffer, node.mesh->indexOffset,
-					nri::IndexType::UINT32);
 			uint32_t instanceCount = 1;
-			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, 0, 0, 0 });
-#else
-			nri::Buffer *geoBuffer = node.meshGPU->m_vertexbuffer->GetBuffer();
-			nri::VertexBufferDesc vertexBufferDesc = {};
-			vertexBufferDesc.buffer = geoBuffer;
-			vertexBufferDesc.stride = sizeof(utils::Vertex);
-#ifdef BUFFER_OFFSET_ENABLE
-			vertexBufferDesc.offset = node.drawArgs.baseVertex;
-			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
-			nri::Buffer *indexGeoBuffer = node.meshGPU->m_indexbuffer->GetBuffer();
-			NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, node.drawArgs.baseIndex,
-					nri::IndexType::UINT32);
-			uint32_t instanceCount = 1;
-			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, 0, 0, 0 });
-#else
-			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
-			nri::Buffer *indexGeoBuffer = node.meshGPU->m_indexbuffer->GetBuffer();
-			NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, 0,
-					nri::IndexType::UINT32);
-			uint32_t instanceCount = 1;
-			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, 0 });
-#endif // BUFFER_OFFSET_ENABLE
 
-#endif // NORMAL_BUFFER_ENABLE
+			if (!m_renderer->m_config.IndirectDrawState) {
+				NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
+			}
 		}
+		if (m_renderer->m_config.IndirectDrawState) {
+			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *m_indirectBuffer->GetBuffer(), 0, m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
+		}
+		
 	}
 }
 
@@ -604,6 +628,16 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 			nri::Rect scissor = { 0, 0, (uint16_t)m_renderer->m_OutputResolution.first, (uint16_t)m_renderer->m_OutputResolution.second };
 			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
 		}
+
+		nri::Buffer *geoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_vertexbuffer->GetBuffer();
+		nri::VertexBufferDesc vertexBufferDesc = {};
+		vertexBufferDesc.buffer = geoBuffer;
+		vertexBufferDesc.stride = sizeof(utils::Vertex);
+		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+		nri::Buffer *indexGeoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_indexbuffer->GetBuffer();
+		NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, 0,
+				nri::IndexType::UINT32);
+
 		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
@@ -616,17 +650,14 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 			block.index[1] = block.index[2] = block.index[3] = 0u;
 			block.testVec.y = 0.0;
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
-			nri::Buffer *geoBuffer = node.mesh->m_indexbuffer->GetBuffer();
-			nri::VertexBufferDesc vertexBufferDesc = {};
-			vertexBufferDesc.buffer = geoBuffer;
-			vertexBufferDesc.offset = node.mesh->vertexOffset;
-			vertexBufferDesc.stride = sizeof(utils::Vertex);
-			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
 
-			NRI.CmdSetIndexBuffer(info.cmdBuffer, *geoBuffer, node.mesh->indexOffset,
-					nri::IndexType::UINT32);
 			uint32_t instanceCount = 1;
-			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.mesh->m_indexCount), instanceCount, 0, 0, 0 });
+			if (!m_renderer->m_config.IndirectDrawState) {
+				NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
+			}
+		}
+		if (m_renderer->m_config.IndirectDrawState) {
+			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *m_indirectBuffer->GetBuffer(), 0, m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
 		}
 	}
 }
@@ -651,6 +682,16 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 			nri::Rect scissor = { 0, 0, 2048, 2048 };
 			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
 		}
+
+		nri::Buffer *geoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_vertexbuffer->GetBuffer();
+		nri::VertexBufferDesc vertexBufferDesc = {};
+		vertexBufferDesc.buffer = geoBuffer;
+		vertexBufferDesc.stride = sizeof(utils::Vertex);
+		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+		nri::Buffer *indexGeoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_indexbuffer->GetBuffer();
+		NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, 0,
+				nri::IndexType::UINT32);
+
 		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 			CBlock block = {};
@@ -661,17 +702,9 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 			block.index[1] = block.index[2] = block.index[3] = 1u;
 			block.testVec.y = 2.0f;
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
-			nri::Buffer *geoBuffer = node.mesh->m_indexbuffer->GetBuffer();
-			nri::VertexBufferDesc vertexBufferDesc = {};
-			vertexBufferDesc.buffer = geoBuffer;
-			vertexBufferDesc.offset = node.mesh->vertexOffset;
-			vertexBufferDesc.stride = sizeof(utils::Vertex);
-			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
 
-			NRI.CmdSetIndexBuffer(info.cmdBuffer, *geoBuffer, node.mesh->indexOffset,
-					nri::IndexType::UINT32);
 			uint32_t instanceCount = 1;
-			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.mesh->m_indexCount), instanceCount, 0, 0, 0 });
+			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
 		}
 	}
 }

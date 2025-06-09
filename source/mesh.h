@@ -66,7 +66,7 @@ public:
 		uint32_t baseVertex;
 	};
 
-	union DrawArgs {
+	struct DrawArgs {
 		DrawArgsOffset offset;
 		DrawArgsBase base;
 	};
