@@ -134,7 +134,7 @@ target("ShaderCompiler")
             "-c", path.join(os.scriptdir(), "Shaders.cfg"),
             "-o", shader_output_path,
             "-I", path.join(os.scriptdir(), "3rd/NRI/Include"),
-            "-p", "DXIL", "--compiler", dxc.program
+            "-p", "DXIL", "--compiler", "D:/Source/GitProject/dxc_2025_02_20/bin/x64/dxc.exe"
         }
         os.execv(shaderMakePath, args)
     end)

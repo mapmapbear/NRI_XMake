@@ -73,23 +73,77 @@ void CommonMeshPass::AllocGPUMemory() {
 	}
 
 	{
+		m_worldMatBuffer = std::make_shared<Buffer>();
+		nri::BufferDesc bufferDesc = {};
+		bufferDesc.size = sizeof(glm::mat4) * m_renderer->m_OpaqueRenderNodes.size();
+		bufferDesc.usage = nri::BufferUsageBits::SHADER_RESOURCE;
+		bufferDesc.structureStride = sizeof(glm::mat4);
+
+		nri::BufferViewDesc viewDesc = {};
+		viewDesc.viewType = nri::BufferViewType::SHADER_RESOURCE;
+		viewDesc.size = bufferDesc.size;
+
+		m_worldMatBuffer->Create(m_renderer, bufferDesc, viewDesc);
+		NRI.SetDebugName(m_worldMatBuffer->GetBuffer(), "worldMatBuffer_GPUScene");
+	}
+
+	{
+		m_sphereCullBuffer = std::make_shared<Buffer>();
+
+		nri::BufferDesc bufferDesc = {};
+		uint32_t dataSize = sizeof(CullData);
+		bufferDesc.size = dataSize * m_renderer->m_OpaqueRenderNodes.size();
+		bufferDesc.usage = nri::BufferUsageBits::SHADER_RESOURCE;
+		bufferDesc.structureStride = dataSize;
+
+		nri::BufferViewDesc viewDesc = {};
+		viewDesc.viewType = nri::BufferViewType::SHADER_RESOURCE;
+		viewDesc.size = bufferDesc.size;
+
+		m_sphereCullBuffer->Create(m_renderer, bufferDesc, viewDesc);
+		NRI.SetDebugName(m_sphereCullBuffer->GetBuffer(), "CullDataBuffer_GPUScene");
+	}
+
+	{
 		std::vector<nri::DrawIndexedDesc> indirectBufferData;
 		indirectBufferData.resize(m_renderer->m_OpaqueRenderNodes.size());
+
+		std::vector<glm::mat4> worldMatData;
+		std::vector<CullData> cullDatas;
+		worldMatData.resize(m_renderer->m_OpaqueRenderNodes.size());
+		cullDatas.resize(m_renderer->m_OpaqueRenderNodes.size());
 		for (size_t i = 0; i < m_renderer->m_OpaqueRenderNodes.size(); ++i) {
 			Renderer::RenderNode node = m_renderer->m_OpaqueRenderNodes[i];
 			indirectBufferData[i].indexNum = node.drawArgs.indexNum;
 			indirectBufferData[i].instanceNum = 1;
 			indirectBufferData[i].baseIndex = node.drawArgs.baseIndex;
 			indirectBufferData[i].baseVertex = node.drawArgs.baseVertex;
-			indirectBufferData[i].baseInstance = i;
+			indirectBufferData[i].baseInstance = (uint32_t)i;
+
+			worldMatData[i] = node.globalTransform;
+			cullDatas[i].center = node.mesh->aabb2.first;
+			cullDatas[i].radians = std::max(node.mesh->aabb2.second.x, std::max(node.mesh->aabb2.second.y, node.mesh->aabb2.second.z));
 		}
+
 		nri::BufferUploadDesc bufferData = {};
 		bufferData.buffer = m_indirectBuffer->GetBuffer();
 		bufferData.data = indirectBufferData.data();
 		bufferData.dataSize = sizeof(nri::DrawIndexedDesc) * indirectBufferData.size();
 		bufferData.after = { .access = nri::AccessBits::ARGUMENT_BUFFER, .stages = nri::StageBits::INDIRECT };
 
-		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData };
+		nri::BufferUploadDesc bufferData2 = {};
+		bufferData2.buffer = m_worldMatBuffer->GetBuffer();
+		bufferData2.data = worldMatData.data();
+		bufferData2.dataSize = helper::GetByteSizeOf(worldMatData);
+		bufferData2.after = { .access = nri::AccessBits::SHADER_RESOURCE, .stages = nri::StageBits::VERTEX_SHADER };
+
+		nri::BufferUploadDesc bufferData3 = {};
+		bufferData3.buffer = m_sphereCullBuffer->GetBuffer();
+		bufferData3.data = cullDatas.data();
+		bufferData3.dataSize = sizeof(CullData) * cullDatas.size();
+		bufferData3.after = { .access = nri::AccessBits::SHADER_RESOURCE, .stages = nri::StageBits::VERTEX_SHADER };
+
+		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData, bufferData2, bufferData3 };
 
 		NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), nullptr, 0,
 				uploadDescArray.data(),
@@ -193,12 +247,14 @@ void CommonMeshPass::BuildPipeline() {
 		descriptorRangeConstant[0] = { 0, 1, nri::DescriptorType::CONSTANT_BUFFER,
 			nri::StageBits::ALL };
 
-		nri::DescriptorRangeDesc descriptorRangeTexture[2];
+		nri::DescriptorRangeDesc descriptorRangeTexture[3];
 		// descriptorRangeTexture[0] = { 0, (uint32_t)m_textureViews.size(), nri::DescriptorType::TEXTURE,
 		descriptorRangeTexture[0] = { 0, 999, nri::DescriptorType::TEXTURE,
 			nri::StageBits::FRAGMENT_SHADER };
 		descriptorRangeTexture[1] = { 0, 2, nri::DescriptorType::SAMPLER,
 			nri::StageBits::FRAGMENT_SHADER };
+		descriptorRangeTexture[2] = { 0, 1, nri::DescriptorType::STRUCTURED_BUFFER,
+			nri::StageBits::VERTEX_SHADER };
 
 		nri::DescriptorSetDesc descriptorSetDescs[] = {
 			{ 0, descriptorRangeConstant,
@@ -525,12 +581,15 @@ void CommonMeshPass::BuildPipeline() {
 				NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_PipelineLayout, 1,
 						&m_TextureDescriptorSet, 1, 0));
 
-		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
+		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[3] = {};
 		descriptorRangeUpdateDescs[0].descriptorNum = (uint32_t)m_textureViews.size();
 		descriptorRangeUpdateDescs[0].descriptors = m_textureViews.data();
 		std::vector<nri::Descriptor *> samplerArray = { m_Sampler, m_SamplerShadow };
 		descriptorRangeUpdateDescs[1].descriptorNum = 2;
 		descriptorRangeUpdateDescs[1].descriptors = samplerArray.data();
+		descriptorRangeUpdateDescs[2].descriptorNum = 1;
+		nri::Descriptor *worldMatView = m_worldMatBuffer->GetView();
+		descriptorRangeUpdateDescs[2].descriptors = &worldMatView;
 
 		NRI.UpdateDescriptorRanges(*m_TextureDescriptorSet, 0,
 				helper::GetCountOf(descriptorRangeUpdateDescs),
@@ -586,15 +645,13 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			block.index[3] = m_brdfTexIndex;
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
 			uint32_t instanceCount = 1;
-
 			if (!m_renderer->m_config.IndirectDrawState) {
 				NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
 			}
 		}
 		if (m_renderer->m_config.IndirectDrawState) {
-			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *m_indirectBuffer->GetBuffer(), 0, m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
+			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *m_indirectBuffer->GetBuffer(), 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
 		}
-		
 	}
 }
 
@@ -657,7 +714,7 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 			}
 		}
 		if (m_renderer->m_config.IndirectDrawState) {
-			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *m_indirectBuffer->GetBuffer(), 0, m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
+			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *m_indirectBuffer->GetBuffer(), 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
 		}
 	}
 }

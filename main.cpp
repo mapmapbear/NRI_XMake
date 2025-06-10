@@ -380,9 +380,9 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 			nullptr,
 			0));
 
-	std::string sceneFile = utils::GetFullPath("meshes/orrery/scene.gltf", utils::DataFolder::ROOT);
-	// sceneFile = utils::GetFullPath("test.glb", utils::DataFolder::ROOT);
-	NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene1, false));
+	// std::string sceneFile = utils::GetFullPath("meshes/orrery/scene.gltf", utils::DataFolder::ROOT);
+	// // sceneFile = utils::GetFullPath("test.glb", utils::DataFolder::ROOT);
+	// NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene1, false));
 
 	testRenderPtr->OnStart(nullptr, m_ColorTexture, m_DepthTexture);
 	testRenderPtr->InitPresentPass(m_ColorTexture, m_SwapChain);

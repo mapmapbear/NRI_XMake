@@ -9,6 +9,13 @@ class Mesh;
 class Renderer;
 class Texture;
 class Buffer;
+
+struct CullData 
+{
+	glm::vec3 center;
+	float radians;
+};
+
 class CommonMeshPass : public CommonRenderPass {
 	friend class DebugDrawPass;
 
@@ -108,6 +115,8 @@ private:
 	std::shared_ptr<Mesh> m_mesh;
 
 	std::shared_ptr<Buffer> m_indirectBuffer = nullptr;
+	std::shared_ptr<Buffer> m_worldMatBuffer = nullptr;
+	std::shared_ptr<Buffer> m_sphereCullBuffer = nullptr;
 
 	glm::mat4 m_lightVP = glm::mat4(1.0);
 	uint32_t m_brdfTexIndex = 0;

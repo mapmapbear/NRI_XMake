@@ -2,13 +2,36 @@
 
 #include "NRIFramework.h"
 #include "glm/ext/matrix_transform.hpp"
+#include "glm/fwd.hpp"
 #include "glm/geometric.hpp"
 #include "glm/trigonometric.hpp"
 #include "spdlog/spdlog.h"
 
 // to get a perspective matrix with reversed z, simply swap the near and far plane
-glm::mat4 perspectiveFovReverseZLH_ZO(float fov, float width, float height, float zNear, float zFar) {
-	return glm::perspectiveFovLH_ZO(fov, width, height, zFar, zNear);
+glm::mat4 perspectiveFovLH_ZO(float fov, float aspect, float zNear, float zFar) {
+	assert(abs(aspect - std::numeric_limits<float>::epsilon()) > static_cast<float>(0));
+
+	float const rad = fov;
+	float const h = glm::cos(static_cast<float>(0.5) * rad) / glm::sin(static_cast<float>(0.5) * rad);
+
+	float SinFov = glm::sin(0.5f * fov);
+	float CosFov = glm::cos(0.5f * fov);
+
+	float Height = CosFov / SinFov;
+	float Width = Height / aspect;
+
+	float fRangle = zFar / (zFar - zNear);
+
+	glm::mat4 Result = 0.0f;
+	Result[0][0] = Width;
+
+	Result[1][1] = Height;
+
+	Result[2][2] = fRangle;
+	Result[2][3] = static_cast<float>(1);
+
+	Result[3][2] = -fRangle * zNear;
+	return Result;
 }
 
 // now let zFar go towards infinity
@@ -127,7 +150,7 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 			projMat = glm::perspectiveLH_ZO(desc.horizontalFov, desc.aspectRatio, desc.farZ, desc.nearZ);
 			// projMat = infinitePerspectiveFovReverseZLH_ZO(desc.horizontalFov, 900, 600, desc.nearZ);
 		} else {
-			projMat = glm::perspectiveLH_ZO(desc.horizontalFov, desc.aspectRatio, desc.nearZ, desc.farZ);
+			projMat = perspectiveFovLH_ZO(desc.horizontalFov, desc.aspectRatio, desc.nearZ, desc.farZ);
 		}
 
 		state.mViewToClip = projMat;

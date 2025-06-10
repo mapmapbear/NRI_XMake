@@ -250,7 +250,6 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 	std::vector<std::shared_ptr<utils::MeshData>> meshDatas = {};
 	meshDatas.resize(numMeshes);
 	m_drawArgs.resize(numMeshes);
-	uint64_t previousIndexAndVertexSize = 0;
 
 	uint64_t indicesDataTotalAlignedSize = 0u;
 	uint64_t vertexDataTotalSize = 0u;
