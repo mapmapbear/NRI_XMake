@@ -28,6 +28,7 @@ class SSAOCompPass;
 class DebugDrawPass;
 class PresentPass;
 class BoxCullingPass;
+class GPUCullingPass;
 class CommonMeshPass;
 class Buffer;
 class Texture;
@@ -133,5 +134,6 @@ private:
 	std::shared_ptr<SSAOCompPass> ssaoCompPass = nullptr;
 	std::shared_ptr<DebugDrawPass> debugdrawPass = nullptr;
 	std::shared_ptr<BoxCullingPass> boxCullingPass = nullptr;
+	std::shared_ptr<GPUCullingPass> gpuCullingPass = nullptr;
 	std::shared_ptr<PresentPass> presentPass = nullptr;
 };

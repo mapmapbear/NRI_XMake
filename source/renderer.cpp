@@ -10,6 +10,7 @@
 #include "render_pass/boxCullingPass.h"
 #include "render_pass/commonMeshPass.h"
 #include "render_pass/debugDrawPass.h"
+#include "render_pass/gpucullingPass.h"
 #include "render_pass/gridRenderPass.h"
 #include "render_pass/instanceMeshPass.h"
 #include "render_pass/presentPass.h"
@@ -393,6 +394,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	ssaoCompPass = std::make_shared<SSAOCompPass>(this);
 	debugdrawPass->GenerateBoxBuffer();
 	boxCullingPass = std::make_shared<BoxCullingPass>(this);
+	gpuCullingPass = std::make_shared<GPUCullingPass>(this);
 }
 
 glm::mat4 Renderer::computeLightSpaceMatrix(float yaw, float pitch, float roll) {

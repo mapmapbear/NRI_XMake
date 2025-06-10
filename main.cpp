@@ -178,7 +178,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	deviceCreationDesc.graphicsAPI = graphicsAPI;
 	deviceCreationDesc.queueFamilies = queueFamilies;
 	deviceCreationDesc.queueFamilyNum = helper::GetCountOf(queueFamilies);
-#ifndef DEBUG
+#ifdef DEBUG
 	deviceCreationDesc.enableGraphicsAPIValidation = true;
 	deviceCreationDesc.enableNRIValidation = true;
 #else
