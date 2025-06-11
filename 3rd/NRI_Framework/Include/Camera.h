@@ -79,7 +79,7 @@ public:
 	vec3 vRight = vec3(1.0, 0.0, 0.0);
 	vec3 vUp = vec3(0.0, 1.0, 0.0);
 	vec3 vForward = vec3(0.0, 0.0, 1.0);
-
+	CameraDesc m_desc = {};
 private:
 	bool m_IsRelative = false;
 };

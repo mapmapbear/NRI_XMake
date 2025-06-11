@@ -37,6 +37,7 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 	descriptorPoolDesc.storageBufferMaxNum = 99;
 	descriptorPoolDesc.storageTextureMaxNum = 99;
 	descriptorPoolDesc.structuredBufferMaxNum = 99;
+	descriptorPoolDesc.storageStructuredBufferMaxNum = 99;
 	descriptorPoolDesc.textureMaxNum = 1024;
 	descriptorPoolDesc.samplerMaxNum = 10;
 
@@ -328,9 +329,9 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = {};
-	meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("plane.gltf", utils::DataFolder::ROOT);
-	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S1.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this);
@@ -543,6 +544,7 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 
 void Renderer::OnRenderDepth(RenderInfo &info, Camera &camera) {
 	ssaoCompPass->Render(info, camera);
+	gpuCullingPass->Render(info, camera);
 	{
 		nri::TextureBarrierDesc textureBarrierDescs = {};
 		textureBarrierDescs.texture = ssaoCompPass->m_SSAOTexture->GetTexture();

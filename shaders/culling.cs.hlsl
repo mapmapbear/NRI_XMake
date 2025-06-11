@@ -22,38 +22,43 @@ struct CullData {
 };
 
 bool FrustumVisible(uint objectIndex) {
-    StructuredBuffer<CullData> sphereCullData = ResourceDescriptorHeap[1014];
+    StructuredBuffer<CullData> sphereCullData = ResourceDescriptorHeap[1015];
     float3 center =  sphereCullData[objectIndex].center;
     float radius = sphereCullData[objectIndex].radians;
     float3 centerVS = mul(g_PushConstants.viewMat, float4(center,1.f)).xyz;
     bool visible = true;
 
     //frustrum culling
-    visible = visible && centerVS.z * g_PushConstants.frustum[1] - abs(centerVS.x) * g_PushConstants.frustum.x > -radius;
-    visible = visible && centerVS.z * g_PushConstants.frustum[3] - abs(centerVS.y) * g_PushConstants.frustum[2] > -radius;
+    visible = visible && centerVS.z * g_PushConstants.frustum.y - abs(centerVS.x) * g_PushConstants.frustum.x > -radius;
+    visible = visible && centerVS.z * g_PushConstants.frustum.w - abs(centerVS.y) * g_PushConstants.frustum.z > -radius;
 
     if(g_PushConstants.cameraArgs.z != 0) {
         // the near/far plane culling uses camera space Z directly
         visible = visible && centerVS.z + radius > g_PushConstants.cameraArgs.x && centerVS.z - radius < g_PushConstants.cameraArgs.y;
     }
 
-    visible = visible || g_PushConstants.cameraArgs.w == 0;
+    // visible = visible || g_PushConstants.cameraArgs.w == 0;
 
     return visible;
 }
 
-[numthreads(64, 1, 1)]
+[numthreads(8, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID) {
     uint objectIndex = DTid.x;
     if (objectIndex >= g_PushConstants.totalObjectCount) {
         return;
     }
 
-    StructuredBuffer<DrawData> allObjects = ResourceDescriptorHeap[1015];
-    AppendStructuredBuffer<DrawData> visibleObjects = ResourceDescriptorHeap[1016]; // Index Error
-
+    StructuredBuffer<DrawData> allObjects = ResourceDescriptorHeap[1016];
+    RWStructuredBuffer<DrawData> visibleObjects = ResourceDescriptorHeap[1017];
+    RWStructuredBuffer<uint> visibleObjectCounter = ResourceDescriptorHeap[1018];
+    
     bool visible = FrustumVisible(objectIndex);
     if (visible) {
-        visibleObjects.Append(allObjects[objectIndex]);
+        uint writeIndex;
+        InterlockedAdd(visibleObjectCounter[0], 1, writeIndex);
+        if (writeIndex < g_PushConstants.totalObjectCount) { // 暂时规定最大数量为最坏剔除结果
+            visibleObjects[writeIndex] = allObjects[objectIndex];
+        }
     }
 }

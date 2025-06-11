@@ -30,5 +30,6 @@ private:
 	std::shared_ptr<Buffer> m_VisibleObjectsBuffer = nullptr;
 	std::shared_ptr<Buffer> m_CullDataBuffer = nullptr;
 	std::shared_ptr<Buffer> m_GPUSceneObjectsBuffer = nullptr;
-
+	std::shared_ptr<Buffer> m_CullGPUSceneObjectsBuffer = nullptr;
+	std::shared_ptr<Buffer> m_VisibleObjectCounterBuffer = nullptr;
 };

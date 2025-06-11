@@ -85,6 +85,7 @@ void Camera::InitializeWithRotation(const vec3 &position, const vec3 &rotation,
 }
 
 void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
+	m_desc = desc;
 	uint32_t projFlags = 0;
 	projFlags |= 0;
 
