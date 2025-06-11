@@ -42,6 +42,8 @@ bool FrustumVisible(uint objectIndex) {
     return visible;
 }
 
+groupshared uint s_DrawCount;
+
 [numthreads(8, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID) {
     uint objectIndex = DTid.x;
@@ -52,12 +54,14 @@ void main(uint3 DTid : SV_DispatchThreadID) {
     StructuredBuffer<DrawData> allObjects = ResourceDescriptorHeap[1016];
     RWStructuredBuffer<DrawData> visibleObjects = ResourceDescriptorHeap[1017];
     RWStructuredBuffer<uint> visibleObjectCounter = ResourceDescriptorHeap[1018];
-    
+
+    // visibleObjects[objectIndex] = allObjects[objectIndex];
     bool visible = FrustumVisible(objectIndex);
     if (visible) {
-        uint writeIndex;
+        uint writeIndex = 0;
         InterlockedAdd(visibleObjectCounter[0], 1, writeIndex);
-        if (writeIndex < g_PushConstants.totalObjectCount) { // 暂时规定最大数量为最坏剔除结果
+        if (writeIndex < g_PushConstants.totalObjectCount) {
+            // 暂时规定最大数量为最坏剔除结果
             visibleObjects[writeIndex] = allObjects[objectIndex];
         }
     }

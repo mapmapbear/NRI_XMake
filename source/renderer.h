@@ -14,8 +14,7 @@ struct RenderInfo {
 	nri::CommandBuffer &cmdBuffer;
 };
 
-struct RenderSetting 
-{
+struct RenderSetting {
 	bool IndirectDrawState = false;
 	bool DebugBoxState = false;
 	bool DebugSSAOState = false;
@@ -126,6 +125,9 @@ public:
 
 	std::vector<nri::Memory *> m_MemoryAllocations;
 
+public:
+	std::shared_ptr<GPUCullingPass> gpuCullingPass = nullptr;
+
 private:
 	std::shared_ptr<SkyRenderPass> skyPass = nullptr;
 	std::shared_ptr<GridRenderPass> gridPass = nullptr;
@@ -134,6 +136,5 @@ private:
 	std::shared_ptr<SSAOCompPass> ssaoCompPass = nullptr;
 	std::shared_ptr<DebugDrawPass> debugdrawPass = nullptr;
 	std::shared_ptr<BoxCullingPass> boxCullingPass = nullptr;
-	std::shared_ptr<GPUCullingPass> gpuCullingPass = nullptr;
 	std::shared_ptr<PresentPass> presentPass = nullptr;
 };

@@ -106,7 +106,7 @@ void GPUCullingPass::AllocGPUMemory() {
 			center = transMat * center;
 			glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
 			cullDatas[i].center = center;
-			cullDatas[i].radians = std::max(extent.x, std::max(extent.y, extent.z));
+			cullDatas[i].radians = std::min(extent.x, std::min(extent.y, extent.z));
 		}
 
 		nri::BufferUploadDesc bufferData = {};

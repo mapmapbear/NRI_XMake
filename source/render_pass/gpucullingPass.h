@@ -15,21 +15,23 @@ public:
 		float radians;
 	};
 
-    struct PushConstants {
-        glm::mat4 viewMat;
-        glm::vec4 cameraArgs;
-        glm::vec4 frustum;
-        uint32_t totalObjectCount;
-    };
+	struct PushConstants {
+		glm::mat4 viewMat;
+		glm::vec4 cameraArgs;
+		glm::vec4 frustum;
+		uint32_t totalObjectCount;
+	};
+
+public:
+	std::shared_ptr<Buffer> m_CullGPUSceneObjectsBuffer = nullptr;
 
 private:
 	nri::PipelineLayout *m_CullingPipelineLayout = nullptr;
 	nri::Pipeline *m_CullingPipeline = nullptr;
-    nri::DescriptorSet *m_CullingDescriptorSet = nullptr;
+	nri::DescriptorSet *m_CullingDescriptorSet = nullptr;
 
-	std::shared_ptr<Buffer> m_VisibleObjectsBuffer = nullptr;
 	std::shared_ptr<Buffer> m_CullDataBuffer = nullptr;
 	std::shared_ptr<Buffer> m_GPUSceneObjectsBuffer = nullptr;
-	std::shared_ptr<Buffer> m_CullGPUSceneObjectsBuffer = nullptr;
 	std::shared_ptr<Buffer> m_VisibleObjectCounterBuffer = nullptr;
+
 };

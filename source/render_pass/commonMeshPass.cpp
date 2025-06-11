@@ -16,6 +16,7 @@
 #include <format>
 #include <memory>
 #include <vector>
+#include "gpucullingPass.h"
 
 struct CBlock {
 	glm::mat4 modelMat;
@@ -650,7 +651,8 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			}
 		}
 		if (m_renderer->m_config.IndirectDrawState) {
-			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *m_indirectBuffer->GetBuffer(), 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
+			nri::Buffer *indirectBuffer = m_renderer->gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
+			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *indirectBuffer, 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
 		}
 	}
 }
@@ -714,7 +716,8 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 			}
 		}
 		if (m_renderer->m_config.IndirectDrawState) {
-			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *m_indirectBuffer->GetBuffer(), 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
+			nri::Buffer *indirectBuffer = m_renderer->gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
+			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *indirectBuffer, 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
 		}
 	}
 }

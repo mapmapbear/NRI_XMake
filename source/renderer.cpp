@@ -330,8 +330,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = {};
 	// meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
-	// meshFile = utils::GetFullPath("plane.gltf", utils::DataFolder::ROOT);
 	meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("plane.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S1.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this);
@@ -511,6 +511,25 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	depthAttachmentsDesc.colorNum = 0;
 	depthAttachmentsDesc.colors = nullptr;
 
+	{
+		nri::BufferBarrierDesc bufferBarrierDescs = {};
+		bufferBarrierDescs.buffer = gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
+		bufferBarrierDescs.before = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
+		bufferBarrierDescs.after = { nri::AccessBits::ARGUMENT_BUFFER, nri::StageBits::INDIRECT };
+		nri::BarrierGroupDesc barrierGroupDesc = {};
+		barrierGroupDesc.bufferNum = 1;
+	}
+	gpuCullingPass->Render(info, camera);
+
+	{
+		nri::BufferBarrierDesc bufferBarrierDescs = {};
+		bufferBarrierDescs.buffer = gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
+		bufferBarrierDescs.before = { nri::AccessBits::ARGUMENT_BUFFER, nri::StageBits::INDIRECT };
+		nri::BarrierGroupDesc barrierGroupDesc = {};
+		bufferBarrierDescs.after = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
+		barrierGroupDesc.bufferNum = 1;
+	}
+
 	GetNRI().CmdBeginRendering(info.cmdBuffer, depthAttachmentsDesc);
 	{
 		RenderInfo depthInfo = { .desc = depthAttachmentsDesc, .cmdBuffer = info.cmdBuffer };
@@ -544,7 +563,6 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 
 void Renderer::OnRenderDepth(RenderInfo &info, Camera &camera) {
 	ssaoCompPass->Render(info, camera);
-	gpuCullingPass->Render(info, camera);
 	{
 		nri::TextureBarrierDesc textureBarrierDescs = {};
 		textureBarrierDescs.texture = ssaoCompPass->m_SSAOTexture->GetTexture();
