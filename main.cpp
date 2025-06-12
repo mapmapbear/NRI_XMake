@@ -389,12 +389,12 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 
 	// User interface
 	bool initialized = InitUI(NRI, NRI, *m_Device, swapChainFormat);
-	m_Camera.Initialize(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) + glm::vec3(0.f, 1.0f, 1.0f));
+	m_Camera.Initialize(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) + glm::vec3(0.2f, 1.0f, 1.0f));
 
 	// DepthTest BUG Angle
-	m_Camera.vForward = { 0.905398309, 0.0342303626, 0.423181087 };
-	m_Camera.vUp = { -0.0310102850, 0.999414027, -0.0144941369 };
-	m_Camera.vRight = { -0.423429251, 0.00000000, 0.905929208 };
+	// m_Camera.vForward = { 0.905398309, 0.0342303626, 0.423181087 };
+	// m_Camera.vUp = { -0.0310102850, 0.999414027, -0.0144941369 };
+	// m_Camera.vRight = { -0.423429251, 0.00000000, 0.905929208 };
 	return initialized;
 }
 

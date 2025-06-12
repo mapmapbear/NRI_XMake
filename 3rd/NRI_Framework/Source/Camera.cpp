@@ -74,6 +74,7 @@ void Camera::Initialize(const vec3 &position, const vec3 &lookAt,
 	state.globalPosition = vec3(position);
 	state.rotation = glm::degrees(rot);
 	state.mWorldToView = glm::lookAtLH(state.globalPosition, state.globalPosition + glm::normalize(dir), glm::vec3(0.0, 1.0, 0.0));
+	statePrev.mWorldToView = state.mWorldToView;
 	m_IsRelative = isRelative;
 }
 

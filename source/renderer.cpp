@@ -54,8 +54,8 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
 
 	std::string sceneFile = utils::GetFullPath("Camera/Camera.gltf", utils::DataFolder::ROOT);
 	//sceneFile = utils::GetFullPath("meshes/orrery/scene.gltf", utils::DataFolder::ROOT);
-	sceneFile = utils::GetFullPath("Sponza/sponza.gltf", utils::DataFolder::ROOT);
-	NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene, false));
+	// sceneFile = utils::GetFullPath("Sponza/sponza.gltf", utils::DataFolder::ROOT);
+	// NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene, false));
 	std::string diffuseIrrTex = "data/Textures/diffuseIrradiance.dds";
 	std::string specularIrrTex = "data/Textures/specularIrradiance.dds";
 #ifdef PBR_TEST
@@ -361,8 +361,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		node.globalTransform = mesh->results.at(i);
 
 		auto submeshAABB = node.mesh->aabb;
-		SPDLOG_INFO("center:{},{},{}  extent:{},{},{}", node.mesh->aabb2.first.x, node.mesh->aabb2.first.y, node.mesh->aabb2.first.z,
-				node.mesh->aabb2.second.x, node.mesh->aabb2.second.y, node.mesh->aabb2.second.z);
+		// SPDLOG_INFO("center:{},{},{}  extent:{},{},{}", node.mesh->aabb2.first.x, node.mesh->aabb2.first.y, node.mesh->aabb2.first.z,
+		// 		node.mesh->aabb2.second.x, node.mesh->aabb2.second.y, node.mesh->aabb2.second.z);
 		glm::vec3 transformedMin = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.first, 1.0f));
 		glm::vec3 transformedMax = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.second, 1.0f));
 
@@ -511,6 +511,8 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	depthAttachmentsDesc.colorNum = 0;
 	depthAttachmentsDesc.colors = nullptr;
 
+	gpuCullingPass->Render(info, camera);
+
 	{
 		nri::BufferBarrierDesc bufferBarrierDescs = {};
 		bufferBarrierDescs.buffer = gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
@@ -518,16 +520,8 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 		bufferBarrierDescs.after = { nri::AccessBits::ARGUMENT_BUFFER, nri::StageBits::INDIRECT };
 		nri::BarrierGroupDesc barrierGroupDesc = {};
 		barrierGroupDesc.bufferNum = 1;
-	}
-	gpuCullingPass->Render(info, camera);
-
-	{
-		nri::BufferBarrierDesc bufferBarrierDescs = {};
-		bufferBarrierDescs.buffer = gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
-		bufferBarrierDescs.before = { nri::AccessBits::ARGUMENT_BUFFER, nri::StageBits::INDIRECT };
-		nri::BarrierGroupDesc barrierGroupDesc = {};
-		bufferBarrierDescs.after = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
-		barrierGroupDesc.bufferNum = 1;
+		barrierGroupDesc.buffers = &bufferBarrierDescs;
+		GetNRI().CmdBarrier(info.cmdBuffer, barrierGroupDesc);
 	}
 
 	GetNRI().CmdBeginRendering(info.cmdBuffer, depthAttachmentsDesc);
@@ -559,6 +553,17 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 		// boxCullingPass->Render(info, camera);
 	}
 	GetNRI().CmdEndRendering(info.cmdBuffer);
+
+	{
+		nri::BufferBarrierDesc bufferBarrierDescs = {};
+		bufferBarrierDescs.buffer = gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
+		bufferBarrierDescs.before = { nri::AccessBits::ARGUMENT_BUFFER, nri::StageBits::INDIRECT };
+		nri::BarrierGroupDesc barrierGroupDesc = {};
+		bufferBarrierDescs.after = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::StageBits::COMPUTE_SHADER };
+		barrierGroupDesc.bufferNum = 1;
+		barrierGroupDesc.buffers = &bufferBarrierDescs;
+		GetNRI().CmdBarrier(info.cmdBuffer, barrierGroupDesc);
+	}
 }
 
 void Renderer::OnRenderDepth(RenderInfo &info, Camera &camera) {

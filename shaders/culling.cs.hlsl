@@ -3,7 +3,7 @@
 struct PushConstants {
     float4x4 viewMat;
     float4 cameraArgs; // znear, zfar, distCull, cullingEnabled
-    float4 frustum; // left, right, top, bottom
+    float4 frustum[4]; // left, right, top, bottom
     uint totalObjectCount;
 };
 NRI_ROOT_CONSTANTS(PushConstants, g_PushConstants, 1, 0);
@@ -21,6 +21,21 @@ struct CullData {
     float radians;
 };
 
+bool IsInsideLeftRightPlanes(float3 centerVS, float radius) {
+    bool insideLeftPlane = true;
+    float distanceToPlane = g_PushConstants.frustum[0].x * centerVS.x  + 
+    g_PushConstants.frustum[0].y * centerVS.z;
+    float distanceToPlane2 = g_PushConstants.frustum[1].x * centerVS.x  + 
+    g_PushConstants.frustum[1].y * centerVS.z;
+    insideLeftPlane = insideLeftPlane && distanceToPlane > -radius && distanceToPlane2 > -radius;
+    // float distanceToPlane3 = g_PushConstants.frustum[2].x * centerVS.x  + 
+    // g_PushConstants.frustum[2].y * centerVS.z;
+    // float distanceToPlane4 = g_PushConstants.frustum[3].x * centerVS.x  + 
+    // g_PushConstants.frustum[3].y * centerVS.z;
+    // insideLeftPlane = insideLeftPlane && distanceToPlane3 > -radius && distanceToPlane4 > -radius;
+    return insideLeftPlane;
+}
+
 bool FrustumVisible(uint objectIndex) {
     StructuredBuffer<CullData> sphereCullData = ResourceDescriptorHeap[1015];
     float3 center =  sphereCullData[objectIndex].center;
@@ -28,14 +43,17 @@ bool FrustumVisible(uint objectIndex) {
     float3 centerVS = mul(g_PushConstants.viewMat, float4(center,1.f)).xyz;
     bool visible = true;
 
-    //frustrum culling
-    visible = visible && centerVS.z * g_PushConstants.frustum.y - abs(centerVS.x) * g_PushConstants.frustum.x > -radius;
-    visible = visible && centerVS.z * g_PushConstants.frustum.w - abs(centerVS.y) * g_PushConstants.frustum.z > -radius;
+    visible = IsInsideLeftRightPlanes(centerVS, radius);
 
-    if(g_PushConstants.cameraArgs.z != 0) {
-        // the near/far plane culling uses camera space Z directly
-        visible = visible && centerVS.z + radius > g_PushConstants.cameraArgs.x && centerVS.z - radius < g_PushConstants.cameraArgs.y;
-    }
+    //frustrum culling
+    // visible = visible && centerVS.x * g_PushConstants.frustum.x + centerVS.z * g_PushConstants.frustum.y > -radius;
+    // visible = visible && centerVS.x * g_PushConstants.frustum.w + centerVS.z * g_PushConstants.frustum.y > -radius;
+    // visible = visible && centerVS.z * g_PushConstants.frustum.w - abs(centerVS.y) * g_PushConstants.frustum.z > -radius;
+
+    // if(g_PushConstants.cameraArgs.z != 0) {
+    //     // the near/far plane culling uses camera space Z directly
+    //     visible = visible && centerVS.z + radius > g_PushConstants.cameraArgs.x && centerVS.z - radius < g_PushConstants.cameraArgs.y;
+    // }
 
     // visible = visible || g_PushConstants.cameraArgs.w == 0;
 

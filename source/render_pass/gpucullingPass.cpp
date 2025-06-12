@@ -105,6 +105,7 @@ void GPUCullingPass::AllocGPUMemory() {
 			glm::vec4 center = glm::vec4(node.mesh->aabb2.first, 1.0);
 			center = transMat * center;
 			glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
+			extent = transMat * extent;
 			cullDatas[i].center = center;
 			cullDatas[i].radians = std::min(extent.x, std::min(extent.y, extent.z));
 		}
@@ -228,14 +229,19 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_CullingPipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_CullingPipeline);
 		glm::mat4 projMat = camera.state.mViewToClip;
-		projMat = glm::transpose(projMat);
-		glm::vec4 frustumX = normalizePlane(projMat[3] + projMat[0]);
-		glm::vec4 frustumY = normalizePlane(projMat[3] + projMat[1]);
+		// projMat = glm::transpose(projMat);
+		glm::vec4 frustumX1 = normalizePlane(projMat[3] + projMat[0]);
+		glm::vec4 frustumX2 = normalizePlane(projMat[3] - projMat[0]);
+		glm::vec4 frustumY1 = normalizePlane(projMat[3] + projMat[1]);
+		glm::vec4 frustumY2 = normalizePlane(projMat[3] - projMat[1]);
 
 		PushConstants block = {
 			.viewMat = camera.state.mWorldToView,
 			.cameraArgs = glm::vec4(camera.m_desc.nearZ, camera.m_desc.farZ, camera.m_desc.farZ + 20, 0.0f),
-			.frustum = glm::vec4(frustumX.x, frustumX.z, frustumY.y, frustumY.z),
+			.frustum = { glm::vec4(frustumX1.x, frustumX1.y, frustumX1.z, frustumX1.w),
+				glm::vec4(frustumX2.x, frustumX2.y, frustumX2.z, frustumX2.w),
+				glm::vec4(frustumY1.x, frustumY1.y, frustumY1.z, frustumY1.w),
+				glm::vec4(frustumY2.x, frustumY2.y, frustumY2.z, frustumY2.w) },
 			.totalObjectCount = (uint32_t)m_renderer->m_OpaqueRenderNodes.size(),
 
 		};

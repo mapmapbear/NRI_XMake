@@ -1,5 +1,6 @@
 #pragma once
 #include "CommonRenderPass.h"
+#include <array>
 class Buffer;
 
 class GPUCullingPass : public CommonRenderPass {
@@ -18,7 +19,7 @@ public:
 	struct PushConstants {
 		glm::mat4 viewMat;
 		glm::vec4 cameraArgs;
-		glm::vec4 frustum;
+		std::array<glm::vec4, 4> frustum;
 		uint32_t totalObjectCount;
 	};
 
