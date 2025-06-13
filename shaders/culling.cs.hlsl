@@ -36,6 +36,18 @@ bool IsInsideLeftRightPlanes(float3 centerVS, float radius) {
     return insideLeftPlane;
 }
 
+
+bool isSphereInFrustum(float3 center, float radius) {
+    for (int i = 0; i < 2; i++) {
+        float4 plane = g_PushConstants.frustum[i];
+        float distance = dot(plane.xyz, center) + plane.w;
+        if (distance < -radius) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool FrustumVisible(uint objectIndex) {
     StructuredBuffer<CullData> sphereCullData = ResourceDescriptorHeap[1015];
     float3 center =  sphereCullData[objectIndex].center;
@@ -59,6 +71,8 @@ bool FrustumVisible(uint objectIndex) {
 
     return visible;
 }
+
+
 
 groupshared uint s_DrawCount;
 

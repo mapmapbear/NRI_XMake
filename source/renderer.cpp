@@ -23,8 +23,8 @@
 #include <random>
 #include <vector>
 
-Renderer::Renderer(NRIInterface &NRI, nri::Device *device) :
-		m_Device(device), m_NRI(NRI) {
+Renderer::Renderer(NRIInterface &NRI, nri::Device *device, Camera &camera) :
+		m_Device(device), m_NRI(NRI), m_Camera(camera) {
 	NRI_ABORT_ON_FAILURE(NRI.GetQueue(*m_Device, nri::QueueType::GRAPHICS, 0, m_GraphicsQueue));
 	NRI.SetDebugName(m_GraphicsQueue, "GraphicsQueue");
 
@@ -329,8 +329,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = {};
-	// meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
-	meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("Sponza/sponza.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("plane.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S1.gltf", utils::DataFolder::ROOT);
@@ -361,8 +361,6 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		node.globalTransform = mesh->results.at(i);
 
 		auto submeshAABB = node.mesh->aabb;
-		// SPDLOG_INFO("center:{},{},{}  extent:{},{},{}", node.mesh->aabb2.first.x, node.mesh->aabb2.first.y, node.mesh->aabb2.first.z,
-		// 		node.mesh->aabb2.second.x, node.mesh->aabb2.second.y, node.mesh->aabb2.second.z);
 		glm::vec3 transformedMin = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.first, 1.0f));
 		glm::vec3 transformedMax = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.second, 1.0f));
 
@@ -381,9 +379,21 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		glm::vec4 center = glm::vec4(node.mesh->aabb2.first, 1.0);
 		center = transMat * center;
 		glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
-		//extent = transMat * extent;
+		extent = transMat * extent;
 		debugdrawPass->DrawBox(center, extent, glm::vec4(1.0));
 	}
+
+	for (int i = 0; i < m_OpaqueRenderNodes.size(); ++i) {
+		RenderNode &node = m_OpaqueRenderNodes[i];
+		glm::mat4 transMat = node.globalTransform;
+		glm::vec4 center = glm::vec4(node.mesh->aabb2.first, 1.0);
+		center = transMat * center;
+		glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
+		extent = transMat * extent;
+		debugdrawPass->DrawSphere(center, std::min(extent.x, std::min(extent.y, extent.z)), glm::vec4(1.0));
+	}
+	debugdrawPass->DrawFrustum(glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
+
 	m_SceneAABB = std::make_pair(sceneMin, sceneMax);
 
 	RandomLights();

@@ -230,21 +230,25 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_CullingPipeline);
 		glm::mat4 projMat = camera.state.mViewToClip;
 		// projMat = glm::transpose(projMat);
-		glm::vec4 frustumX1 = normalizePlane(projMat[3] + projMat[0]);
-		glm::vec4 frustumX2 = normalizePlane(projMat[3] - projMat[0]);
-		glm::vec4 frustumY1 = normalizePlane(projMat[3] + projMat[1]);
-		glm::vec4 frustumY2 = normalizePlane(projMat[3] - projMat[1]);
+		glm::vec4 frustumL = normalizePlane(projMat[3] + projMat[0]);
+		glm::vec4 frustumR = normalizePlane(projMat[3] - projMat[0]);
+		glm::vec4 frustumT = normalizePlane(projMat[3] + projMat[1]);
+		glm::vec4 frustumB = normalizePlane(projMat[3] - projMat[1]);
 
 		PushConstants block = {
-			.viewMat = camera.state.mWorldToView,
+			.viewMat = camera.statePrev.mWorldToView,
 			.cameraArgs = glm::vec4(camera.m_desc.nearZ, camera.m_desc.farZ, camera.m_desc.farZ + 20, 0.0f),
-			.frustum = { glm::vec4(frustumX1.x, frustumX1.y, frustumX1.z, frustumX1.w),
-				glm::vec4(frustumX2.x, frustumX2.y, frustumX2.z, frustumX2.w),
-				glm::vec4(frustumY1.x, frustumY1.y, frustumY1.z, frustumY1.w),
-				glm::vec4(frustumY2.x, frustumY2.y, frustumY2.z, frustumY2.w) },
+			.frustum = { glm::vec4(frustumL.x, frustumL.y, frustumL.z, frustumL.w),
+					glm::vec4(frustumR.x, frustumR.y, frustumR.z, frustumR.w),
+					glm::vec4(frustumT.x, frustumT.y, frustumT.z, frustumT.w),
+					glm::vec4(frustumB.x, frustumB.y, frustumB.z, frustumB.w) },
 			.totalObjectCount = (uint32_t)m_renderer->m_OpaqueRenderNodes.size(),
 
 		};
+
+		if (block.viewMat != camera.statePrev.mWorldToView) {
+			SPDLOG_ERROR("viewMat changed");
+		}
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(PushConstants));
 		NRI.CmdDispatch(info.cmdBuffer, { (uint32_t)m_renderer->m_OpaqueRenderNodes.size() / 8 + 1, 1, 1 });
 	}

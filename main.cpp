@@ -221,7 +221,8 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 
 	NRI_ABORT_ON_FAILURE(NRI.GetQueue(*m_Device, nri::QueueType::COMPUTE, 0, m_ComputeQueue));
 	NRI.SetDebugName(m_ComputeQueue, "ComputeQueue");
-	testRenderPtr = new Renderer(NRI, m_Device);
+	m_Camera.Initialize(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	testRenderPtr = new Renderer(NRI, m_Device, m_Camera);
 	// Fences
 	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_FrameFence[0]));
 	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_FrameFence[1]));
@@ -389,7 +390,8 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 
 	// User interface
 	bool initialized = InitUI(NRI, NRI, *m_Device, swapChainFormat);
-	m_Camera.Initialize(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) + glm::vec3(0.2f, 1.0f, 1.0f));
+
+	// testRenderPtr->BindCamera(m_Camera);
 
 	// DepthTest BUG Angle
 	// m_Camera.vForward = { 0.905398309, 0.0342303626, 0.423181087 };

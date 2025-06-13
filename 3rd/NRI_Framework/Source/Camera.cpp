@@ -73,7 +73,7 @@ void Camera::Initialize(const vec3 &position, const vec3 &lookAt,
 
 	state.globalPosition = vec3(position);
 	state.rotation = glm::degrees(rot);
-	state.mWorldToView = glm::lookAtLH(state.globalPosition, state.globalPosition + glm::normalize(dir), glm::vec3(0.0, 1.0, 0.0));
+	state.mWorldToView = glm::lookAtLH(state.globalPosition, state.globalPosition + vForward, vUp);
 	statePrev.mWorldToView = state.mWorldToView;
 	m_IsRelative = isRelative;
 }
@@ -84,6 +84,8 @@ void Camera::InitializeWithRotation(const vec3 &position, const vec3 &rotation,
 	state.rotation = rotation;
 	m_IsRelative = isRelative;
 }
+
+
 
 void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 	m_desc = desc;
@@ -101,8 +103,6 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 	state.position = vec3(state.globalPosition);
 	statePrev.position = vec3(statePrev.globalPosition);
 	state.mWorldToView = glm::lookAtLH(state.globalPosition, state.globalPosition + vForward, vUp);
-	// SPDLOG_INFO("forward: {}, {}, {}", vForward.x, vForward.y, vForward.z);
-	// Rotation
 	float angularSpeed = 10.0f * clamp(desc.horizontalFov * 0.5f / 90.0f, 0.0f, 1.0f);
 
 	state.rotation.x += desc.dYaw * angularSpeed;

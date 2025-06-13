@@ -33,7 +33,7 @@ class Buffer;
 class Texture;
 class Renderer {
 public:
-	Renderer(NRIInterface &NRI, nri::Device *device);
+	Renderer(NRIInterface &NRI, nri::Device *device, Camera &camera);
 	nri::Device *GetRenderDevice() { return m_Device; }
 	NRIInterface &GetNRI() { return m_NRI; }
 	nri::DescriptorPool &GetDescriptorPool() { return *m_DescriptorPool; }
@@ -49,6 +49,8 @@ public:
 	void OnPostRender();
 	void InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain);
 	void UploadSceneData();
+
+	void BindCamera(Camera &camera) { m_Camera = camera; }
 
 	utils::Texture &GetDefaultBlackTex() { return defaultBlackTex; }
 	utils::Texture &GetDefaultWhiteTex() { return defaultWhiteTex; }
@@ -73,6 +75,7 @@ public:
 	std::unordered_map<std::shared_ptr<Texture>, std::shared_ptr<utils::Texture>> uploadTextureMap;
 	std::unordered_map<std::shared_ptr<Buffer>, std::shared_ptr<utils::MeshData>> uploadIndexBufferMap;
 	std::unordered_map<std::shared_ptr<Buffer>, std::shared_ptr<utils::MeshData>> uploadShadowIndexBufferMap;
+	Camera& m_Camera;
 
 private:
 	nri::Device *m_Device = nullptr;
