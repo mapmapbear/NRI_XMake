@@ -329,11 +329,11 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = {};
-	meshFile = utils::GetFullPath("Sponza/sponza.gltf", utils::DataFolder::ROOT);
-	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("Sponza/sponza.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("plane.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
-	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S1.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S2.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this);
 	debugdrawPass = std::make_shared<DebugDrawPass>(this);
 
@@ -389,8 +389,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		glm::vec4 center = glm::vec4(node.mesh->aabb2.first, 1.0);
 		center = transMat * center;
 		glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
-		extent = transMat * extent;
-		debugdrawPass->DrawSphere(center, std::min(extent.x, std::min(extent.y, extent.z)), glm::vec4(1.0));
+		// extent = transMat * extent;
+		debugdrawPass->DrawSphere(center, std::max(extent.x, std::max(extent.y, extent.z)), glm::vec4(1.0));
 	}
 	debugdrawPass->DrawFrustum(glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
 

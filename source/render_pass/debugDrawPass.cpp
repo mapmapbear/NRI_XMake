@@ -2,19 +2,12 @@
 #include "NRIDescs.h"
 #include "buffer.h"
 #include "glm/ext/matrix_transform.hpp"
+#include "glm/fwd.hpp"
 #include "glm/matrix.hpp"
+#include "glm/trigonometric.hpp"
 #include "renderer.h"
 #include <cstdint>
 #include <memory>
-
-struct CBlock {
-	glm::mat4 modelMat;
-	glm::vec4 camPos;
-	glm::vec4 testVec;
-	glm::vec4 baseColor;
-	glm::vec4 pbrParams;
-	uint32_t index[4];
-};
 
 DebugDrawPass::DebugDrawPass(Renderer *renderer) :
 		CommonRenderPass(renderer) {
@@ -30,24 +23,34 @@ void DebugDrawPass::AllocGPUMemory() {
 	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
 			deviceDesc.memoryAlignment.constantBufferOffset);
 
-	// {
-	// 	nri::BufferDesc bufferDesc = {};
-	// 	bufferDesc.size = constantBufferSize * BUFFERED_FRAME_MAX_NUM;
-	// 	bufferDesc.usage = nri::BufferUsageBits::CONSTANT_BUFFER;
-	// 	NRI_ABORT_ON_FAILURE(
-	// 			NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_ConstantBuffer));
-	// }
+	{
+		nri::BufferDesc bufferDesc = {};
+		bufferDesc.size = constantBufferSize * BUFFERED_FRAME_MAX_NUM;
+		bufferDesc.usage = nri::BufferUsageBits::CONSTANT_BUFFER;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_ConstantBuffer));
+	}
 
-	// std::vector<nri::Buffer *> constantBufferArray = { m_ConstantBuffer };
+	std::vector<nri::Buffer *> constantBufferArray = { m_ConstantBuffer };
 
-	// nri::ResourceGroupDesc resourceGroupDesc = {};
-	// resourceGroupDesc.memoryLocation = nri::MemoryLocation::HOST_UPLOAD;
-	// resourceGroupDesc.bufferNum = 1;
-	// resourceGroupDesc.buffers = &m_ConstantBuffer;
+	nri::ResourceGroupDesc resourceGroupDesc = {};
+	resourceGroupDesc.memoryLocation = nri::MemoryLocation::HOST_UPLOAD;
+	resourceGroupDesc.bufferNum = 1;
+	resourceGroupDesc.buffers = &m_ConstantBuffer;
 
-	// m_MemoryAllocations.resize(1, nullptr);
-	// NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(*m_renderer->GetRenderDevice(), resourceGroupDesc,
-	// 		m_MemoryAllocations.data()));
+	m_MemoryAllocations.resize(1, nullptr);
+	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(*m_renderer->GetRenderDevice(), resourceGroupDesc,
+			m_MemoryAllocations.data()));
+
+	{
+		nri::BufferViewDesc bufferViewDesc = {};
+		bufferViewDesc.buffer = m_ConstantBuffer;
+		bufferViewDesc.viewType = nri::BufferViewType::CONSTANT;
+		bufferViewDesc.offset = 0;
+		bufferViewDesc.size = constantBufferSize;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateBufferView(bufferViewDesc, m_ConstantBufferView));
+	}
 }
 
 void DebugDrawPass::GenerateBoundingSphere(float radius, int segments) {
@@ -142,10 +145,101 @@ void DebugDrawPass::GenerateFrustum(float nearZ, float farZ, float fov, float as
 	m_positions_frustum.push_back({ { farPlaneWidth / 2.0f, farPlaneHeight / 2.0f, -farZ }, color }); //far Right Bottom
 	m_positions_frustum.push_back({ { -farPlaneWidth / 2.0f, farPlaneHeight / 2.0f, -farZ }, color }); //far Left Bottom
 
+	// 在近平面和远平面之间添加3个中间平面
+	int max_Frustum_Level = 7;
+	for (int i = 0; i < max_Frustum_Level; i++) {
+		float dist = nearZ + (farZ - nearZ) * ((i + 1.f) / (max_Frustum_Level + 1));
+		float planeHeight = 2.0f * tanHalfFovY * dist;
+		float planeWidth = planeHeight * aspect;
+
+		// 添加中间平面的4个顶点
+		m_positions_frustum.push_back({ { -planeWidth / 2.0f, -planeHeight / 2.0f, -dist }, color });
+		m_positions_frustum.push_back({ { planeWidth / 2.0f, -planeHeight / 2.0f, -dist }, color });
+		m_positions_frustum.push_back({ { planeWidth / 2.0f, planeHeight / 2.0f, -dist }, color });
+		m_positions_frustum.push_back({ { -planeWidth / 2.0f, planeHeight / 2.0f, -dist }, color });
+	}
+
 	m_indices_frustum = {
-		0, 1, 1, 2, 2, 3, 3, 0,
-		4, 5, 5, 6, 6, 7, 7, 4,
-		0, 4, 1, 5, 2, 6, 3, 7
+		0,
+		1,
+		1,
+		2,
+		2,
+		3,
+		3,
+		0,
+		4,
+		5,
+		5,
+		6,
+		6,
+		7,
+		7,
+		4,
+		0,
+		4,
+		1,
+		5,
+		2,
+		6,
+		3,
+		7,
+		8,
+		9,
+		9,
+		10,
+		10,
+		11,
+		11,
+		8,
+		12,
+		13,
+		13,
+		14,
+		14,
+		15,
+		15,
+		12,
+		16,
+		17,
+		17,
+		18,
+		18,
+		19,
+		19,
+		16,
+		20,
+		21,
+		21,
+		22,
+		22,
+		23,
+		23,
+		20,
+		24,
+		25,
+		25,
+		26,
+		26,
+		27,
+		27,
+		24,
+		28,
+		29,
+		29,
+		30,
+		30,
+		31,
+		31,
+		28,
+		32,
+		33,
+		33,
+		34,
+		34,
+		35,
+		35,
+		32,
 	};
 }
 
@@ -167,7 +261,7 @@ void DebugDrawPass::BindMemory() {
 		{ { minX, minY, maxZ }, { minX, minY, maxZ, 1.0 } }, // color }, // 4
 		{ { maxX, minY, maxZ }, { maxX, minY, maxZ, 1.0 } }, // color }, // 5
 		{ { maxX, maxY, maxZ }, { maxX, maxY, maxZ, 1.0 } }, // color }, // 6
-		{ { minX, maxY, maxZ }, { minX, maxY, maxZ, 1.0 } } // color } // 7
+		{ { minX, maxY, maxZ }, { minX, maxY, maxZ, 1.0 } } // color }   // 7
 	};
 
 	m_indices = {
@@ -289,7 +383,7 @@ void DebugDrawPass::BuildPipeline() {
 					helper::GetCountOf(descriptorRangeConstant) }
 		};
 
-		nri::RootConstantDesc rootConstant = { 1, sizeof(CBlock),
+		nri::RootConstantDesc rootConstant = { 1, sizeof(ConstantBlock),
 			nri::StageBits::VERTEX_SHADER };
 
 		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
@@ -338,7 +432,7 @@ void DebugDrawPass::BuildPipeline() {
 		inputAssemblyDesc_sphere.topology = nri::Topology::LINE_STRIP;
 
 		nri::RasterizationDesc rasterizationDesc = {};
-		rasterizationDesc.fillMode = nri::FillMode::WIREFRAME;
+		rasterizationDesc.fillMode = nri::FillMode::SOLID;
 		rasterizationDesc.cullMode = nri::CullMode::NONE;
 		// rasterizationDesc.frontCounterClockwise = true;
 
@@ -393,6 +487,17 @@ void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
 	const glm::mat4 p = camera.state.mViewToClip;
 	const glm::vec3 cameraPos = camera.state.globalPosition;
 
+	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
+			*m_ConstantBuffer, 0,
+			sizeof(ConstantBufferLayout));
+
+	if (commonConstants) {
+		commonConstants->modelMat = glm::mat4(1.0);
+		commonConstants->viewMat = camera.state.mWorldToView;
+		commonConstants->projectMat = p;
+		NRI.UnmapBuffer(*m_ConstantBuffer);
+	}
+
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Debug Draw Pass");
 
@@ -408,15 +513,14 @@ void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
 		// Box Draw
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
-		CBlock block = {};
+		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0, *m_DescriptorSet, nullptr);
+		ConstantBlock block = {};
 		block.modelMat = glm::mat4(1.0);
 		block.modelMat = camera.state.mWorldToView * block.modelMat;
 		block.modelMat = p * block.modelMat;
-		block.index[0] = 0;
-		block.index[1] = 0;
 		block.camPos = vec4(cameraPos, 1.0);
 		block.index[0] = block.index[1] = block.index[2] = block.index[3] = 0u;
-		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(ConstantBlock));
 		NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer->GetBuffer(), 0,
 				nri::IndexType::UINT32);
 		nri::VertexBufferDesc vertexBufferDesc = {};
@@ -424,12 +528,12 @@ void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
 		vertexBufferDesc.offset = m_indicesOffset;
 		vertexBufferDesc.stride = sizeof(VertexA);
 		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
-		NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(m_indices.size()), m_box_count, 0, 0, 0 });
+		// NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(m_indices.size()), m_box_count, 0, 0, 0 });
 
 		// Sphere Draw
 		block.index[0] = m_box_count;
 		block.index[1] = 0;
-		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(ConstantBlock));
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline_sphere);
 		NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer_sphere->GetBuffer(), 0,
 				nri::IndexType::UINT32);
@@ -442,13 +546,11 @@ void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
 		NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(m_indices_sphere.size()), m_sphere_count, 0, 0, 0 });
 
 		// Frustum Draw
-		// block.modelMat = glm::inverse(camera.statePrev.mWorldToView) * camera.state.mWorldToView;
-		block.modelMat = glm::inverse(camera.statePrev.mWorldToView);
-		// block.modelMat = camera.state.mWorldToView * block.modelMat;
-		// block.modelMat = p * block.modelMat;
+		block.modelMat = glm::inverse(camera.statePrev.mWorldToView) * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f));
+
 		block.index[0] = m_sphere_count + m_box_count;
 		block.index[1] = 3;
-		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(ConstantBlock));
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
 		NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer_frustum->GetBuffer(), 0,
 				nri::IndexType::UINT32);
@@ -507,10 +609,13 @@ void DebugDrawPass::GenerateBoxBuffer() {
 			NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_PipelineLayout, 0,
 					&m_DescriptorSet, 1, 0));
 	nri::Descriptor *view = m_boxDataBuffer->GetView();
-	nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs = {};
-	descriptorRangeUpdateDescs.descriptorNum = 1;
-	descriptorRangeUpdateDescs.descriptors = &view;
-	NRI.UpdateDescriptorRanges(*m_DescriptorSet, 0, 1, &descriptorRangeUpdateDescs);
+	nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[2] = {};
+	descriptorRangeUpdateDescs[0].descriptorNum = 1;
+	descriptorRangeUpdateDescs[0].descriptors = &m_ConstantBufferView;
+	descriptorRangeUpdateDescs[1].descriptorNum = 1;
+	descriptorRangeUpdateDescs[1].descriptors = &view;
+
+	NRI.UpdateDescriptorRanges(*m_DescriptorSet, 0, 2, descriptorRangeUpdateDescs);
 
 	struct BoxMeshData data = {};
 	data.worldMat = glm::mat4(1.0);

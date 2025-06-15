@@ -36,11 +36,10 @@ bool IsInsideLeftRightPlanes(float3 centerVS, float radius) {
     return insideLeftPlane;
 }
 
-
 bool isSphereInFrustum(float3 center, float radius) {
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 4; i++) {
         float4 plane = g_PushConstants.frustum[i];
-        float distance = dot(plane.xyz, center) + plane.w;
+        float distance = dot(plane.xyz, center);// + plane.w;
         if (distance < -radius) {
             return false;
         }
@@ -52,10 +51,10 @@ bool FrustumVisible(uint objectIndex) {
     StructuredBuffer<CullData> sphereCullData = ResourceDescriptorHeap[1015];
     float3 center =  sphereCullData[objectIndex].center;
     float radius = sphereCullData[objectIndex].radians;
-    float3 centerVS = mul(g_PushConstants.viewMat, float4(center,1.f)).xyz;
+    float4 centerVS = mul(g_PushConstants.viewMat, float4(center,radius));
     bool visible = true;
 
-    visible = IsInsideLeftRightPlanes(centerVS, radius);
+    visible = isSphereInFrustum(centerVS.xyz, radius);
 
     //frustrum culling
     // visible = visible && centerVS.x * g_PushConstants.frustum.x + centerVS.z * g_PushConstants.frustum.y > -radius;
@@ -64,15 +63,13 @@ bool FrustumVisible(uint objectIndex) {
 
     // if(g_PushConstants.cameraArgs.z != 0) {
     //     // the near/far plane culling uses camera space Z directly
-    //     visible = visible && centerVS.z + radius > g_PushConstants.cameraArgs.x && centerVS.z - radius < g_PushConstants.cameraArgs.y;
+    //     visible = visible && centerVS.z + radius > g_PushConstants.cameraArgs.x && centerVS.z - radius <             g_PushConstants.cameraArgs.y;
     // }
 
     // visible = visible || g_PushConstants.cameraArgs.w == 0;
 
     return visible;
 }
-
-
 
 groupshared uint s_DrawCount;
 

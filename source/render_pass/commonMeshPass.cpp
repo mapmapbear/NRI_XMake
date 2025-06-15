@@ -7,7 +7,9 @@
 #include "glm/ext/matrix_projection.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/matrix.hpp"
+#include "gpucullingPass.h"
 #include "mesh.h"
+#include "render_pass/presentPass.h"
 #include "spdlog/spdlog.h"
 #include "texture.h"
 #include <stddef.h>
@@ -16,7 +18,6 @@
 #include <format>
 #include <memory>
 #include <vector>
-#include "gpucullingPass.h"
 
 struct CBlock {
 	glm::mat4 modelMat;
@@ -612,7 +613,7 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 	auto NRI = *m_NRI;
 	const glm::vec3 cameraPos = camera.state.globalPosition;
 	{
-		helper::Annotation annotation(NRI, info.cmdBuffer, "GLTF Mesh Pass");
+		helper::Annotation annotation(NRI, info.cmdBuffer, "Forward Mesh Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
 		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
@@ -634,23 +635,21 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 		nri::Buffer *indexGeoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_indexbuffer->GetBuffer();
 		NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, 0,
 				nri::IndexType::UINT32);
+		if (!m_renderer->m_config.IndirectDrawState) {
+			for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
+				Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
+				CBlock block = {};
+				block.modelMat = node.globalTransform;
+				block.camPos = vec4(cameraPos, 1.0);
+				block.index[0] = node.material->m_BaseTexture->GetViewIndex();
+				block.index[1] = block.index[2] = 0u;
+				block.index[3] = m_brdfTexIndex;
+				NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+				uint32_t instanceCount = 1;
 
-		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
-			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
-			CBlock block = {};
-			block.modelMat = node.globalTransform; //m_rootMesh->results.at(index);
-			// block.modelMat = glm::scale(block.modelMat, glm::vec3(0.01f));
-			block.camPos = vec4(cameraPos, 1.0);
-			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
-			block.index[1] = block.index[2] = 0u;
-			block.index[3] = m_brdfTexIndex;
-			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
-			uint32_t instanceCount = 1;
-			if (!m_renderer->m_config.IndirectDrawState) {
 				NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
 			}
-		}
-		if (m_renderer->m_config.IndirectDrawState) {
+		} else {
 			nri::Buffer *indirectBuffer = m_renderer->gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
 			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *indirectBuffer, 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
 		}
@@ -696,26 +695,22 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 		nri::Buffer *indexGeoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_indexbuffer->GetBuffer();
 		NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, 0,
 				nri::IndexType::UINT32);
+		if (!m_renderer->m_config.IndirectDrawState) {
+			for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
+				Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
+				CBlock block = {};
+				block.modelMat = node.globalTransform;
+				block.camPos = vec4(cameraPos, 1.0);
+				block.index[0] = node.material->m_BaseTexture->GetViewIndex();
+				block.index[1] = block.index[2] = block.index[3] = 0u;
+				block.testVec.y = 0.0;
+				NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
 
-		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
-			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
-			CBlock block = {};
-			block.modelMat = node.globalTransform;
-			// block.modelMat = glm::scale(block.modelMat, glm::vec3(0.01f));
-			// block.modelMat = camera.state.mWorldToView * block.modelMat;
-			// block.modelMat = (p * block.modelMat);
-			block.camPos = vec4(cameraPos, 1.0);
-			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
-			block.index[1] = block.index[2] = block.index[3] = 0u;
-			block.testVec.y = 0.0;
-			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+				uint32_t instanceCount = 1;
 
-			uint32_t instanceCount = 1;
-			if (!m_renderer->m_config.IndirectDrawState) {
 				NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
 			}
-		}
-		if (m_renderer->m_config.IndirectDrawState) {
+		} else {
 			nri::Buffer *indirectBuffer = m_renderer->gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
 			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *indirectBuffer, 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
 		}
@@ -724,7 +719,61 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 
 void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 	auto NRI = *m_NRI;
+	// {
+	// 	helper::Annotation annotation(NRI, info.cmdBuffer, "Shadow Pass");
+	// 	NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_ShadowPipelineLayout);
+	// 	NRI.CmdSetPipeline(info.cmdBuffer, *m_ShadowPipeline);
+	// 	nri::ClearDesc clearDesc = {};
+	// 	clearDesc.planes = nri::PlaneBits::DEPTH;
+	// 	clearDesc.value.depthStencil.depth = 1.0;
+	// 	NRI.CmdClearAttachments(info.cmdBuffer, &clearDesc, 1, nullptr, 0);
+	// 	{
+	// 		const nri::Viewport viewport = { 0.0f, 0.0f, 2048.f,
+	// 			2048.f, 0.0f, 1.0f };
+	// 		NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
+
+	// 		nri::Rect scissor = { 0, 0, 2048, 2048 };
+	// 		NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
+	// 	}
+
+	// 	nri::Buffer *geoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_vertexbuffer->GetBuffer();
+	// 	nri::VertexBufferDesc vertexBufferDesc = {};
+	// 	vertexBufferDesc.buffer = geoBuffer;
+	// 	vertexBufferDesc.stride = sizeof(utils::Vertex);
+	// 	NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+	// 	nri::Buffer *indexGeoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_indexbuffer->GetBuffer();
+	// 	NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, 0,
+	// 			nri::IndexType::UINT32);
+
+	// 	for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
+	// 		Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
+	// 		CBlock block = {};
+	// 		block.modelMat = node.globalTransform;
+	// 		// block.modelMat = glm::scale(block.modelMat, glm::vec3(0.01f));
+	// 		block.camPos = vec4(cameraPos, 1.0);
+	// 		block.index[0] = node.material->m_BaseTexture->GetViewIndex();
+	// 		block.index[1] = block.index[2] = block.index[3] = 1u;
+	// 		block.testVec.y = 2.0f;
+	// 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+
+	// 		uint32_t instanceCount = 1;
+	// 		NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
+	// 	}
+	// }
+
+	const glm::mat4 p = camera.statePrev.mViewToClip;
 	const glm::vec3 cameraPos = camera.statePrev.position;
+
+	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
+			*m_ConstantBuffer, 0,
+			sizeof(ConstantBufferLayout));
+	if (commonConstants) {
+		commonConstants->modelMat = glm::mat4(1.0);
+		commonConstants->viewMat = camera.state.mWorldToView;
+		commonConstants->projectMat = camera.state.mViewToClip;
+		commonConstants->lightVP = m_renderer->m_lightVP;
+		NRI.UnmapBuffer(*m_ConstantBuffer);
+	}
 
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Shadow Pass");
@@ -751,20 +800,26 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 		nri::Buffer *indexGeoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_indexbuffer->GetBuffer();
 		NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, 0,
 				nri::IndexType::UINT32);
+		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
+				*m_ConstantBufferDescriptorSet, nullptr);
+		if (!m_renderer->m_config.IndirectDrawState) {
+			for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
+				Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
+				CBlock block = {};
+				block.modelMat = node.globalTransform;
+				block.camPos = vec4(cameraPos, 1.0);
+				block.index[0] = node.material->m_BaseTexture->GetViewIndex();
+				block.index[1] = block.index[2] = block.index[3] = 1u;
+				block.testVec.y = 2.0f;
+				NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
 
-		for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
-			Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
-			CBlock block = {};
-			block.modelMat = node.globalTransform;
-			// block.modelMat = glm::scale(block.modelMat, glm::vec3(0.01f));
-			block.camPos = vec4(cameraPos, 1.0);
-			block.index[0] = node.material->m_BaseTexture->GetViewIndex();
-			block.index[1] = block.index[2] = block.index[3] = 1u;
-			block.testVec.y = 2.0f;
-			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+				uint32_t instanceCount = 1;
 
-			uint32_t instanceCount = 1;
-			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
+				NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
+			}
+		} else {
+			nri::Buffer *indirectBuffer = m_renderer->gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
+			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *indirectBuffer, 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
 		}
 	}
 }

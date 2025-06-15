@@ -1,5 +1,6 @@
 #include "gpucullingPass.h"
 #include "../renderer.h"
+#include "Camera.h"
 #include "buffer.h"
 #include "render_pass/commonRenderPass.h"
 
@@ -105,7 +106,7 @@ void GPUCullingPass::AllocGPUMemory() {
 			glm::vec4 center = glm::vec4(node.mesh->aabb2.first, 1.0);
 			center = transMat * center;
 			glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
-			extent = transMat * extent;
+			
 			cullDatas[i].center = center;
 			cullDatas[i].radians = std::min(extent.x, std::min(extent.y, extent.z));
 		}
@@ -236,7 +237,7 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 		glm::vec4 frustumB = normalizePlane(projMat[3] - projMat[1]);
 
 		PushConstants block = {
-			.viewMat = camera.statePrev.mWorldToView,
+			.viewMat = camera.statePrev.mWorldToView * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f)),
 			.cameraArgs = glm::vec4(camera.m_desc.nearZ, camera.m_desc.farZ, camera.m_desc.farZ + 20, 0.0f),
 			.frustum = { glm::vec4(frustumL.x, frustumL.y, frustumL.z, frustumL.w),
 					glm::vec4(frustumR.x, frustumR.y, frustumR.z, frustumR.w),
@@ -245,10 +246,6 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 			.totalObjectCount = (uint32_t)m_renderer->m_OpaqueRenderNodes.size(),
 
 		};
-
-		if (block.viewMat != camera.statePrev.mWorldToView) {
-			SPDLOG_ERROR("viewMat changed");
-		}
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(PushConstants));
 		NRI.CmdDispatch(info.cmdBuffer, { (uint32_t)m_renderer->m_OpaqueRenderNodes.size() / 8 + 1, 1, 1 });
 	}

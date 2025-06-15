@@ -19,6 +19,7 @@ struct inputVS {
 #ifdef ALPHA_TEST
     float2 in_texcoord : TEXCOORD0;
 #endif
+    uint startInstance : SV_StartInstanceLocation;
 };
 
 struct outputVS {
@@ -39,17 +40,15 @@ struct InputPS {
 
 outputVS vs_main(inputVS input) {
     outputVS output;
-    float4x4 lightMVP = mul(lightVP, g_PushConstants.worldMat);
+    StructuredBuffer<float4x4> worldMatBuffer = ResourceDescriptorHeap[1006];
+    float4x4 testMat = worldMatBuffer[input.startInstance];
+    float4x4 lightMVP = mul(lightVP,testMat);
     output.testVS = mul(g_PushConstants.worldMat, float4(0.0, 1.0, 1.0, 1.0));
     float4x4 worldMat = g_PushConstants.worldMat;
     float4x4 vpMat = mul(viewMat, worldMat);
     float4x4 mvpMat = mul(projectMat, vpMat);
-
-    output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));
-    // output.position = mul(float4(0.0, 0.0, 10.0, 1.0) , g_PushConstants.mvpMat) ;
-    if(g_PushConstants.testVec.y > 0) {
-        output.position = mul(lightMVP, float4(input.in_position.xyz, 1.0));
-    }
+    // output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));
+    output.position = mul(lightMVP, float4(input.in_position.xyz, 1.0));
 #ifdef ALPHA_TEST
     output.texCoord = input.in_texcoord;
 #endif

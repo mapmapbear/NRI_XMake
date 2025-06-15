@@ -26,10 +26,20 @@ public:
 		glm::mat4 worldMat;
 	};
 
+	struct ConstantBlock {
+	glm::mat4 modelMat;
+	glm::vec4 camPos;
+	glm::vec4 testVec;
+	uint32_t index[4];
+};
+
+
 private:
 	nri::PipelineLayout *m_PipelineLayout = nullptr;
 	nri::DescriptorSet *m_DescriptorSet = nullptr;
 	nri::Buffer *m_ConstantBuffer = nullptr;
+	nri::DescriptorSet *m_ConstantBufferDescriptorSet = nullptr;
+	nri::Descriptor *m_ConstantBufferView = nullptr;
 
 	// Box
 	std::vector<VertexA> m_positions;

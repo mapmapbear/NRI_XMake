@@ -95,7 +95,7 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 	vec3 delta = desc.dLocal * desc.timeScale;
 	delta.z *= desc.isPositiveZ ? 1.0f : -1.0f;
 
-	state.globalPosition += vec3(vRight * -delta.x);
+	state.globalPosition += vec3(vRight * delta.x);
 	state.globalPosition += vec3(vUp * delta.y);
 	state.globalPosition += vec3(vForward * delta.z);
 	state.globalPosition += vec3(desc.dUser);
@@ -111,25 +111,29 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 	state.rotation.x = fmodf(state.rotation.x, 360.0f);
 	state.rotation.y = clamp(state.rotation.y, -90.0f, 90.0f);
 #if 1
-
+	// SPDLOG_INFO("state.rotation: {}, {}", state.rotation.x, state.rotation.y);
 	// 计算yaw旋转（绕Y轴）
 	glm::quat yawRotation = glm::angleAxis(glm::radians(-state.rotation.x), vUp);
 	glm::vec3 rotatedForward = glm::normalize(yawRotation * vForward);
 	glm::vec3 rotatedRight = glm::normalize(yawRotation * vRight);
-	glm::vec3 rotatedUp = glm::vec3(0.0f, 1.0f, 0.0f);
+	glm::vec3 rotatedUp = glm::normalize(yawRotation * vUp);
 
 	// 计算pitch旋转（绕X轴）
-	glm::quat pitchRotation = glm::angleAxis(glm::radians(state.rotation.y), rotatedRight);
+	glm::quat pitchRotation = glm::angleAxis(glm::radians(-state.rotation.y), rotatedRight);
 	rotatedForward = glm::normalize(pitchRotation * rotatedForward);
-	rotatedUp = glm::normalize(pitchRotation * rotatedUp);
+	//rotatedUp = glm::normalize(pitchRotation * rotatedUp);
 
 	// 确保正交性
-	rotatedRight = glm::normalize(glm::cross(rotatedForward, rotatedUp));
-	rotatedUp = glm::normalize(glm::cross(rotatedRight, rotatedForward));
+	// rotatedRight = glm::normalize(glm::cross(rotatedForward, rotatedUp));
+	// rotatedUp = glm::normalize(glm::cross(rotatedRight, rotatedForward));
 
 	vForward = rotatedForward;
 	vRight = rotatedRight;
-	vUp = rotatedUp;
+	// vUp = rotatedUp;
+
+	// SPDLOG_INFO("vForward: {}, {}, {}", vForward.x, vForward.y, vForward.z);
+	// SPDLOG_INFO("vRight: {}, {}, {}", vRight.x, vRight.y, vRight.z);
+	// SPDLOG_INFO("vUp: {}, {}, {}", vUp.x, vUp.y, vUp.z);
 
 	// // 构建视图矩阵
 	// state.mWorldToView = glm::mat4(
