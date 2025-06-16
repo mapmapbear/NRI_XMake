@@ -531,10 +531,11 @@ void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
 		// NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(m_indices.size()), m_box_count, 0, 0, 0 });
 
 		// Sphere Draw
-		block.index[0] = m_box_count;
-		block.index[1] = 0;
-		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(ConstantBlock));
+		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline_sphere);
+		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0, *m_DescriptorSet, nullptr);
+		block.index[0] = m_box_count;
+		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(ConstantBlock));
 		NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer_sphere->GetBuffer(), 0,
 				nri::IndexType::UINT32);
 		nri::VertexBufferDesc vertexBufferDesc_sphere = {};
@@ -548,10 +549,12 @@ void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
 		// Frustum Draw
 		block.modelMat = glm::inverse(camera.statePrev.mWorldToView) * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f));
 
+		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
+		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
+		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0, *m_DescriptorSet, nullptr);
 		block.index[0] = m_sphere_count + m_box_count;
 		block.index[1] = 3;
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(ConstantBlock));
-		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
 		NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer_frustum->GetBuffer(), 0,
 				nri::IndexType::UINT32);
 		nri::VertexBufferDesc vertexBufferDesc_frustum = {};
