@@ -21,25 +21,10 @@ struct CullData {
     float radians;
 };
 
-bool IsInsideLeftRightPlanes(float3 centerVS, float radius) {
-    bool insideLeftPlane = true;
-    float distanceToPlane = g_PushConstants.frustum[0].x * centerVS.x  + 
-    g_PushConstants.frustum[0].y * centerVS.z;
-    float distanceToPlane2 = g_PushConstants.frustum[1].x * centerVS.x  + 
-    g_PushConstants.frustum[1].y * centerVS.z;
-    insideLeftPlane = insideLeftPlane && distanceToPlane > -radius && distanceToPlane2 > -radius;
-    // float distanceToPlane3 = g_PushConstants.frustum[2].x * centerVS.x  + 
-    // g_PushConstants.frustum[2].y * centerVS.z;
-    // float distanceToPlane4 = g_PushConstants.frustum[3].x * centerVS.x  + 
-    // g_PushConstants.frustum[3].y * centerVS.z;
-    // insideLeftPlane = insideLeftPlane && distanceToPlane3 > -radius && distanceToPlane4 > -radius;
-    return insideLeftPlane;
-}
-
 bool isSphereInFrustum(float3 center, float radius) {
     for (int i = 0; i < 4; i++) {
         float4 plane = g_PushConstants.frustum[i];
-        float distance = dot(plane.xyz, center);// + plane.w;
+        float distance = dot(plane.xyz, center);
         if (distance < -radius) {
             return false;
         }
@@ -57,7 +42,7 @@ bool FrustumVisible(uint objectIndex) {
     visible = isSphereInFrustum(centerVS.xyz, radius);
 
     //frustrum culling
-    // visible = visible && centerVS.x * g_PushConstants.frustum.x + centerVS.z * g_PushConstants.frustum.y > -radius;
+    // visible = visible && centerVS.x * g_PushConstants.frustum[0].x + centerVS.z * g_PushConstants.frustum[0].y > -radius;
     // visible = visible && centerVS.x * g_PushConstants.frustum.w + centerVS.z * g_PushConstants.frustum.y > -radius;
     // visible = visible && centerVS.z * g_PushConstants.frustum.w - abs(centerVS.y) * g_PushConstants.frustum.z > -radius;
 

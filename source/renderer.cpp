@@ -52,7 +52,7 @@ Renderer::Renderer(NRIInterface &NRI, nri::Device *device, Camera &camera) :
 
 	utils::LoadTexture(utils::GetFullPath("brdf.dds", utils::DataFolder::TEXTURES), BRDFTex, true);
 
-	std::string sceneFile = utils::GetFullPath("Camera/Camera.gltf", utils::DataFolder::ROOT);
+	// std::string sceneFile = utils::GetFullPath("Camera/Camera.gltf", utils::DataFolder::ROOT);
 	//sceneFile = utils::GetFullPath("meshes/orrery/scene.gltf", utils::DataFolder::ROOT);
 	// sceneFile = utils::GetFullPath("Sponza/sponza.gltf", utils::DataFolder::ROOT);
 	// NRI_ABORT_ON_FALSE(utils::LoadScene(sceneFile, m_Scene, false));
@@ -329,8 +329,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = {};
-	// meshFile = utils::GetFullPath("Sponza/sponza.gltf", utils::DataFolder::ROOT);
-	meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("Sponza/sponza.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("plane.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S2.gltf", utils::DataFolder::ROOT);

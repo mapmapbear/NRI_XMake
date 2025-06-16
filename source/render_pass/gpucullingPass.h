@@ -1,12 +1,15 @@
 #pragma once
 #include "CommonRenderPass.h"
 #include <array>
-class Buffer;
+#include <memory>
 
+class Buffer;
+class Texture;
 class GPUCullingPass : public CommonRenderPass {
 public:
 	GPUCullingPass(Renderer *renderer);
 	void Render(struct RenderInfo &info, Camera &camera) override;
+	void RenderHiZ(struct RenderInfo &info);
 	void BuildPipeline() override;
 	void AllocGPUMemory() override;
 	void BindMemory() override;
@@ -30,6 +33,13 @@ private:
 	nri::PipelineLayout *m_CullingPipelineLayout = nullptr;
 	nri::Pipeline *m_CullingPipeline = nullptr;
 	nri::DescriptorSet *m_CullingDescriptorSet = nullptr;
+
+	nri::PipelineLayout *m_HiZPipelineLayout = nullptr;
+	nri::Pipeline *m_HiZPipeline = nullptr;
+	nri::DescriptorSet *m_HiZDescriptorSet = nullptr;
+	nri::Descriptor *m_DepthTextureSRV = nullptr;
+	nri::Descriptor *m_PointSampler = nullptr;
+	std::shared_ptr<Texture> m_HiZTexture = nullptr;
 
 	std::shared_ptr<Buffer> m_CullDataBuffer = nullptr;
 	std::shared_ptr<Buffer> m_GPUSceneObjectsBuffer = nullptr;

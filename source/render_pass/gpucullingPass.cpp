@@ -2,7 +2,10 @@
 #include "../renderer.h"
 #include "Camera.h"
 #include "buffer.h"
+#include "glm/fwd.hpp"
 #include "render_pass/commonRenderPass.h"
+#include "texture.h"
+
 
 GPUCullingPass::GPUCullingPass(Renderer *renderer) :
 		CommonRenderPass(renderer) {
@@ -14,7 +17,7 @@ GPUCullingPass::GPUCullingPass(Renderer *renderer) :
 
 void GPUCullingPass::AllocGPUMemory() {
 	auto NRI = *m_NRI;
-
+	// Culling GPU Resources
 	{
 		m_CullDataBuffer = std::make_shared<Buffer>();
 
@@ -106,7 +109,7 @@ void GPUCullingPass::AllocGPUMemory() {
 			glm::vec4 center = glm::vec4(node.mesh->aabb2.first, 1.0);
 			center = transMat * center;
 			glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
-			
+
 			cullDatas[i].center = center;
 			cullDatas[i].radians = std::min(extent.x, std::min(extent.y, extent.z));
 		}
@@ -142,9 +145,68 @@ void GPUCullingPass::AllocGPUMemory() {
 				uploadDescArray.data(),
 				(uint32_t)uploadDescArray.size()));
 	}
+
+	// HiZ GPU Resources
+	{
+		nri::TextureDesc textureDesc = {};
+		textureDesc.type = nri::TextureType::TEXTURE_2D;
+		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE_STORAGE | nri::TextureUsageBits::SHADER_RESOURCE;
+		textureDesc.format = nri::Format::R32_SFLOAT;
+		textureDesc.width = m_renderer->m_OutputResolution.first;
+		textureDesc.height = m_renderer->m_OutputResolution.second;
+		textureDesc.mipNum = 11;
+
+		nri::Texture2DViewDesc texture2DViewDesc = {};
+		texture2DViewDesc.format = textureDesc.format;
+		texture2DViewDesc.viewType = nri::Texture2DViewType::SHADER_RESOURCE_STORAGE_2D;
+
+		m_HiZTexture = std::make_shared<Texture>();
+		m_HiZTexture->Create(m_renderer, textureDesc, texture2DViewDesc);
+		NRI.SetDebugName(m_HiZTexture->GetTexture(), "m_HiZTexture");
+		std::vector<std::vector<float>> data(textureDesc.mipNum);
+		std::vector<nri::TextureSubresourceUploadDesc> subresources;
+		for (uint32_t i = 0; i < textureDesc.mipNum; i++) {
+			nri::TextureSubresourceUploadDesc subresource = {};
+			uint32_t width = textureDesc.width >> i;
+			uint32_t height = textureDesc.height >> i;
+			subresource.rowPitch = width * sizeof(float);
+			subresource.slicePitch = subresource.rowPitch * height;
+			data[i].resize(width * height);
+			subresource.slices = data[i].data();
+			subresource.sliceNum = 1;
+			subresources.push_back(subresource);
+		}
+
+		nri::TextureUploadDesc textureData = {};
+		textureData.subresources = subresources.data();
+		textureData.texture = m_HiZTexture->GetTexture();
+		textureData.after = { nri::AccessBits::SHADER_RESOURCE_STORAGE, nri::Layout::SHADER_RESOURCE_STORAGE };
+		textureData.planes = nri::PlaneBits::ALL;
+
+		NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), &textureData, 1, nullptr, 0));
+	}
 }
 
 void GPUCullingPass::BindMemory() {
+	auto NRI = *m_NRI;
+	{
+		nri::Texture2DViewDesc texture2DViewDes = { .texture = m_renderer->m_DepthTex, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = nri::Format::D32_SFLOAT };
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateTexture2DView(texture2DViewDes, m_DepthTextureSRV));
+	}
+
+	{
+		nri::SamplerDesc samplerDesc = {};
+		samplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE,
+			nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
+		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
+			nri::Filter::LINEAR };
+		// samplerDesc.anisotropy = 4;
+		samplerDesc.mipMax = 16.0f;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_PointSampler));
+		NRI.SetDebugName(m_PointSampler, "Point Sampler");
+	}
 }
 
 void GPUCullingPass::BuildPipeline() {
@@ -184,6 +246,45 @@ void GPUCullingPass::BuildPipeline() {
 		NRI_ABORT_ON_FAILURE(NRI.CreateComputePipeline(*m_renderer->GetRenderDevice(), computePipelineDesc, m_CullingPipeline));
 	}
 
+	// HiZ Pipeline
+	{
+		nri::DescriptorRangeDesc descriptorRangeTexture[3] = {};
+		descriptorRangeTexture[0].descriptorNum = 1;
+		descriptorRangeTexture[0].descriptorType = nri::DescriptorType::TEXTURE;
+		descriptorRangeTexture[0].shaderStages = nri::StageBits::COMPUTE_SHADER;
+		descriptorRangeTexture[1].descriptorNum = 1;
+		descriptorRangeTexture[1].descriptorType = nri::DescriptorType::STORAGE_TEXTURE;
+		descriptorRangeTexture[1].shaderStages = nri::StageBits::COMPUTE_SHADER;
+		descriptorRangeTexture[2].descriptorNum = 1;
+		descriptorRangeTexture[2].descriptorType = nri::DescriptorType::SAMPLER;
+		descriptorRangeTexture[2].shaderStages = nri::StageBits::COMPUTE_SHADER;
+
+		nri::DescriptorSetDesc descriptorSetDescs[] = {
+			{ 0, descriptorRangeTexture, helper::GetCountOf(descriptorRangeTexture) },
+		};
+
+		nri::RootConstantDesc rootConstant = { 1, sizeof(PushConstants),
+			nri::StageBits::COMPUTE_SHADER };
+
+		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
+		pipelineLayoutDesc.descriptorSetNum =
+				helper::GetCountOf(descriptorSetDescs);
+		pipelineLayoutDesc.descriptorSets = descriptorSetDescs;
+		pipelineLayoutDesc.rootConstants = &rootConstant;
+		pipelineLayoutDesc.rootConstantNum = 1;
+		pipelineLayoutDesc.shaderStages =
+				nri::StageBits::COMPUTE_SHADER;
+		NRI_ABORT_ON_FAILURE(NRI.CreatePipelineLayout(*m_renderer->GetRenderDevice(), pipelineLayoutDesc,
+				m_HiZPipelineLayout));
+
+		utils::ShaderCodeStorage shaderCodeStorage;
+		nri::ComputePipelineDesc computePipelineDesc = {};
+		computePipelineDesc.pipelineLayout = m_HiZPipelineLayout;
+		computePipelineDesc.shader = utils::LoadShader(nri::GraphicsAPI::D3D12, "hizBuild.cs", shaderCodeStorage);
+		NRI_ABORT_ON_FAILURE(NRI.CreateComputePipeline(*m_renderer->GetRenderDevice(), computePipelineDesc, m_HiZPipeline));
+	}
+
+	// Update Culling Descriptor Set
 	{
 		nri::DescriptorRangeDesc descriptorRangeTexture[2] = {};
 		descriptorRangeTexture[0].descriptorNum = 2;
@@ -210,6 +311,38 @@ void GPUCullingPass::BuildPipeline() {
 		descriptorRangeUpdateDescs[1].descriptors = descriptors2.data();
 
 		NRI.UpdateDescriptorRanges(*m_CullingDescriptorSet, 0,
+				helper::GetCountOf(descriptorRangeUpdateDescs),
+				descriptorRangeUpdateDescs);
+	}
+
+	// Update Hi-Z Descriptor Set
+	{
+		nri::DescriptorRangeDesc descriptorRangeTexture[3] = {};
+		descriptorRangeTexture[0].descriptorNum = 1;
+		descriptorRangeTexture[0].descriptorType = nri::DescriptorType::TEXTURE;
+		descriptorRangeTexture[0].shaderStages = nri::StageBits::COMPUTE_SHADER;
+		descriptorRangeTexture[1].descriptorNum = 1;
+		descriptorRangeTexture[1].descriptorType = nri::DescriptorType::STORAGE_TEXTURE;
+		descriptorRangeTexture[1].shaderStages = nri::StageBits::COMPUTE_SHADER;
+		descriptorRangeTexture[2].descriptorNum = 1;
+		descriptorRangeTexture[2].descriptorType = nri::DescriptorType::SAMPLER;
+		descriptorRangeTexture[2].shaderStages = nri::StageBits::COMPUTE_SHADER;
+
+		NRI_ABORT_ON_FAILURE(NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_HiZPipelineLayout, 0,
+				&m_HiZDescriptorSet, 1, 0));
+		NRI.SetDebugName(m_HiZDescriptorSet, "m_HiZDescriptorSet");
+
+		nri::Descriptor *hizStorageTextureView = m_HiZTexture->GetView();
+		nri::Descriptor *hizSamplerView = m_PointSampler;
+		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[3] = {};
+		descriptorRangeUpdateDescs[0].descriptorNum = 1;
+		descriptorRangeUpdateDescs[0].descriptors = &m_DepthTextureSRV;
+		descriptorRangeUpdateDescs[1].descriptorNum = 1;
+		descriptorRangeUpdateDescs[1].descriptors = &hizStorageTextureView;
+		descriptorRangeUpdateDescs[2].descriptorNum = 1;
+		descriptorRangeUpdateDescs[2].descriptors = &hizSamplerView;
+
+		NRI.UpdateDescriptorRanges(*m_HiZDescriptorSet, 0,
 				helper::GetCountOf(descriptorRangeUpdateDescs),
 				descriptorRangeUpdateDescs);
 	}
@@ -248,5 +381,15 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 		};
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(PushConstants));
 		NRI.CmdDispatch(info.cmdBuffer, { (uint32_t)m_renderer->m_OpaqueRenderNodes.size() / 8 + 1, 1, 1 });
+	}
+}
+
+void GPUCullingPass::RenderHiZ(struct RenderInfo &info) {
+	auto NRI = *m_NRI;
+	{
+		helper::Annotation annotation(NRI, info.cmdBuffer, "Hi-Z Pass");
+		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_HiZPipelineLayout);
+		NRI.CmdSetPipeline(info.cmdBuffer, *m_HiZPipeline);
+		NRI.CmdDispatch(info.cmdBuffer, { m_renderer->m_OutputResolution.first / 8 + 1, m_renderer->m_OutputResolution.second / 8 + 1, 1 });
 	}
 }
