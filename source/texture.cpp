@@ -3,6 +3,8 @@
 
 void Texture::Create(Renderer *renderer, nri::TextureDesc &texDesc, nri::Texture2DViewDesc &viewDesc) {
 	if (texDesc.format != nri::Format::UNKNOWN) {
+		m_mipNum = texDesc.mipNum;
+
 		NRI_ABORT_ON_FAILURE(
 				renderer->GetNRI().CreateTexture(*renderer->GetRenderDevice(), texDesc, m_texture));
 
@@ -13,10 +15,13 @@ void Texture::Create(Renderer *renderer, nri::TextureDesc &texDesc, nri::Texture
 		NRI_ABORT_ON_FAILURE(renderer->GetNRI().AllocateAndBindMemory(*renderer->GetRenderDevice(), resourceGroupDesc,
 				&m_mem));
 	}
-
+	m_views.resize(texDesc.mipNum);
 	if (viewDesc.format != nri::Format::UNKNOWN) {
 		viewDesc.texture = m_texture;
-		NRI_ABORT_ON_FAILURE(
-				renderer->GetNRI().CreateTexture2DView(viewDesc, m_view));
+		for (uint32_t i = 0; i < texDesc.mipNum; i++) {
+			viewDesc.mipOffset = i;
+			NRI_ABORT_ON_FAILURE(
+					renderer->GetNRI().CreateTexture2DView(viewDesc, m_views[i]));
+		}
 	}
 }

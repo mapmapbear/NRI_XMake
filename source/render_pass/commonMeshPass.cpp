@@ -695,7 +695,8 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 		nri::Buffer *indexGeoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_indexbuffer->GetBuffer();
 		NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, 0,
 				nri::IndexType::UINT32);
-		if (!m_renderer->m_config.IndirectDrawState) {
+		if (!m_renderer->m_config.IndirectDrawState) 
+		{
 			for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 				Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 				CBlock block = {};
@@ -710,7 +711,8 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 
 				NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
 			}
-		} else {
+		} 
+		else {
 			nri::Buffer *indirectBuffer = m_renderer->gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
 			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *indirectBuffer, 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
 		}

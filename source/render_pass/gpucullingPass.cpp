@@ -6,7 +6,6 @@
 #include "render_pass/commonRenderPass.h"
 #include "texture.h"
 
-
 GPUCullingPass::GPUCullingPass(Renderer *renderer) :
 		CommonRenderPass(renderer) {
 	m_NRI = &renderer->GetNRI();
@@ -17,6 +16,42 @@ GPUCullingPass::GPUCullingPass(Renderer *renderer) :
 
 void GPUCullingPass::AllocGPUMemory() {
 	auto NRI = *m_NRI;
+
+	{
+		const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
+		const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
+				deviceDesc.memoryAlignment.constantBufferOffset);
+
+		{
+			nri::BufferDesc bufferDesc = {};
+			bufferDesc.size = constantBufferSize * BUFFERED_FRAME_MAX_NUM;
+			bufferDesc.usage = nri::BufferUsageBits::CONSTANT_BUFFER;
+			NRI_ABORT_ON_FAILURE(
+					NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_ConstantBuffer));
+		}
+
+		std::vector<nri::Buffer *> constantBufferArray = { m_ConstantBuffer };
+
+		nri::ResourceGroupDesc resourceGroupDesc = {};
+		resourceGroupDesc.memoryLocation = nri::MemoryLocation::HOST_UPLOAD;
+		resourceGroupDesc.bufferNum = 1;
+		resourceGroupDesc.buffers = &m_ConstantBuffer;
+
+		m_MemoryAllocations.resize(1, nullptr);
+		NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(*m_renderer->GetRenderDevice(), resourceGroupDesc,
+				m_MemoryAllocations.data()));
+
+		{
+			nri::BufferViewDesc bufferViewDesc = {};
+			bufferViewDesc.buffer = m_ConstantBuffer;
+			bufferViewDesc.viewType = nri::BufferViewType::CONSTANT;
+			bufferViewDesc.offset = 0;
+			bufferViewDesc.size = constantBufferSize;
+			NRI_ABORT_ON_FAILURE(
+					NRI.CreateBufferView(bufferViewDesc, m_ConstantBufferView));
+		}
+	}
+
 	// Culling GPU Resources
 	{
 		m_CullDataBuffer = std::make_shared<Buffer>();
@@ -111,7 +146,7 @@ void GPUCullingPass::AllocGPUMemory() {
 			glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
 
 			cullDatas[i].center = center;
-			cullDatas[i].radians = std::min(extent.x, std::min(extent.y, extent.z));
+			cullDatas[i].extents = extent;
 		}
 
 		nri::BufferUploadDesc bufferData = {};
@@ -163,6 +198,7 @@ void GPUCullingPass::AllocGPUMemory() {
 		m_HiZTexture = std::make_shared<Texture>();
 		m_HiZTexture->Create(m_renderer, textureDesc, texture2DViewDesc);
 		NRI.SetDebugName(m_HiZTexture->GetTexture(), "m_HiZTexture");
+
 		std::vector<std::vector<float>> data(textureDesc.mipNum);
 		std::vector<nri::TextureSubresourceUploadDesc> subresources;
 		for (uint32_t i = 0; i < textureDesc.mipNum; i++) {
@@ -199,10 +235,10 @@ void GPUCullingPass::BindMemory() {
 		nri::SamplerDesc samplerDesc = {};
 		samplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE,
 			nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
-		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
-			nri::Filter::LINEAR };
+		samplerDesc.filters = { nri::Filter::NEAREST, nri::Filter::NEAREST,
+			nri::Filter::NEAREST };
 		// samplerDesc.anisotropy = 4;
-		samplerDesc.mipMax = 16.0f;
+		samplerDesc.mipMax = 3.0f;
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateSampler(*m_renderer->GetRenderDevice(), samplerDesc, m_PointSampler));
 		NRI.SetDebugName(m_PointSampler, "Point Sampler");
@@ -211,7 +247,6 @@ void GPUCullingPass::BindMemory() {
 
 void GPUCullingPass::BuildPipeline() {
 	auto NRI = *m_NRI;
-	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
 
 	// Pipeline
 	{
@@ -221,8 +256,11 @@ void GPUCullingPass::BuildPipeline() {
 		descriptorRangeTexture[1] = { 1, 2, nri::DescriptorType::STORAGE_STRUCTURED_BUFFER,
 			nri::StageBits::COMPUTE_SHADER };
 
+		nri::DescriptorRangeDesc descriptorRangeConstantBuffer = { 0, 1, nri::DescriptorType::CONSTANT_BUFFER };
+
 		nri::DescriptorSetDesc descriptorSetDescs[] = {
-			{ 0, descriptorRangeTexture, 2 },
+			{ 0, descriptorRangeTexture, helper::GetCountOf(descriptorRangeTexture) },
+			{ 1, &descriptorRangeConstantBuffer, 1 },
 		};
 
 		nri::RootConstantDesc rootConstant = { 1, sizeof(PushConstants),
@@ -252,7 +290,7 @@ void GPUCullingPass::BuildPipeline() {
 		descriptorRangeTexture[0].descriptorNum = 1;
 		descriptorRangeTexture[0].descriptorType = nri::DescriptorType::TEXTURE;
 		descriptorRangeTexture[0].shaderStages = nri::StageBits::COMPUTE_SHADER;
-		descriptorRangeTexture[1].descriptorNum = 1;
+		descriptorRangeTexture[1].descriptorNum = m_HiZTexture->GetMipNum();
 		descriptorRangeTexture[1].descriptorType = nri::DescriptorType::STORAGE_TEXTURE;
 		descriptorRangeTexture[1].shaderStages = nri::StageBits::COMPUTE_SHADER;
 		descriptorRangeTexture[2].descriptorNum = 1;
@@ -263,7 +301,7 @@ void GPUCullingPass::BuildPipeline() {
 			{ 0, descriptorRangeTexture, helper::GetCountOf(descriptorRangeTexture) },
 		};
 
-		nri::RootConstantDesc rootConstant = { 1, sizeof(PushConstants),
+		nri::RootConstantDesc rootConstant = { 1, sizeof(HiZPushConstants),
 			nri::StageBits::COMPUTE_SHADER };
 
 		nri::PipelineLayoutDesc pipelineLayoutDesc = {};
@@ -286,18 +324,13 @@ void GPUCullingPass::BuildPipeline() {
 
 	// Update Culling Descriptor Set
 	{
-		nri::DescriptorRangeDesc descriptorRangeTexture[2] = {};
-		descriptorRangeTexture[0].descriptorNum = 2;
-		descriptorRangeTexture[0].descriptorType = nri::DescriptorType::STRUCTURED_BUFFER;
-		descriptorRangeTexture[0].shaderStages = nri::StageBits::COMPUTE_SHADER;
-
-		descriptorRangeTexture[1].descriptorNum = 2;
-		descriptorRangeTexture[1].descriptorType = nri::DescriptorType::STRUCTURED_BUFFER;
-		descriptorRangeTexture[1].shaderStages = nri::StageBits::COMPUTE_SHADER;
-
 		NRI_ABORT_ON_FAILURE(NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_CullingPipelineLayout, 0,
 				&m_CullingDescriptorSet, 1, 0));
 		NRI.SetDebugName(m_CullingDescriptorSet, "m_CullingDescriptorSet");
+
+		NRI_ABORT_ON_FAILURE(NRI.AllocateDescriptorSets(m_renderer->GetDescriptorPool(), *m_CullingPipelineLayout, 1,
+				&m_CullingDescriptorConstantBufferSet, 1, 0));
+		NRI.SetDebugName(m_CullingDescriptorConstantBufferSet, "m_CullingDescriptorConstantBufferSet");
 
 		nri::Descriptor *cullDataBufferView = m_CullDataBuffer->GetView();
 		nri::Descriptor *gpuSceneObjectsBufferView = m_GPUSceneObjectsBuffer->GetView();
@@ -313,6 +346,15 @@ void GPUCullingPass::BuildPipeline() {
 		NRI.UpdateDescriptorRanges(*m_CullingDescriptorSet, 0,
 				helper::GetCountOf(descriptorRangeUpdateDescs),
 				descriptorRangeUpdateDescs);
+
+		nri::Descriptor *constantBufferView = m_ConstantBufferView;
+		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs2[1] = {};
+		descriptorRangeUpdateDescs2[0].descriptorNum = 1;
+		descriptorRangeUpdateDescs2[0].descriptors = &constantBufferView;
+
+		NRI.UpdateDescriptorRanges(*m_CullingDescriptorConstantBufferSet, 0,
+				helper::GetCountOf(descriptorRangeUpdateDescs2),
+				descriptorRangeUpdateDescs2);
 	}
 
 	// Update Hi-Z Descriptor Set
@@ -321,7 +363,7 @@ void GPUCullingPass::BuildPipeline() {
 		descriptorRangeTexture[0].descriptorNum = 1;
 		descriptorRangeTexture[0].descriptorType = nri::DescriptorType::TEXTURE;
 		descriptorRangeTexture[0].shaderStages = nri::StageBits::COMPUTE_SHADER;
-		descriptorRangeTexture[1].descriptorNum = 1;
+		descriptorRangeTexture[1].descriptorNum = m_HiZTexture->GetMipNum();
 		descriptorRangeTexture[1].descriptorType = nri::DescriptorType::STORAGE_TEXTURE;
 		descriptorRangeTexture[1].shaderStages = nri::StageBits::COMPUTE_SHADER;
 		descriptorRangeTexture[2].descriptorNum = 1;
@@ -332,13 +374,16 @@ void GPUCullingPass::BuildPipeline() {
 				&m_HiZDescriptorSet, 1, 0));
 		NRI.SetDebugName(m_HiZDescriptorSet, "m_HiZDescriptorSet");
 
-		nri::Descriptor *hizStorageTextureView = m_HiZTexture->GetView();
+		std::vector<nri::Descriptor *> hizStorageTextureViews;
+		for (uint32_t i = 0; i < m_HiZTexture->GetMipNum(); i++) {
+			hizStorageTextureViews.push_back(m_HiZTexture->GetView(i));
+		}
 		nri::Descriptor *hizSamplerView = m_PointSampler;
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[3] = {};
 		descriptorRangeUpdateDescs[0].descriptorNum = 1;
 		descriptorRangeUpdateDescs[0].descriptors = &m_DepthTextureSRV;
-		descriptorRangeUpdateDescs[1].descriptorNum = 1;
-		descriptorRangeUpdateDescs[1].descriptors = &hizStorageTextureView;
+		descriptorRangeUpdateDescs[1].descriptorNum = m_HiZTexture->GetMipNum();
+		descriptorRangeUpdateDescs[1].descriptors = hizStorageTextureViews.data();
 		descriptorRangeUpdateDescs[2].descriptorNum = 1;
 		descriptorRangeUpdateDescs[2].descriptors = &hizSamplerView;
 
@@ -358,19 +403,31 @@ glm::vec4 normalizePlane(const glm::vec4 &plane) {
 
 void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 	auto NRI = *m_NRI;
+
+	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
+			*m_ConstantBuffer, 0,
+			sizeof(ConstantBufferLayout));
+	const glm::mat4 p = camera.state.mViewToClip;
+	if (commonConstants) {
+		commonConstants->modelMat = glm::mat4(1.0);
+		commonConstants->viewMat = camera.state.mWorldToView;
+		commonConstants->projectMat = p;
+		NRI.UnmapBuffer(*m_ConstantBuffer);
+	}
+
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Frustum Culling Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_CullingPipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_CullingPipeline);
 		glm::mat4 projMat = camera.state.mViewToClip;
-		// projMat = glm::transpose(projMat);
+
 		glm::vec4 frustumL = normalizePlane(projMat[3] + projMat[0]);
 		glm::vec4 frustumR = normalizePlane(projMat[3] - projMat[0]);
 		glm::vec4 frustumT = normalizePlane(projMat[3] + projMat[1]);
 		glm::vec4 frustumB = normalizePlane(projMat[3] - projMat[1]);
 
 		PushConstants block = {
-			.viewMat = camera.statePrev.mWorldToView * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f)),
+			.viewMat = camera.statePrev.mWorldToView,// * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f)),
 			.cameraArgs = glm::vec4(camera.m_desc.nearZ, camera.m_desc.farZ, camera.m_desc.farZ + 20, 0.0f),
 			.frustum = { glm::vec4(frustumL.x, frustumL.y, frustumL.z, frustumL.w),
 					glm::vec4(frustumR.x, frustumR.y, frustumR.z, frustumR.w),
@@ -380,6 +437,7 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 
 		};
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(PushConstants));
+		NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_CullingDescriptorConstantBufferSet, nullptr);
 		NRI.CmdDispatch(info.cmdBuffer, { (uint32_t)m_renderer->m_OpaqueRenderNodes.size() / 8 + 1, 1, 1 });
 	}
 }
@@ -390,6 +448,17 @@ void GPUCullingPass::RenderHiZ(struct RenderInfo &info) {
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Hi-Z Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_HiZPipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_HiZPipeline);
-		NRI.CmdDispatch(info.cmdBuffer, { m_renderer->m_OutputResolution.first / 8 + 1, m_renderer->m_OutputResolution.second / 8 + 1, 1 });
+		for (uint32_t i = 0; i < m_HiZTexture->GetMipNum(); i++) {
+			UINT destWidth = std::max(1u, (UINT)(m_renderer->m_OutputResolution.first >> i));
+			UINT destHeight = std::max(1u, (UINT)(m_renderer->m_OutputResolution.second >> i));
+			HiZPushConstants block = {
+				.DimensionsInv = 1.0f / glm::vec2(destWidth, destHeight),
+				.texDepth = 1020,
+				.texHiZ = 1021 + i,
+				.sampleIndex = 5,
+			};
+			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(HiZPushConstants));
+			NRI.CmdDispatch(info.cmdBuffer, { destWidth / 8 + 1, destHeight / 8 + 1, 1 });
+		}
 	}
 }

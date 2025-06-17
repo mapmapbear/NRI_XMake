@@ -16,7 +16,7 @@ public:
 
 	struct CullData {
 		glm::vec3 center;
-		float radians;
+		glm::vec3 extents;
 	};
 
 	struct PushConstants {
@@ -26,6 +26,14 @@ public:
 		uint32_t totalObjectCount;
 	};
 
+	struct HiZPushConstants {
+		float2 DimensionsInv;
+		uint texDepth;
+		uint texHiZ;
+		uint sampleIndex;
+	};
+	
+
 public:
 	std::shared_ptr<Buffer> m_CullGPUSceneObjectsBuffer = nullptr;
 
@@ -33,6 +41,7 @@ private:
 	nri::PipelineLayout *m_CullingPipelineLayout = nullptr;
 	nri::Pipeline *m_CullingPipeline = nullptr;
 	nri::DescriptorSet *m_CullingDescriptorSet = nullptr;
+	nri::DescriptorSet *m_CullingDescriptorConstantBufferSet = nullptr;
 
 	nri::PipelineLayout *m_HiZPipelineLayout = nullptr;
 	nri::Pipeline *m_HiZPipeline = nullptr;
@@ -44,5 +53,8 @@ private:
 	std::shared_ptr<Buffer> m_CullDataBuffer = nullptr;
 	std::shared_ptr<Buffer> m_GPUSceneObjectsBuffer = nullptr;
 	std::shared_ptr<Buffer> m_VisibleObjectCounterBuffer = nullptr;
+
+	nri::Buffer *m_ConstantBuffer = nullptr;
+	nri::Descriptor *m_ConstantBufferView = nullptr;
 
 };

@@ -331,10 +331,10 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = {};
 	// meshFile = utils::GetFullPath("Sponza/sponza.gltf", utils::DataFolder::ROOT);
-	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("plane.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
-	meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S2.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S2.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this);
 	debugdrawPass = std::make_shared<DebugDrawPass>(this);
 
@@ -522,9 +522,6 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	depthAttachmentsDesc.colorNum = 0;
 	depthAttachmentsDesc.colors = nullptr;
 
-	gpuCullingPass->Render(info, camera);
-
-
 	{
 		nri::BufferBarrierDesc bufferBarrierDescs = {};
 		bufferBarrierDescs.buffer = gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
@@ -536,6 +533,8 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 		GetNRI().CmdBarrier(info.cmdBuffer, barrierGroupDesc);
 	}
 
+	gpuCullingPass->Render(info, camera);
+
 	GetNRI().CmdBeginRendering(info.cmdBuffer, depthAttachmentsDesc);
 	{
 		RenderInfo depthInfo = { .desc = depthAttachmentsDesc, .cmdBuffer = info.cmdBuffer };
@@ -543,7 +542,8 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	}
 	GetNRI().CmdEndRendering(info.cmdBuffer);
 
-	gpuCullingPass->RenderHiZ(info);
+	// gpuCullingPass->RenderHiZ(info);
+
 
 	nri::AttachmentsDesc shadowAttachmentDesc = {};
 	shadowAttachmentDesc.depthStencil = m_ShadowMap->GetView();
