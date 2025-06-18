@@ -380,7 +380,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		glm::vec4 center = glm::vec4(node.mesh->aabb2.first, 1.0);
 		center = transMat * center;
 		glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
-		extent = transMat * extent;
+		// extent = transMat * extent;
 		debugdrawPass->DrawBox(center, extent, glm::vec4(1.0));
 	}
 
@@ -533,8 +533,6 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 		GetNRI().CmdBarrier(info.cmdBuffer, barrierGroupDesc);
 	}
 
-	gpuCullingPass->Render(info, camera);
-
 	GetNRI().CmdBeginRendering(info.cmdBuffer, depthAttachmentsDesc);
 	{
 		RenderInfo depthInfo = { .desc = depthAttachmentsDesc, .cmdBuffer = info.cmdBuffer };
@@ -542,8 +540,8 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	}
 	GetNRI().CmdEndRendering(info.cmdBuffer);
 
-	// gpuCullingPass->RenderHiZ(info);
-
+	gpuCullingPass->RenderHiZ(info);
+	gpuCullingPass->Render(info, camera);
 
 	nri::AttachmentsDesc shadowAttachmentDesc = {};
 	shadowAttachmentDesc.depthStencil = m_ShadowMap->GetView();

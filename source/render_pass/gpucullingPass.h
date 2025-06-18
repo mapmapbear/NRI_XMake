@@ -47,6 +47,7 @@ private:
 	nri::Pipeline *m_HiZPipeline = nullptr;
 	nri::DescriptorSet *m_HiZDescriptorSet = nullptr;
 	nri::Descriptor *m_DepthTextureSRV = nullptr;
+	nri::Descriptor *m_HiZTextureSRV = nullptr;
 	nri::Descriptor *m_PointSampler = nullptr;
 	std::shared_ptr<Texture> m_HiZTexture = nullptr;
 

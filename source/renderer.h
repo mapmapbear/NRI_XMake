@@ -15,7 +15,7 @@ struct RenderInfo {
 };
 
 struct RenderSetting {
-	bool IndirectDrawState = false;
+	bool IndirectDrawState = true;
 	bool DebugBoxState = false;
 	bool DebugSSAOState = false;
 };

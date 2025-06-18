@@ -187,9 +187,9 @@ void GPUCullingPass::AllocGPUMemory() {
 		textureDesc.type = nri::TextureType::TEXTURE_2D;
 		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE_STORAGE | nri::TextureUsageBits::SHADER_RESOURCE;
 		textureDesc.format = nri::Format::R32_SFLOAT;
-		textureDesc.width = m_renderer->m_OutputResolution.first;
-		textureDesc.height = m_renderer->m_OutputResolution.second;
-		textureDesc.mipNum = 11;
+		textureDesc.width = m_renderer->m_OutputResolution.first / 2;
+		textureDesc.height = m_renderer->m_OutputResolution.second / 2;
+		textureDesc.mipNum = 10;
 
 		nri::Texture2DViewDesc texture2DViewDesc = {};
 		texture2DViewDesc.format = textureDesc.format;
@@ -229,6 +229,12 @@ void GPUCullingPass::BindMemory() {
 		nri::Texture2DViewDesc texture2DViewDes = { .texture = m_renderer->m_DepthTex, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = nri::Format::D32_SFLOAT };
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(texture2DViewDes, m_DepthTextureSRV));
+	}
+
+	{
+		nri::Texture2DViewDesc texture2DViewDes = { .texture = m_HiZTexture->GetTexture(), .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = nri::Format::R32_SFLOAT };
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateTexture2DView(texture2DViewDes, m_HiZTextureSRV));
 	}
 
 	{
@@ -287,7 +293,7 @@ void GPUCullingPass::BuildPipeline() {
 	// HiZ Pipeline
 	{
 		nri::DescriptorRangeDesc descriptorRangeTexture[3] = {};
-		descriptorRangeTexture[0].descriptorNum = 1;
+		descriptorRangeTexture[0].descriptorNum = 2;
 		descriptorRangeTexture[0].descriptorType = nri::DescriptorType::TEXTURE;
 		descriptorRangeTexture[0].shaderStages = nri::StageBits::COMPUTE_SHADER;
 		descriptorRangeTexture[1].descriptorNum = m_HiZTexture->GetMipNum();
@@ -360,7 +366,7 @@ void GPUCullingPass::BuildPipeline() {
 	// Update Hi-Z Descriptor Set
 	{
 		nri::DescriptorRangeDesc descriptorRangeTexture[3] = {};
-		descriptorRangeTexture[0].descriptorNum = 1;
+		descriptorRangeTexture[0].descriptorNum = 2;
 		descriptorRangeTexture[0].descriptorType = nri::DescriptorType::TEXTURE;
 		descriptorRangeTexture[0].shaderStages = nri::StageBits::COMPUTE_SHADER;
 		descriptorRangeTexture[1].descriptorNum = m_HiZTexture->GetMipNum();
@@ -379,9 +385,10 @@ void GPUCullingPass::BuildPipeline() {
 			hizStorageTextureViews.push_back(m_HiZTexture->GetView(i));
 		}
 		nri::Descriptor *hizSamplerView = m_PointSampler;
+		std::vector<nri::Descriptor *> descriptors = { m_DepthTextureSRV, m_HiZTextureSRV };
 		nri::DescriptorRangeUpdateDesc descriptorRangeUpdateDescs[3] = {};
-		descriptorRangeUpdateDescs[0].descriptorNum = 1;
-		descriptorRangeUpdateDescs[0].descriptors = &m_DepthTextureSRV;
+		descriptorRangeUpdateDescs[0].descriptorNum = (uint32_t)descriptors.size();
+		descriptorRangeUpdateDescs[0].descriptors = descriptors.data();
 		descriptorRangeUpdateDescs[1].descriptorNum = m_HiZTexture->GetMipNum();
 		descriptorRangeUpdateDescs[1].descriptors = hizStorageTextureViews.data();
 		descriptorRangeUpdateDescs[2].descriptorNum = 1;
@@ -427,7 +434,7 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 		glm::vec4 frustumB = normalizePlane(projMat[3] - projMat[1]);
 
 		PushConstants block = {
-			.viewMat = camera.statePrev.mWorldToView,// * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f)),
+			.viewMat = p * camera.statePrev.mWorldToView,// * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f)),
 			.cameraArgs = glm::vec4(camera.m_desc.nearZ, camera.m_desc.farZ, camera.m_desc.farZ + 20, 0.0f),
 			.frustum = { glm::vec4(frustumL.x, frustumL.y, frustumL.z, frustumL.w),
 					glm::vec4(frustumR.x, frustumR.y, frustumR.z, frustumR.w),
@@ -448,13 +455,16 @@ void GPUCullingPass::RenderHiZ(struct RenderInfo &info) {
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Hi-Z Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_HiZPipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_HiZPipeline);
+		uint32_t srcWidth = m_renderer->m_OutputResolution.first;
+		uint32_t srcHeight = m_renderer->m_OutputResolution.second;
+
 		for (uint32_t i = 0; i < m_HiZTexture->GetMipNum(); i++) {
-			UINT destWidth = std::max(1u, (UINT)(m_renderer->m_OutputResolution.first >> i));
-			UINT destHeight = std::max(1u, (UINT)(m_renderer->m_OutputResolution.second >> i));
+			UINT destWidth = std::max(1u, (UINT)(srcWidth >> i));
+			UINT destHeight = std::max(1u, (UINT)(srcHeight >> i));
 			HiZPushConstants block = {
 				.DimensionsInv = 1.0f / glm::vec2(destWidth, destHeight),
 				.texDepth = 1020,
-				.texHiZ = 1021 + i,
+				.texHiZ = 1022 + i,
 				.sampleIndex = 5,
 			};
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(HiZPushConstants));

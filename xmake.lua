@@ -52,42 +52,42 @@ target("NRI")
     add_files("3rd/NRI/Source/Validation/*.cpp")
     add_links("3rd/WinPixEventRuntime/bin/x64/WinPixEventRuntime.lib")
     add_syslinks("dxgi", "d3d12", "dxguid")
-    on_config(function(target)
-        local header_path = "3rd/NRI/Include/NRIAgilitySDK.h"
-        local agility_sdk_version = "615"
-        local agility_sdk_dir = "AgilitySDK"
+    -- on_config(function(target)
+    --     local header_path = "3rd/NRI/Include/NRIAgilitySDK.h"
+    --     local agility_sdk_version = "615"
+    --     local agility_sdk_dir = "AgilitySDK"
 
-        local content = [[
-        // This file is auto-generated during project deployment. Do not modify!
-        #ifdef __cplusplus
-        extern "C" {
-        #endif
+    --     local content = [[
+    --     // This file is auto-generated during project deployment. Do not modify!
+    --     #ifdef __cplusplus
+    --     extern "C" {
+    --     #endif
 
-        __declspec(dllexport) extern const uint32_t D3D12SDKVersion = ]] .. agility_sdk_version .. [[;
-        __declspec(dllexport) extern const char* D3D12SDKPath = "]] .. agility_sdk_dir .. [[/x64/";
+    --     __declspec(dllexport) extern const uint32_t D3D12SDKVersion = ]] .. agility_sdk_version .. [[;
+    --     __declspec(dllexport) extern const char* D3D12SDKPath = "]] .. agility_sdk_dir .. [[/x64/";
 
-        #ifdef __cplusplus
-        }
-        #endif
-        ]]
+    --     #ifdef __cplusplus
+    --     }
+    --     #endif
+    --     ]]
 
-        io.writefile(header_path, content)
+    --     io.writefile(header_path, content)
 
-        local runtime_dir = get_config("rundir") or "bin"
-        -- local agility_sdk_dir = get_config("NRI_AGILITY_SDK_DIR") or "AgilitySDK"
-        local build_dir = get_config("buildir") or "build"
-        local dest_path = path.join(path.join(build_dir, "windows/x64/debug"), "AgilitySDK/x64")
-        if os.isdir(dest_path) then
-            print("delete old dest dir...")
-            os.rm(dest_path)
-            print("NRI: copying Agility SDK binaries to '" .. dest_path .. "'")
-            os.cp("3rd/Directx12Agility/build/native/bin/x64", dest_path)
-        else 
-            print("NRI: copying Agility SDK binaries to '" .. dest_path .. "'")
-            os.cp("3rd/Directx12Agility/build/native/bin/x64", dest_path)
-        end
+    --     local runtime_dir = get_config("rundir") or "bin"
+    --     -- local agility_sdk_dir = get_config("NRI_AGILITY_SDK_DIR") or "AgilitySDK"
+    --     local build_dir = get_config("buildir") or "build"
+    --     local dest_path = path.join(path.join(build_dir, "windows/x64/debug"), "AgilitySDK/x64")
+    --     if os.isdir(dest_path) then
+    --         print("delete old dest dir...")
+    --         os.rm(dest_path)
+    --         print("NRI: copying Agility SDK binaries to '" .. dest_path .. "'")
+    --         os.cp("3rd/Directx12Agility/build/native/bin/x64", dest_path)
+    --     else 
+    --         print("NRI: copying Agility SDK binaries to '" .. dest_path .. "'")
+    --         os.cp("3rd/Directx12Agility/build/native/bin/x64", dest_path)
+    --     end
         
-    end)
+    -- end)
 
 
 target("NRIFramework")
@@ -134,7 +134,7 @@ target("ShaderCompiler")
             "-c", path.join(os.scriptdir(), "Shaders.cfg"),
             "-o", shader_output_path,
             "-I", path.join(os.scriptdir(), "3rd/NRI/Include"),
-            "-p", "DXIL", "--compiler", "D:/Source/GitProject/dxc_2025_02_20/bin/x64/dxc.exe"
+            "-p", "DXIL", "--compiler", "D:/GitProject/dxc_2025_05_24/bin/x64/dxc.exe"
         }
         os.execv(shaderMakePath, args)
     end)
