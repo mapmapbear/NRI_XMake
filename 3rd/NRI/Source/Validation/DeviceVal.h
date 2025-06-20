@@ -7,13 +7,13 @@ namespace nri {
 struct QueueVal;
 
 struct IsExtSupported {
-    uint32_t lowLatency : 1;
-    uint32_t meshShader : 1;
-    uint32_t rayTracing : 1;
-    uint32_t swapChain : 1;
+    uint32_t lowLatency   : 1;
+    uint32_t meshShader   : 1;
+    uint32_t rayTracing   : 1;
+    uint32_t swapChain    : 1;
     uint32_t wrapperD3D11 : 1;
     uint32_t wrapperD3D12 : 1;
-    uint32_t wrapperVK : 1;
+    uint32_t wrapperVK    : 1;
 };
 
 struct DeviceVal final : public DeviceBase {
@@ -24,48 +24,48 @@ struct DeviceVal final : public DeviceBase {
         return m_Impl;
     }
 
-    inline const CoreInterface& GetCoreInterfaceVal() const {
-        return m_iCoreVal;
-    }
-
     inline const CoreInterface& GetCoreInterface() const {
         return m_iCore;
     }
 
-    inline const HelperInterface& GetHelperInterface() const {
-        return m_iHelper;
+    inline const CoreInterface& GetCoreInterfaceImpl() const {
+        return m_iCoreImpl;
     }
 
-    inline const LowLatencyInterface& GetLowLatencyInterface() const {
-        return m_iLowLatency;
+    inline const HelperInterface& GetHelperInterfaceImpl() const {
+        return m_iHelperImpl;
     }
 
-    inline const MeshShaderInterface& GetMeshShaderInterface() const {
-        return m_iMeshShader;
+    inline const LowLatencyInterface& GetLowLatencyInterfaceImpl() const {
+        return m_iLowLatencyImpl;
     }
 
-    inline const RayTracingInterface& GetRayTracingInterface() const {
-        return m_iRayTracing;
+    inline const MeshShaderInterface& GetMeshShaderInterfaceImpl() const {
+        return m_iMeshShaderImpl;
     }
 
-    inline const SwapChainInterface& GetSwapChainInterface() const {
-        return m_iSwapChain;
+    inline const RayTracingInterface& GetRayTracingInterfaceImpl() const {
+        return m_iRayTracingImpl;
     }
 
-    inline const WrapperD3D11Interface& GetWrapperD3D11Interface() const {
-        return m_iWrapperD3D11;
+    inline const SwapChainInterface& GetSwapChainInterfaceImpl() const {
+        return m_iSwapChainImpl;
     }
 
-    inline const WrapperD3D12Interface& GetWrapperD3D12Interface() const {
-        return m_iWrapperD3D12;
+    inline const WrapperD3D11Interface& GetWrapperD3D11InterfaceImpl() const {
+        return m_iWrapperD3D11Impl;
     }
 
-    inline const WrapperVKInterface& GetWrapperVKInterface() const {
-        return m_iWrapperVK;
+    inline const WrapperD3D12Interface& GetWrapperD3D12InterfaceImpl() const {
+        return m_iWrapperD3D12Impl;
+    }
+
+    inline const WrapperVKInterface& GetWrapperVKInterfaceImpl() const {
+        return m_iWrapperVKImpl;
     }
 
     inline void* GetNativeObject() const {
-        return m_iCore.GetDeviceNativeObject(m_Impl);
+        return m_iCoreImpl.GetDeviceNativeObject(m_Impl);
     }
 
     inline Lock& GetLock() {
@@ -88,7 +88,7 @@ struct DeviceVal final : public DeviceBase {
         m_Name = (char*)allocationCallbacks.Allocate(allocationCallbacks.userArg, len + 1, sizeof(size_t));
         strcpy(m_Name, name);
 
-        GetCoreInterface().SetDebugName(&m_Impl, name);
+        GetCoreInterfaceImpl().SetDebugName(&m_Impl, name);
     }
 
     //================================================================================================================
@@ -113,6 +113,10 @@ struct DeviceVal final : public DeviceBase {
     Result FillFunctionTable(WrapperD3D12Interface& table) const override;
     Result FillFunctionTable(WrapperVKInterface& table) const override;
 
+#if NRI_ENABLE_IMGUI_EXTENSION
+    Result FillFunctionTable(ImguiInterface& table) const override;
+#endif
+
     //================================================================================================================
     // NRI
     //================================================================================================================
@@ -132,6 +136,7 @@ struct DeviceVal final : public DeviceBase {
     Result CreatePipeline(const ComputePipelineDesc& computePipelineDesc, Pipeline*& pipeline);
     Result CreatePipeline(const RayTracingPipelineDesc& pipelineDesc, Pipeline*& pipeline);
     Result CreateMicromap(const MicromapDesc& micromapDesc, Micromap*& micromap);
+    Result AllocateMemory(const AllocateMemoryDesc& allocateMemoryDesc, Memory*& memory);
     Result AllocateBuffer(const AllocateBufferDesc& bufferDesc, Buffer*& buffer);
     Result AllocateTexture(const AllocateTextureDesc& textureDesc, Texture*& texture);
     Result CreateQueryPool(const QueryPoolDesc& queryPoolDesc, QueryPool*& queryPool);
@@ -175,7 +180,6 @@ struct DeviceVal final : public DeviceBase {
 
     void FreeMemory(Memory& memory);
     Result GetQueue(QueueType queueType, uint32_t queueIndex, Queue*& queue);
-    Result AllocateMemory(const AllocateMemoryDesc& allocateMemoryDesc, Memory*& memory);
     Result BindBufferMemory(const BufferMemoryBindingDesc* memoryBindingDescs, uint32_t memoryBindingDescNum);
     Result BindTextureMemory(const TextureMemoryBindingDesc* memoryBindingDescs, uint32_t memoryBindingDescNum);
     Result BindMicromapMemory(const MicromapMemoryBindingDesc* memoryBindingDescs, uint32_t memoryBindingDescNum);
@@ -189,20 +193,20 @@ private:
     std::array<QueueVal*, (size_t)QueueType::MAX_NUM> m_Queues = {};
     UnorderedMap<MemoryType, MemoryLocation> m_MemoryTypeMap;
 
-    // Validation interfaces
-    CoreInterface m_iCoreVal = {};
-
-    // Original interfaces
+    // Validation
     CoreInterface m_iCore = {};
-    HelperInterface m_iHelper = {};
-    LowLatencyInterface m_iLowLatency = {};
-    MeshShaderInterface m_iMeshShader = {};
-    RayTracingInterface m_iRayTracing = {};
-    ResourceAllocatorInterface m_iResourceAllocator = {};
-    SwapChainInterface m_iSwapChain = {};
-    WrapperD3D11Interface m_iWrapperD3D11 = {};
-    WrapperD3D12Interface m_iWrapperD3D12 = {};
-    WrapperVKInterface m_iWrapperVK = {};
+
+    // Implementation
+    CoreInterface m_iCoreImpl = {};
+    HelperInterface m_iHelperImpl = {};
+    LowLatencyInterface m_iLowLatencyImpl = {};
+    MeshShaderInterface m_iMeshShaderImpl = {};
+    RayTracingInterface m_iRayTracingImpl = {};
+    ResourceAllocatorInterface m_iResourceAllocatorImpl = {};
+    SwapChainInterface m_iSwapChainImpl = {};
+    WrapperD3D11Interface m_iWrapperD3D11Impl = {};
+    WrapperD3D12Interface m_iWrapperD3D12Impl = {};
+    WrapperVKInterface m_iWrapperVKImpl = {};
 
     union {
         uint32_t m_IsExtSupportedStorage = 0;

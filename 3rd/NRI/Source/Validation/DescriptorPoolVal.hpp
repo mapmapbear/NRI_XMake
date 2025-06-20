@@ -13,7 +13,7 @@ NRI_INLINE void DescriptorPoolVal::Reset() {
     m_StorageStructuredBufferNum = 0;
     m_AccelerationStructureNum = 0;
 
-    GetCoreInterface().ResetDescriptorPool(*GetImpl());
+    GetCoreInterfaceImpl().ResetDescriptorPool(*GetImpl());
 }
 
 NRI_INLINE Result DescriptorPoolVal::AllocateDescriptorSets(const PipelineLayout& pipelineLayout, uint32_t setIndex, DescriptorSet** descriptorSets, uint32_t instanceNum, uint32_t variableDescriptorNum) {
@@ -78,14 +78,13 @@ NRI_INLINE Result DescriptorPoolVal::AllocateDescriptorSets(const PipelineLayout
             }
 
             m_DynamicConstantBufferNum += descriptorSetDesc.dynamicConstantBufferNum;
-            RETURN_ON_FAILURE(&m_Device, m_DynamicConstantBufferNum <= m_Desc.dynamicConstantBufferMaxNum, Result::INVALID_ARGUMENT,
-                "the maximum number of 'DYNAMIC_CONSTANT_BUFFER' descriptors in DescriptorPool exceeded at DescriptorSet instance #%u", i);
+            RETURN_ON_FAILURE(&m_Device, m_DynamicConstantBufferNum <= m_Desc.dynamicConstantBufferMaxNum, Result::INVALID_ARGUMENT, "the maximum number of 'DYNAMIC_CONSTANT_BUFFER' descriptors in DescriptorPool exceeded at DescriptorSet instance #%u", i);
         }
     }
 
     PipelineLayout* pipelineLayoutImpl = NRI_GET_IMPL(PipelineLayout, &pipelineLayout);
 
-    Result result = GetCoreInterface().AllocateDescriptorSets(*GetImpl(), *pipelineLayoutImpl, setIndex, descriptorSets, instanceNum, variableDescriptorNum);
+    Result result = GetCoreInterfaceImpl().AllocateDescriptorSets(*GetImpl(), *pipelineLayoutImpl, setIndex, descriptorSets, instanceNum, variableDescriptorNum);
     if (result != Result::SUCCESS)
         return result;
 

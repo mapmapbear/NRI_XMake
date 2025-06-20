@@ -203,7 +203,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		textureDesc.width = 2048;
 		textureDesc.height = 2048;
 		textureDesc.mipNum = 1;
-		textureDesc.clearValue = { .depthStencil = { 1.0f, 0 } };
+		textureDesc.optimizedClearValue = { .depthStencil = { 1.0f, 0 } };
 
 		nri::Texture2DViewDesc texViewDesc = {};
 		texViewDesc.viewType = nri::Texture2DViewType::DEPTH_STENCIL_ATTACHMENT;
@@ -331,8 +331,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = {};
 	// meshFile = utils::GetFullPath("Sponza/sponza.gltf", utils::DataFolder::ROOT);
-	meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
-	// meshFile = utils::GetFullPath("plane.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("cubes.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S2.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this);
@@ -477,7 +477,7 @@ void Renderer::UploadSceneData() {
 		nri::BufferUploadDesc &bufferData = uploadBufferDescs.at(i);
 		bufferData.buffer = buffer->GetBuffer();
 		bufferData.data = geometryBufferDatas.at(i).data();
-		bufferData.dataSize = geometryBufferDatas.at(i).size();
+		// bufferData.dataSize = geometryBufferDatas.at(i).size();
 		bufferData.after = { nri::AccessBits::INDEX_BUFFER |
 			nri::AccessBits::VERTEX_BUFFER };
 		GetNRI().SetDebugName(buffer->GetBuffer(), std::format("Buffer{}", i).c_str());
@@ -496,7 +496,7 @@ void Renderer::UploadSceneData() {
 		nri::BufferUploadDesc &bufferData = uploadBufferDescs.at(i);
 		bufferData.buffer = buffer->GetBuffer();
 		bufferData.data = geometryBufferDatas.at(i).data();
-		bufferData.dataSize = geometryBufferDatas.at(i).size();
+		// bufferData.dataSize = geometryBufferDatas.at(i).size();
 		bufferData.after = { nri::AccessBits::INDEX_BUFFER |
 			nri::AccessBits::VERTEX_BUFFER };
 		GetNRI().SetDebugName(buffer->GetBuffer(), std::format("Buffer{}", i).c_str());

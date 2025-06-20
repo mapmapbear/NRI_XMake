@@ -3,7 +3,7 @@
 /*
 Overview:
 - Generalized common denominator for VK, D3D12 and D3D11
-    - VK spec: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html
+    - VK spec: https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html
        - Best practices: https://developer.nvidia.com/blog/vulkan-dos-donts/
     - D3D12 spec: https://microsoft.github.io/DirectX-Specs/
     - D3D11 spec: https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm
@@ -35,9 +35,8 @@ Implicit:
 
 #pragma once
 
-#define NRI_VERSION_MAJOR 1
-#define NRI_VERSION_MINOR 165
-#define NRI_VERSION_DATE "9 April 2025"
+#define NRI_VERSION 172
+#define NRI_VERSION_DATE "12 June 2025"
 
 #include "NRIDescs.h"
 
@@ -234,9 +233,9 @@ NriStruct(CoreInterface) {
     void                (NRI_CALL *ResetCommandAllocator)           (NriRef(CommandAllocator) commandAllocator);
 
     // Map / Unmap
-    // D3D11: persistent mapping unsupported
-    // D3D12: persistent mapping supported, "Map/Unmap" do nothing
-    // VK: persistent mapping supported, but "Unmap" can do a flush if underlying memory is not HOST_COHERENT (unlikely)
+    // D3D11: no persistent mapping
+    // D3D12: persistent mapping, "Map/Unmap" do nothing
+    // VK: persistent mapping, but "Unmap" can do a flush if underlying memory is not "HOST_COHERENT" (unlikely)
     void*               (NRI_CALL *MapBuffer)                       (NriRef(Buffer) buffer, uint64_t offset, uint64_t size);
     void                (NRI_CALL *UnmapBuffer)                     (NriRef(Buffer) buffer);
 

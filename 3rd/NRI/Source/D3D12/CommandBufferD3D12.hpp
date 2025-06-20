@@ -395,7 +395,8 @@ NRI_INLINE void CommandBufferD3D12::ClearStorage(const ClearStorageDesc& clearDe
     DescriptorSetD3D12* descriptorSet = m_DescriptorSets[clearDesc.setIndex];
     DescriptorD3D12* storage = (DescriptorD3D12*)clearDesc.storage;
 
-    if (storage->IsIntegerFormat() || storage->GetBufferViewType() != BufferViewType::MAX_NUM)
+    // TODO: typed buffers are currently cleared according to the format, it seems to be more reliable than using integers for all buffers
+    if (storage->IsIntegerFormat())
         m_GraphicsCommandList->ClearUnorderedAccessViewUint({descriptorSet->GetPointerGPU(clearDesc.rangeIndex, clearDesc.descriptorIndex)}, {storage->GetPointerCPU()}, *storage, &clearDesc.value.ui.x, 0, nullptr);
     else
         m_GraphicsCommandList->ClearUnorderedAccessViewFloat({descriptorSet->GetPointerGPU(clearDesc.rangeIndex, clearDesc.descriptorIndex)}, {storage->GetPointerCPU()}, *storage, &clearDesc.value.f.x, 0, nullptr);
@@ -509,26 +510,24 @@ NRI_INLINE void CommandBufferD3D12::SetRootDescriptor(uint32_t rootDescriptorInd
     DescriptorD3D12& descriptorD3D12 = (DescriptorD3D12&)descriptor;
     D3D12_GPU_VIRTUAL_ADDRESS bufferLocation = descriptorD3D12.GetPointerGPU();
 
-    switch (descriptorD3D12.GetBufferViewType()) {
-        case BufferViewType::SHADER_RESOURCE:
-            if (m_IsGraphicsPipelineLayout)
-                m_GraphicsCommandList->SetGraphicsRootShaderResourceView(rootParameterIndex, bufferLocation);
-            else
-                m_GraphicsCommandList->SetComputeRootShaderResourceView(rootParameterIndex, bufferLocation);
-            break;
-        case BufferViewType::SHADER_RESOURCE_STORAGE:
-            if (m_IsGraphicsPipelineLayout)
-                m_GraphicsCommandList->SetGraphicsRootUnorderedAccessView(rootParameterIndex, bufferLocation);
-            else
-                m_GraphicsCommandList->SetComputeRootUnorderedAccessView(rootParameterIndex, bufferLocation);
-            break;
-        case BufferViewType::CONSTANT:
-            if (m_IsGraphicsPipelineLayout)
-                m_GraphicsCommandList->SetGraphicsRootConstantBufferView(rootParameterIndex, bufferLocation);
-            else
-                m_GraphicsCommandList->SetComputeRootConstantBufferView(rootParameterIndex, bufferLocation);
-            break;
-    }
+    BufferViewType bufferViewType = descriptorD3D12.GetBufferViewType();
+    if (bufferViewType == BufferViewType::SHADER_RESOURCE || descriptorD3D12.IsAccelerationStructure()) {
+        if (m_IsGraphicsPipelineLayout)
+            m_GraphicsCommandList->SetGraphicsRootShaderResourceView(rootParameterIndex, bufferLocation);
+        else
+            m_GraphicsCommandList->SetComputeRootShaderResourceView(rootParameterIndex, bufferLocation);
+    } else if (bufferViewType == BufferViewType::SHADER_RESOURCE_STORAGE) {
+        if (m_IsGraphicsPipelineLayout)
+            m_GraphicsCommandList->SetGraphicsRootUnorderedAccessView(rootParameterIndex, bufferLocation);
+        else
+            m_GraphicsCommandList->SetComputeRootUnorderedAccessView(rootParameterIndex, bufferLocation);
+    } else if (bufferViewType == BufferViewType::CONSTANT) {
+        if (m_IsGraphicsPipelineLayout)
+            m_GraphicsCommandList->SetGraphicsRootConstantBufferView(rootParameterIndex, bufferLocation);
+        else
+            m_GraphicsCommandList->SetComputeRootConstantBufferView(rootParameterIndex, bufferLocation);
+    } else
+        CHECK(false, "Unexpected");
 }
 
 NRI_INLINE void CommandBufferD3D12::Draw(const DrawDesc& drawDesc) {
@@ -1175,6 +1174,40 @@ NRI_INLINE void CommandBufferD3D12::BuildBottomLevelAccelerationStructures(const
 
 NRI_INLINE void CommandBufferD3D12::BuildMicromaps(const BuildMicromapDesc* buildMicromapDescs, uint32_t buildMicromapDescNum) {
 #ifdef NRI_D3D12_HAS_OPACITY_MICROMAP
+    static_assert(sizeof(MicromapTriangle) == sizeof(D3D12_RAYTRACING_OPACITY_MICROMAP_DESC), "Type mismatch");
+
+    uint32_t usageMaxNum = 0;
+    for (uint32_t i = 0; i < buildMicromapDescNum; i++)
+        usageMaxNum = std::max(usageMaxNum, ((MicromapD3D12*)buildMicromapDescs[i].dst)->GetUsageNum());
+
+    Scratch<D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY> usages = AllocateScratch(m_Device, D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY, usageMaxNum);
+
+    for (uint32_t i = 0; i < buildMicromapDescNum; i++) {
+        const BuildMicromapDesc& in = buildMicromapDescs[i];
+
+        MicromapD3D12* dst = (MicromapD3D12*)in.dst;
+
+        for (uint32_t j = 0; j < dst->GetUsageNum(); j++)
+            usages[j] = dst->GetUsages()[j];
+
+        D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC opacityMicromapArrayDesc = {};
+        opacityMicromapArrayDesc.NumOmmHistogramEntries = dst->GetUsageNum();
+        opacityMicromapArrayDesc.pOmmHistogram = usages;
+        opacityMicromapArrayDesc.InputBuffer = GetBufferAddress(in.dataBuffer, in.dataOffset);
+        opacityMicromapArrayDesc.PerOmmDescs.StartAddress = GetBufferAddress(in.triangleBuffer, in.triangleOffset);
+        opacityMicromapArrayDesc.PerOmmDescs.StrideInBytes = sizeof(MicromapTriangle);
+
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC out = {};
+        out.DestAccelerationStructureData = dst->GetHandle();
+        out.ScratchAccelerationStructureData = GetBufferAddress(in.scratchBuffer, in.scratchOffset);
+        out.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_OPACITY_MICROMAP_ARRAY;
+        out.Inputs.Flags = GetMicromapFlags(dst->GetFlags());
+        out.Inputs.NumDescs = 1;
+        out.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY; // TODO: D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS support?
+        out.Inputs.pOpacityMicromapArrayDesc = &opacityMicromapArrayDesc;
+
+        m_GraphicsCommandList->BuildRaytracingAccelerationStructure(&out, 0, nullptr);
+    }
 #else
     MaybeUnused(buildMicromapDescs, buildMicromapDescNum);
 #endif

@@ -20,10 +20,10 @@
 #include "SwapChainVK.h"
 #include "TextureVK.h"
 
-#include "HelperDataUpload.h"
-#include "HelperDeviceMemoryAllocator.h"
-#include "Streamer.h"
-#include "Upscaler.h"
+#include "HelperInterface.h"
+#include "ImguiInterface.h"
+#include "StreamerInterface.h"
+#include "UpscalerInterface.h"
 
 using namespace nri;
 
@@ -691,6 +691,54 @@ Result DeviceVK::FillFunctionTable(HelperInterface& table) const {
 #pragma endregion
 
 //============================================================================================================================================================================================
+#pragma region[  Imgui  ]
+
+#if NRI_ENABLE_IMGUI_EXTENSION
+
+static Result NRI_CALL CreateImgui(Device& device, const ImguiDesc& imguiDesc, Imgui*& imgui) {
+    DeviceVK& deviceVK = (DeviceVK&)device;
+    ImguiImpl* impl = Allocate<ImguiImpl>(deviceVK.GetAllocationCallbacks(), device, deviceVK.GetCoreInterface());
+    Result result = impl->Create(imguiDesc);
+
+    if (result != Result::SUCCESS) {
+        Destroy(impl);
+        imgui = nullptr;
+    } else
+        imgui = (Imgui*)impl;
+
+    return result;
+}
+
+static void NRI_CALL DestroyImgui(Imgui& imgui) {
+    Destroy((ImguiImpl*)&imgui);
+}
+
+static void NRI_CALL CmdCopyImguiData(CommandBuffer& commandBuffer, Streamer& streamer, Imgui& imgui, const CopyImguiDataDesc& copyImguiDataDesc) {
+    ImguiImpl& imguiImpl = (ImguiImpl&)imgui;
+
+    return imguiImpl.CmdCopyData(commandBuffer, streamer, copyImguiDataDesc);
+}
+
+static void NRI_CALL CmdDrawImgui(CommandBuffer& commandBuffer, Imgui& imgui, const DrawImguiDesc& drawImguiDesc) {
+    ImguiImpl& imguiImpl = (ImguiImpl&)imgui;
+
+    return imguiImpl.CmdDraw(commandBuffer, drawImguiDesc);
+}
+
+Result DeviceVK::FillFunctionTable(ImguiInterface& table) const {
+    table.CreateImgui = ::CreateImgui;
+    table.DestroyImgui = ::DestroyImgui;
+    table.CmdCopyImguiData = ::CmdCopyImguiData;
+    table.CmdDrawImgui = ::CmdDrawImgui;
+
+    return Result::SUCCESS;
+}
+
+#endif
+
+#pragma endregion
+
+//============================================================================================================================================================================================
 #pragma region[  Low latency  ]
 
 static void NRI_CALL QueueSubmitTrackable(Queue& queue, const QueueSubmitDesc& workSubmissionDesc, const SwapChain& swapChain) {
@@ -970,40 +1018,35 @@ static Buffer* NRI_CALL GetStreamerConstantBuffer(Streamer& streamer) {
     return ((StreamerImpl&)streamer).GetConstantBuffer();
 }
 
-static uint32_t NRI_CALL UpdateStreamerConstantBuffer(Streamer& streamer, const void* data, uint32_t dataSize) {
-    return ((StreamerImpl&)streamer).UpdateConstantBuffer(data, dataSize);
+static uint32_t NRI_CALL StreamConstantData(Streamer& streamer, const void* data, uint32_t dataSize) {
+    return ((StreamerImpl&)streamer).StreamConstantData(data, dataSize);
 }
 
-static uint64_t NRI_CALL AddStreamerBufferUpdateRequest(Streamer& streamer, const BufferUpdateRequestDesc& bufferUpdateRequestDesc) {
-    return ((StreamerImpl&)streamer).AddBufferUpdateRequest(bufferUpdateRequestDesc);
+static BufferOffset NRI_CALL StreamBufferData(Streamer& streamer, const StreamBufferDataDesc& streamBufferDataDesc) {
+    return ((StreamerImpl&)streamer).StreamBufferData(streamBufferDataDesc);
 }
 
-static uint64_t NRI_CALL AddStreamerTextureUpdateRequest(Streamer& streamer, const TextureUpdateRequestDesc& textureUpdateRequestDesc) {
-    return ((StreamerImpl&)streamer).AddTextureUpdateRequest(textureUpdateRequestDesc);
+static BufferOffset NRI_CALL StreamTextureData(Streamer& streamer, const StreamTextureDataDesc& streamTextureDataDesc) {
+    return ((StreamerImpl&)streamer).StreamTextureData(streamTextureDataDesc);
 }
 
-static Result NRI_CALL CopyStreamerUpdateRequests(Streamer& streamer) {
-    return ((StreamerImpl&)streamer).CopyUpdateRequests();
+static void NRI_CALL EndStreamerFrame(Streamer& streamer) {
+    return ((StreamerImpl&)streamer).EndFrame();
 }
 
-static Buffer* NRI_CALL GetStreamerDynamicBuffer(Streamer& streamer) {
-    return ((StreamerImpl&)streamer).GetDynamicBuffer();
-}
-
-static void NRI_CALL CmdUploadStreamerUpdateRequests(CommandBuffer& commandBuffer, Streamer& streamer) {
-    ((StreamerImpl&)streamer).CmdUploadUpdateRequests(commandBuffer);
+static void NRI_CALL CmdCopyStreamedData(CommandBuffer& commandBuffer, Streamer& streamer) {
+    ((StreamerImpl&)streamer).CmdCopyStreamedData(commandBuffer);
 }
 
 Result DeviceVK::FillFunctionTable(StreamerInterface& table) const {
     table.CreateStreamer = ::CreateStreamer;
     table.DestroyStreamer = ::DestroyStreamer;
     table.GetStreamerConstantBuffer = ::GetStreamerConstantBuffer;
-    table.GetStreamerDynamicBuffer = ::GetStreamerDynamicBuffer;
-    table.AddStreamerBufferUpdateRequest = ::AddStreamerBufferUpdateRequest;
-    table.AddStreamerTextureUpdateRequest = ::AddStreamerTextureUpdateRequest;
-    table.UpdateStreamerConstantBuffer = ::UpdateStreamerConstantBuffer;
-    table.CopyStreamerUpdateRequests = ::CopyStreamerUpdateRequests;
-    table.CmdUploadStreamerUpdateRequests = ::CmdUploadStreamerUpdateRequests;
+    table.StreamBufferData = ::StreamBufferData;
+    table.StreamTextureData = ::StreamTextureData;
+    table.StreamConstantData = ::StreamConstantData;
+    table.EndStreamerFrame = ::EndStreamerFrame;
+    table.CmdCopyStreamedData = ::CmdCopyStreamedData;
 
     return Result::SUCCESS;
 }
@@ -1025,20 +1068,20 @@ static Texture* const* NRI_CALL GetSwapChainTextures(const SwapChain& swapChain,
     return ((SwapChainVK&)swapChain).GetTextures(textureNum);
 }
 
-static uint32_t NRI_CALL AcquireNextSwapChainTexture(SwapChain& swapChain) {
-    return ((SwapChainVK&)swapChain).AcquireNextTexture();
+static Result NRI_CALL GetDisplayDesc(SwapChain& swapChain, DisplayDesc& displayDesc) {
+    return ((SwapChainVK&)swapChain).GetDisplayDesc(displayDesc);
+}
+
+static Result NRI_CALL AcquireNextTexture(SwapChain& swapChain, Fence& acquireSemaphore, uint32_t& textureIndex) {
+    return ((SwapChainVK&)swapChain).AcquireNextTexture((FenceVK&)acquireSemaphore, textureIndex);
 }
 
 static Result NRI_CALL WaitForPresent(SwapChain& swapChain) {
     return ((SwapChainVK&)swapChain).WaitForPresent();
 }
 
-static Result NRI_CALL QueuePresent(SwapChain& swapChain) {
-    return ((SwapChainVK&)swapChain).Present();
-}
-
-static Result NRI_CALL GetDisplayDesc(SwapChain& swapChain, DisplayDesc& displayDesc) {
-    return ((SwapChainVK&)swapChain).GetDisplayDesc(displayDesc);
+static Result NRI_CALL QueuePresent(SwapChain& swapChain, Fence& releaseSemaphore) {
+    return ((SwapChainVK&)swapChain).Present((FenceVK&)releaseSemaphore);
 }
 
 Result DeviceVK::FillFunctionTable(SwapChainInterface& table) const {
@@ -1048,10 +1091,10 @@ Result DeviceVK::FillFunctionTable(SwapChainInterface& table) const {
     table.CreateSwapChain = ::CreateSwapChain;
     table.DestroySwapChain = ::DestroySwapChain;
     table.GetSwapChainTextures = ::GetSwapChainTextures;
-    table.AcquireNextSwapChainTexture = ::AcquireNextSwapChainTexture;
+    table.GetDisplayDesc = ::GetDisplayDesc;
+    table.AcquireNextTexture = ::AcquireNextTexture;
     table.WaitForPresent = ::WaitForPresent;
     table.QueuePresent = ::QueuePresent;
-    table.GetDisplayDesc = ::GetDisplayDesc;
 
     return Result::SUCCESS;
 }

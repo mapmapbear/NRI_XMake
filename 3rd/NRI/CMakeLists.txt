@@ -1,30 +1,41 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.30)
 
 include(CMakeDependentOption)
 include(FetchContent)
 
+# Create project
+project(NRI LANGUAGES C CXX)
+
+# Test packages availability ("find_package" works only for X11)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_path(XLIB_HEADERS NAMES "X11/Xlib.h")
+    find_path(WAYLAND_HEADERS NAMES "wayland-client.h")
+endif()
+
 # Options
-option(NRI_STATIC_LIBRARY "Build static library" ON)
+set(NRI_AGILITY_SDK_DIR "AgilitySDK" CACHE STRING "Directory where Agility SDK will be copied relative to the directory with binaries")
+set(NRI_AGILITY_SDK_VERSION_MAJOR "616" CACHE STRING "Agility SDK major version") # 717 (can cause D3D12_ERROR_INVALID_REDIST error?)
+set(NRI_AGILITY_SDK_VERSION_MINOR "0" CACHE STRING "Agility SDK minor version") # 0-preview
+set(NRI_SHADERS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/_Shaders" CACHE STRING "Shader output path override")
+
+option(NRI_STATIC_LIBRARY "Build static library" OFF)
 option(NRI_ENABLE_NVTX_SUPPORT "Annotations for NVIDIA Nsight Systems" ON)
 option(NRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS "Enable debug names, host and device annotations" ON)
 option(NRI_ENABLE_NONE_SUPPORT "Enable NONE backend" ON)
 option(NRI_ENABLE_VK_SUPPORT "Enable Vulkan backend" ON)
 option(NRI_ENABLE_VALIDATION_SUPPORT "Enable Validation backend (otherwise 'enableNRIValidation' is ignored)" ON)
 option(NRI_ENABLE_NIS_SDK "Enable NVIDIA Image Sharpening SDK" OFF)
+option(NRI_ENABLE_IMGUI_EXTENSION "Enable 'NRIImgui' extension" OFF)
 
 cmake_dependent_option(NRI_ENABLE_D3D11_SUPPORT "Enable D3D11 backend" ON "WIN32" OFF)
 cmake_dependent_option(NRI_ENABLE_D3D12_SUPPORT "Enable D3D12 backend" ON "WIN32" OFF)
 cmake_dependent_option(NRI_ENABLE_D3D_EXTENSIONS "Enable vendor specific extension libraries for D3D (NVAPI and AMD AGS)" ON "NRI_ENABLE_D3D11_SUPPORT OR NRI_ENABLE_D3D12_SUPPORT" OFF)
 cmake_dependent_option(NRI_ENABLE_AGILITY_SDK_SUPPORT "Enable Agility SDK support to unlock access to latest D3D12 features" ON "NRI_ENABLE_D3D12_SUPPORT" OFF)
-cmake_dependent_option(NRI_ENABLE_XLIB_SUPPORT "Enable 'xlib' support" ON "NRI_ENABLE_VK_SUPPORT AND NOT WIN32" OFF)
-cmake_dependent_option(NRI_ENABLE_WAYLAND_SUPPORT "Enable 'wayland' support" ON "NRI_ENABLE_VK_SUPPORT AND NOT WIN32" OFF)
+cmake_dependent_option(NRI_ENABLE_XLIB_SUPPORT "Enable X11 support" ON "XLIB_HEADERS" OFF)
+cmake_dependent_option(NRI_ENABLE_WAYLAND_SUPPORT "Enable Wayland support" ON "WAYLAND_HEADERS" OFF)
 cmake_dependent_option(NRI_ENABLE_NGX_SDK "Enable NVIDIA NGX (DLSS) SDK" OFF "NRI_ENABLE_D3D11_SUPPORT OR NRI_ENABLE_D3D12_SUPPORT OR NRI_ENABLE_VK_SUPPORT" OFF)
 cmake_dependent_option(NRI_ENABLE_FFX_SDK "Enable AMD FidelityFX SDK" OFF "(NRI_ENABLE_VK_SUPPORT OR NRI_ENABLE_D3D12_SUPPORT) AND WIN32" OFF)
-
-set(NRI_AGILITY_SDK_DIR "AgilitySDK" CACHE STRING "Directory where Agility SDK binaries will be copied to relative to 'CMAKE_RUNTIME_OUTPUT_DIRECTORY'")
-set(NRI_AGILITY_SDK_VERSION_MAJOR 615)
-set(NRI_AGILITY_SDK_VERSION_MINOR 0)
-set(NRI_SHADERS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/_Shaders" CACHE STRING "Shader output path override")
+cmake_dependent_option(NRI_ENABLE_XESS_SDK "Enable INTEL XeSS SDK" OFF "NRI_ENABLE_D3D12_SUPPORT AND WIN32" OFF)
 
 # Is submodule?
 if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
@@ -33,16 +44,7 @@ else()
     set(IS_SUBMODULE ON)
 endif()
 
-# Create project
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/Include/NRI.h" ver_h)
-string(REGEX MATCH "NRI_VERSION_MAJOR ([0-9]*)" _ ${ver_h})
-set(VERSION_MAJOR ${CMAKE_MATCH_1})
-string(REGEX MATCH "NRI_VERSION_MINOR ([0-9]*)" _ ${ver_h})
-set(VERSION_MINOR ${CMAKE_MATCH_1})
-
-message("NRI: v${VERSION_MAJOR}.${VERSION_MINOR}")
-project(NRI LANGUAGES C CXX)
-
+# Settings
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
@@ -52,7 +54,12 @@ set(CMAKE_POSITION_INDEPENDENT_BINARIES ON)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
 
 if(NOT IS_SUBMODULE)
-    set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "")
+    get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+
+    if(IS_MULTI_CONFIG)
+        set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "")
+    endif()
+
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/_Bin" CACHE STRING "")
 endif()
 
@@ -72,20 +79,24 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Compile options
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(COMPILE_OPTIONS -msse4.1 -Wextra -Wno-missing-field-initializers)
+    set(COMPILE_OPTIONS -Wextra -Wno-missing-field-initializers)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    set(COMPILE_OPTIONS -msse4.1 -Wextra -Wno-missing-field-initializers)
+    set(COMPILE_OPTIONS -Wextra -Wno-missing-field-initializers)
 elseif(MSVC)
     set(COMPILE_OPTIONS
         /W4 /WX
         /wd4324 # padding was added at the end of a structure because you specified an alignment specifier
     )
 else()
-    message(WARNING "Unknown compiler!")
+    message(WARNING "NRI: Unknown compiler!")
 endif()
 
 # Compile definitions
-message("NRI: enabled options:")
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/Include/NRI.h" ver_h)
+string(REGEX MATCH "NRI_VERSION ([0-9]*)" _ ${ver_h})
+set(NRI_VERSION ${CMAKE_MATCH_1})
+
+message("NRI: v${NRI_VERSION}:")
 
 set(COMPILE_DEFINITIONS WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
 
@@ -103,6 +114,7 @@ add_compile_definition(NRI_ENABLE_NONE_SUPPORT)
 add_compile_definition(NRI_ENABLE_VK_SUPPORT)
 add_compile_definition(NRI_ENABLE_VALIDATION_SUPPORT)
 add_compile_definition(NRI_ENABLE_NIS_SDK)
+add_compile_definition(NRI_ENABLE_IMGUI_EXTENSION)
 add_compile_definition(NRI_ENABLE_D3D11_SUPPORT)
 add_compile_definition(NRI_ENABLE_D3D12_SUPPORT)
 add_compile_definition(NRI_ENABLE_D3D_EXTENSIONS)
@@ -111,6 +123,7 @@ add_compile_definition(NRI_ENABLE_XLIB_SUPPORT)
 add_compile_definition(NRI_ENABLE_WAYLAND_SUPPORT)
 add_compile_definition(NRI_ENABLE_NGX_SDK)
 add_compile_definition(NRI_ENABLE_FFX_SDK)
+add_compile_definition(NRI_ENABLE_XESS_SDK)
 
 # Find Windows SDK
 if(NRI_ENABLE_D3D11_SUPPORT OR NRI_ENABLE_D3D12_SUPPORT)
@@ -156,14 +169,16 @@ if(NRI_ENABLE_D3D11_SUPPORT OR NRI_ENABLE_D3D12_SUPPORT)
     find_library(INPUT_LIB_DXGUID NAMES dxguid HINTS ${WINDOWS_SDK_LIB_PATH} REQUIRED)
 endif()
 
-# Construct list of dependencies
+# Construct list of dependencies # TODO: update to latest releases from time to time
 set(DEPS)
 
+# Dependencies: URL - good (no fat ".git" folder)
 if(NRI_ENABLE_AGILITY_SDK_SUPPORT)
     # Agility SDK
     FetchContent_Declare(
         agilitysdk
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        DOWNLOAD_EXTRACT_TIMESTAMP 1
+        DOWNLOAD_NO_PROGRESS 1
         URL https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/1.${NRI_AGILITY_SDK_VERSION_MAJOR}.${NRI_AGILITY_SDK_VERSION_MINOR}
     )
     list(APPEND DEPS agilitysdk)
@@ -173,33 +188,69 @@ if(NRI_ENABLE_NVTX_SUPPORT)
     # NVTX
     FetchContent_Declare(
         nvtx
-        GIT_REPOSITORY https://github.com/NVIDIA/NVTX.git
-        GIT_TAG dev
-        GIT_SHALLOW 1
+        DOWNLOAD_EXTRACT_TIMESTAMP 1
+        DOWNLOAD_NO_PROGRESS 1
+        URL https://github.com/NVIDIA/NVTX/archive/refs/tags/v3.2.0.zip
     )
     list(APPEND DEPS nvtx)
 endif()
 
-if(NRI_ENABLE_D3D_EXTENSIONS)
-    # NV API
+if(NRI_ENABLE_VK_SUPPORT)
+    # Vulkan headers
     FetchContent_Declare(
-        nvapi
-        GIT_REPOSITORY https://github.com/NVIDIA/nvapi.git
-        GIT_TAG main
-        GIT_SHALLOW 1
+        vulkan_headers
+        DOWNLOAD_EXTRACT_TIMESTAMP 1
+        DOWNLOAD_NO_PROGRESS 1
+        URL https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v1.4.315.zip
     )
-    list(APPEND DEPS nvapi)
+    list(APPEND DEPS vulkan_headers)
 
-    # AMD AGS
+    # Vulkan MA
     FetchContent_Declare(
-        amdags
-        GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/AGS_SDK.git
-        GIT_TAG master
-        GIT_SHALLOW 1
+        vma
+        DOWNLOAD_EXTRACT_TIMESTAMP 1
+        DOWNLOAD_NO_PROGRESS 1
+        SOURCE_SUBDIR "ignore CMakeLists.txt"
+        URL https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/archive/refs/tags/v3.3.0.zip
     )
-    list(APPEND DEPS amdags)
+    list(APPEND DEPS vma)
 endif()
 
+if(NRI_ENABLE_NGX_SDK)
+    # NVIDIA NGX SDK
+    FetchContent_Declare(
+        ngx
+        DOWNLOAD_EXTRACT_TIMESTAMP 1
+        DOWNLOAD_NO_PROGRESS 1
+        URL https://github.com/NVIDIA/DLSS/archive/refs/tags/v310.2.1.zip
+    )
+    list(APPEND DEPS ngx)
+endif()
+
+if(NRI_ENABLE_FFX_SDK)
+    # AMD FidelityFX SDK
+    FetchContent_Declare(
+        ffx
+        DOWNLOAD_EXTRACT_TIMESTAMP 1
+        DOWNLOAD_NO_PROGRESS 1
+        SOURCE_SUBDIR "ignore CMakeLists.txt"
+        URL https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/releases/download/v1.1.4/FidelityFX-SDK-v1.1.4.zip
+    )
+    list(APPEND DEPS ffx)
+endif()
+
+if(NRI_ENABLE_XESS_SDK)
+    # INTEL XeSS SDK
+    FetchContent_Declare(
+        xess
+        DOWNLOAD_EXTRACT_TIMESTAMP 1
+        DOWNLOAD_NO_PROGRESS 1
+        URL https://github.com/intel/xess/releases/download/v2.0.1/XeSS_SDK_2.0.1.zip
+    )
+    list(APPEND DEPS xess)
+endif()
+
+# Dependencies: GIT_REPOSITORY - worse (because of ".git" folder)
 if(NRI_ENABLE_D3D12_SUPPORT)
     # D3D12 MA
     FetchContent_Declare(
@@ -212,55 +263,30 @@ if(NRI_ENABLE_D3D12_SUPPORT)
     list(APPEND DEPS d3d12ma)
 endif()
 
-if(NRI_ENABLE_VK_SUPPORT)
-    # Vulkan headers
+if(NRI_ENABLE_D3D_EXTENSIONS)
+    # AMD AGS
     FetchContent_Declare(
-        vulkan_headers
-        GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
-        GIT_TAG origin/vulkan-sdk-1.4.304
-        GIT_SHALLOW 1
-        SOURCE_SUBDIR "ignore CMakeLists.txt"
+        amdags
+        DOWNLOAD_EXTRACT_TIMESTAMP 1
+        DOWNLOAD_NO_PROGRESS 1
+        URL https://github.com/GPUOpen-LibrariesAndSDKs/AGS_SDK/archive/refs/tags/v6.2.0-signed.zip
     )
-    list(APPEND DEPS vulkan_headers)
+    list(APPEND DEPS amdags)
 
-    # Vulkan MA
+    # NV API
     FetchContent_Declare(
-        vma
-        GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
-        GIT_TAG master
-        GIT_SHALLOW 1
-        SOURCE_SUBDIR "ignore CMakeLists.txt"
-    )
-    list(APPEND DEPS vma)
-endif()
-
-if(NRI_ENABLE_NGX_SDK)
-    # NVIDIA NGX SDK
-    FetchContent_Declare(
-        ngx
-        GIT_REPOSITORY https://github.com/NVIDIA/DLSS.git
-        GIT_TAG v310.1.0
+        nvapi
+        GIT_REPOSITORY https://github.com/NVIDIA/nvapi.git
+        GIT_TAG main
         GIT_SHALLOW 1
     )
-    list(APPEND DEPS ngx)
-endif()
-
-if(NRI_ENABLE_FFX_SDK)
-    # AMD FidelityFX SDK
-    FetchContent_Declare(
-        ffx
-        GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK.git
-        GIT_TAG v1.1.3
-        GIT_SHALLOW 1
-        SOURCE_SUBDIR "ignore CMakeLists.txt"
-    )
-    list(APPEND DEPS ffx)
+    list(APPEND DEPS nvapi)
 endif()
 
 # Add dependencies for dependencies
-if(NRI_ENABLE_NIS_SDK AND NOT TARGET ShaderMake)
+if((NRI_ENABLE_NIS_SDK OR NRI_ENABLE_IMGUI_EXTENSION) AND NOT TARGET ShaderMake)
     # ShaderMake
-    set(SHADERMAKE_BIN_OUTPUT_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} CACHE STRING "")
+    option(SHADERMAKE_TOOL "" ON)
 
     FetchContent_Declare(
         shadermake
@@ -275,7 +301,13 @@ endif()
 if(DEPS)
     message("NRI: downloading dependencies:")
     message(STATUS "${DEPS} ...")
+
     FetchContent_MakeAvailable(${DEPS})
+
+    # Delete original archives
+    foreach(DEP IN LISTS DEPS)
+        file(REMOVE_RECURSE "${FETCHCONTENT_BASE_DIR}/${DEP}-tmp")
+    endforeach()
 endif()
 
 # D3D extensions
@@ -295,7 +327,7 @@ if(NRI_ENABLE_D3D_EXTENSIONS)
         "${amdags_SOURCE_DIR}/ags_lib/hlsl/*.hlsl"
     )
     source_group("External/amdags" FILES ${AMDAGS_HEADERS})
-    set_property(SOURCE ${AMDAGS_HEADERS} PROPERTY VS_SETTINGS "ExcludedFromBuild=true")
+    set_source_files_properties(${AMDAGS_HEADERS} PROPERTIES VS_TOOL_OVERRIDE "None")
 endif()
 
 # NONE
@@ -363,28 +395,28 @@ if(NRI_ENABLE_D3D12_SUPPORT)
         "${nvapi_SOURCE_DIR}"
         "${amdags_SOURCE_DIR}/ags_lib/inc"
     )
-    target_compile_definitions(NRI_D3D12 PRIVATE ${COMPILE_DEFINITIONS})
+    target_compile_definitions(NRI_D3D12 PRIVATE ${COMPILE_DEFINITIONS} NRI_AGILITY_SDK_VERSION_MAJOR=${NRI_AGILITY_SDK_VERSION_MAJOR})
     target_compile_options(NRI_D3D12 PRIVATE ${COMPILE_OPTIONS})
     target_link_libraries(NRI_D3D12 PRIVATE NRI_Shared ${INPUT_LIB_D3D12} ${INPUT_LIB_DXGI} ${INPUT_LIB_DXGUID})
     set_property(TARGET NRI_D3D12 PROPERTY FOLDER ${PROJECT_NAME})
 
     if(NRI_ENABLE_AGILITY_SDK_SUPPORT)
-        target_include_directories(NRI_D3D12 PRIVATE "${agilitysdk_SOURCE_DIR}/build/native/include")
+        message("NRI: using AgilitySDK v1.${NRI_AGILITY_SDK_VERSION_MAJOR}.${NRI_AGILITY_SDK_VERSION_MINOR}")
 
-        # Copy Agility SDK binaries
-        message("NRI: copying Agility SDK binaries to '${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${NRI_AGILITY_SDK_DIR}'")
-        file(COPY "${agilitysdk_SOURCE_DIR}/build/native/bin/x64" DESTINATION "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${NRI_AGILITY_SDK_DIR}")
+        target_include_directories(NRI_D3D12 PRIVATE "${agilitysdk_SOURCE_DIR}/build/native/include")
 
         # Generate "NRIAgilitySDK.h"
         file(WRITE Include/NRIAgilitySDK.h
             "// This file is auto-generated during project deployment. Do not modify!\n"
+            "#if NRI_ENABLE_AGILITY_SDK_SUPPORT\n\n"
             "#ifdef __cplusplus\n"
             "extern \"C\" {\n"
             "#endif\n\n"
             "__declspec(dllexport) extern const uint32_t D3D12SDKVersion = ${NRI_AGILITY_SDK_VERSION_MAJOR};\n"
-            "__declspec(dllexport) extern const char* D3D12SDKPath = \"../${NRI_AGILITY_SDK_DIR}/x64/\";\n\n"
+            "__declspec(dllexport) extern const char* D3D12SDKPath = \"${NRI_AGILITY_SDK_DIR}/\";\n\n"
             "#ifdef __cplusplus\n"
             "}\n"
+            "#endif\n\n"
             "#endif\n"
         )
     endif()
@@ -413,25 +445,15 @@ if(NRI_ENABLE_VK_SUPPORT)
     if(WIN32)
         target_compile_definitions(NRI_VK PRIVATE VK_USE_PLATFORM_WIN32_KHR)
     elseif(APPLE)
+        find_package(Vulkan REQUIRED)
+        target_link_libraries(NRI_VK PRIVATE ${Vulkan_LIBRARIES})
         target_compile_definitions(NRI_VK PRIVATE VK_USE_PLATFORM_METAL_EXT VK_ENABLE_BETA_EXTENSIONS)
     else()
         if(NRI_ENABLE_XLIB_SUPPORT)
-            find_path(XLIB_HEADERS NAMES "X11/Xlib.h")
-
-            if(NOT XLIB_HEADERS)
-                message(FATAL_ERROR "Can't find 'X11/xlib.h'. 'libx11-dev' is not installed?")
-            endif()
-
             target_compile_definitions(NRI_VK PRIVATE VK_USE_PLATFORM_XLIB_KHR)
         endif()
 
         if(NRI_ENABLE_WAYLAND_SUPPORT)
-            find_path(WAYLAND_HEADERS NAMES "wayland-client.h")
-
-            if(NOT WAYLAND_HEADERS)
-                message(FATAL_ERROR "Can't find 'wayland-client.h'. 'libwayland-dev' is not installed?")
-            endif()
-
             target_compile_definitions(NRI_VK PRIVATE VK_USE_PLATFORM_WAYLAND_KHR)
         endif()
     endif()
@@ -487,23 +509,26 @@ if(NRI_ENABLE_NGX_SDK)
             set(NGX_SUFFIX "d")
             message("NRI: using NGX LIB with dynamic runtime")
         else()
-            set(NGX_SUFFIX "s") # static runtime
+            set(NGX_SUFFIX "s")
             message("NRI: using NGX LIB with static runtime")
         endif()
 
-        find_library(NGX_D_LIB NAMES nvsdk_ngx_${NGX_SUFFIX}_dbg.lib PATHS "${ngx_SOURCE_DIR}/lib/Windows_x86_64/x64")
-        find_library(NGX_LIB NAMES nvsdk_ngx_${NGX_SUFFIX}.lib PATHS "${ngx_SOURCE_DIR}/lib/Windows_x86_64/x64")
-    else()
-        find_library(NGX_D_LIB NAMES libnvsdk_ngx.a PATHS "${ngx_SOURCE_DIR}/lib/Linux_x86_64")
-        find_library(NGX_LIB NAMES libnvsdk_ngx.a PATHS "${ngx_SOURCE_DIR}/lib/Linux_x86_64")
-    endif()
+        set(NGX_LIB "${ngx_SOURCE_DIR}/lib/Windows_x86_64/x64/nvsdk_ngx_${NGX_SUFFIX}")
 
-    target_link_libraries(NRI_Shared PRIVATE debug ${NGX_D_LIB})
-    target_link_libraries(NRI_Shared PRIVATE optimized ${NGX_LIB})
+        target_link_libraries(NRI_Shared PRIVATE debug ${NGX_LIB}_dbg.lib)
+        target_link_libraries(NRI_Shared PRIVATE optimized ${NGX_LIB}.lib)
+    else()
+        target_link_libraries(NRI_Shared PRIVATE "${ngx_SOURCE_DIR}/lib/Linux_x86_64/libnvsdk_ngx.a")
+    endif()
 endif()
 
 if(NRI_ENABLE_FFX_SDK)
     target_include_directories(NRI_Shared PRIVATE "${ffx_SOURCE_DIR}/ffx-api/include/ffx_api")
+endif()
+
+if(NRI_ENABLE_XESS_SDK)
+    target_include_directories(NRI_Shared PRIVATE "${xess_SOURCE_DIR}/inc/xess")
+    target_link_libraries(NRI_Shared PRIVATE "${xess_SOURCE_DIR}/lib/libxess.lib")
 endif()
 
 target_compile_definitions(NRI_Shared PRIVATE ${COMPILE_DEFINITIONS})
@@ -513,8 +538,9 @@ set_property(TARGET NRI_Shared PROPERTY FOLDER ${PROJECT_NAME})
 # NRI
 file(GLOB NRI_HEADERS
     "Include/*.h"
-    "Include/*.hpp"
+    "Include/*.hlsl"
 )
+set_source_files_properties(${NRI_HEADERS} PROPERTIES VS_TOOL_OVERRIDE "None")
 source_group("Include" FILES ${NRI_HEADERS})
 
 file(GLOB NRI_EXTENSIONS
@@ -550,7 +576,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "${nvtx_SOURCE_DIR}/c/include/"
     "${vulkan_headers_SOURCE_DIR}/include"
 )
+
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${COMPILE_DEFINITIONS})
+
+if(NRI_ENABLE_AGILITY_SDK_SUPPORT)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC NRI_ENABLE_AGILITY_SDK_SUPPORT=1) # make it available in the parent project
+endif()
+
 target_compile_options(${PROJECT_NAME} PRIVATE ${COMPILE_OPTIONS})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE NRI_Shared)
@@ -581,20 +613,21 @@ endif()
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY FOLDER ${PROJECT_NAME})
 
-message("NRI: setting output path to '${CMAKE_RUNTIME_OUTPUT_DIRECTORY}'")
+message("NRI: output path '${CMAKE_RUNTIME_OUTPUT_DIRECTORY}'")
 set_target_properties(${PROJECT_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
-# Function - copy a library to the project output folder
-function(copy_library PROJECT LIBRARY_NAME)
-    add_custom_command(TARGET ${PROJECT} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LIBRARY_NAME}" "$<TARGET_FILE_DIR:${PROJECT}>"
-        COMMAND_EXPAND_LISTS)
-endfunction()
-
-# Copy shared libs to the output folder
+# Copy to the output folder
 if(NRI_ENABLE_D3D_EXTENSIONS)
     find_file(AMD_AGS_DLL NAMES amd_ags_x64.dll PATHS "${amdags_SOURCE_DIR}/ags_lib/lib")
-    copy_library(${PROJECT_NAME} ${AMD_AGS_DLL})
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${AMD_AGS_DLL}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        VERBATIM)
+endif()
+
+if(NRI_ENABLE_AGILITY_SDK_SUPPORT)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${agilitysdk_SOURCE_DIR}/build/native/bin/x64" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/${NRI_AGILITY_SDK_DIR}"
+        VERBATIM)
 endif()
 
 if(NRI_ENABLE_NGX_SDK)
@@ -604,28 +637,43 @@ if(NRI_ENABLE_NGX_SDK)
         set(DLSS_SR_DLL "${ngx_SOURCE_DIR}/lib/Windows_x86_64/${NGX_LIB_DIR}/nvngx_dlss.dll")
         set(DLSS_RR_DLL "${ngx_SOURCE_DIR}/lib/Windows_x86_64/${NGX_LIB_DIR}/nvngx_dlssd.dll")
     else()
-        set(DLSS_SR_DLL "${ngx_SOURCE_DIR}/lib/Linux_x86_64/${NGX_LIB_DIR}/libnvidia-ngx-dlss.so.310.1.0")
-        set(DLSS_RR_DLL "${ngx_SOURCE_DIR}/lib/Linux_x86_64/${NGX_LIB_DIR}/libnvidia-ngx-dlssd.so.310.1.0")
+        set(DLSS_SR_DLL "${ngx_SOURCE_DIR}/lib/Linux_x86_64/${NGX_LIB_DIR}/libnvidia-ngx-dlss.so.310.2.1")
+        set(DLSS_RR_DLL "${ngx_SOURCE_DIR}/lib/Linux_x86_64/${NGX_LIB_DIR}/libnvidia-ngx-dlssd.so.310.2.1")
     endif()
 
-    copy_library(${PROJECT_NAME} ${DLSS_SR_DLL})
-    copy_library(${PROJECT_NAME} ${DLSS_RR_DLL})
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${DLSS_SR_DLL} "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${DLSS_RR_DLL} "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        VERBATIM)
 endif()
 
 if(NRI_ENABLE_FFX_SDK)
     if(NRI_ENABLE_D3D12_SUPPORT)
         find_file(FFX_DX12_DLL NAMES amd_fidelityfx_dx12.dll PATHS "${ffx_SOURCE_DIR}/PrebuiltSignedDLL")
-        copy_library(${PROJECT_NAME} ${FFX_DX12_DLL})
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FFX_DX12_DLL} "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+            VERBATIM)
     endif()
 
     if(NRI_ENABLE_VK_SUPPORT AND WIN32)
         find_file(FFX_VK_DLL NAMES amd_fidelityfx_vk.dll PATHS "${ffx_SOURCE_DIR}/PrebuiltSignedDLL")
-        copy_library(${PROJECT_NAME} ${FFX_VK_DLL})
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FFX_VK_DLL} "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+            VERBATIM)
+    endif()
+endif()
+
+if(NRI_ENABLE_XESS_SDK)
+    if(NRI_ENABLE_D3D12_SUPPORT)
+        find_file(XESS_DX12_DLL NAMES libxess.dll PATHS "${xess_SOURCE_DIR}/bin")
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${XESS_DX12_DLL} "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+            VERBATIM)
     endif()
 endif()
 
 # Shaders
-if(NRI_ENABLE_NIS_SDK)
+if(NRI_ENABLE_NIS_SDK OR NRI_ENABLE_IMGUI_EXTENSION)
     file(GLOB_RECURSE SHADERS
         "Shaders/*.hlsl"
         "Shaders/*.hlsli"
@@ -633,7 +681,11 @@ if(NRI_ENABLE_NIS_SDK)
     set_source_files_properties(${SHADERS} PROPERTIES VS_TOOL_OVERRIDE "None")
 
     set(SHADERMAKE_GENERAL_ARGS
-        --useAPI --flatten --stripReflection --WX
+        --project "NRI"
+        --compactProgress
+        --flatten
+        --stripReflection
+        --WX
         --sRegShift 0 --tRegShift 0 --bRegShift 0 --uRegShift 0
         --headerBlob
         --sourceDir "Shaders"
@@ -641,27 +693,30 @@ if(NRI_ENABLE_NIS_SDK)
         -c "Shaders/Shaders.cfg"
         -o "${NRI_SHADERS_PATH}"
         -I "Shaders"
+        -I "Include"
     )
 
-    if(WIN32)
-        add_custom_target(NRI_Shaders ALL
-            COMMAND ShaderMake ${SHADERMAKE_GENERAL_ARGS} -p DXBC --compiler "${FXC_PATH}"
-            COMMAND ShaderMake ${SHADERMAKE_GENERAL_ARGS} -p DXIL --compiler "${DXC_PATH}"
-            COMMAND ShaderMake ${SHADERMAKE_GENERAL_ARGS} -p SPIRV --compiler "${DXC_SPIRV_PATH}"
-            DEPENDS ShaderMake
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-            VERBATIM
-            SOURCES ${SHADERS}
-        )
-    else()
-        add_custom_target(NRI_Shaders ALL
-            COMMAND ShaderMake ${SHADERMAKE_GENERAL_ARGS} -p SPIRV --compiler "${DXC_SPIRV_PATH}"
-            DEPENDS ShaderMake
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-            VERBATIM
-            SOURCES ${SHADERS}
-        )
+    set(SHADERMAKE_COMMANDS "")
+
+    if(NRI_ENABLE_D3D11_SUPPORT)
+        set(SHADERMAKE_COMMANDS ${SHADERMAKE_COMMANDS} COMMAND ${SHADERMAKE_PATH} -p DXBC --compiler "${SHADERMAKE_FXC_PATH}" ${SHADERMAKE_GENERAL_ARGS})
     endif()
+
+    if(NRI_ENABLE_D3D12_SUPPORT)
+        set(SHADERMAKE_COMMANDS ${SHADERMAKE_COMMANDS} COMMAND ${SHADERMAKE_PATH} -p DXIL --compiler "${SHADERMAKE_DXC_PATH}" ${SHADERMAKE_GENERAL_ARGS})
+    endif()
+
+    if(NRI_ENABLE_VK_SUPPORT)
+        set(SHADERMAKE_COMMANDS ${SHADERMAKE_COMMANDS} COMMAND ${SHADERMAKE_PATH} -p SPIRV --compiler "${SHADERMAKE_DXC_VK_PATH}" ${SHADERMAKE_GENERAL_ARGS})
+    endif()
+
+    add_custom_target(NRI_Shaders ALL
+        ${SHADERMAKE_COMMANDS}
+        DEPENDS ShaderMake
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        VERBATIM
+        SOURCES ${SHADERS}
+    )
 
     set_property(TARGET NRI_Shaders PROPERTY FOLDER ${PROJECT_NAME})
 
@@ -669,5 +724,5 @@ if(NRI_ENABLE_NIS_SDK)
     target_include_directories(NRI_Shared PRIVATE "${NRI_SHADERS_PATH}")
     target_link_libraries(NRI_Shared PRIVATE ShaderMakeBlob)
 
-    message("NRI: setting shaders path to '${NRI_SHADERS_PATH}'")
+    message("NRI: shaders path '${NRI_SHADERS_PATH}'")
 endif()

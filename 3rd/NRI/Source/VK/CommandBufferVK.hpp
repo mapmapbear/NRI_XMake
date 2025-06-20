@@ -33,8 +33,8 @@ NRI_INLINE Result CommandBufferVK::Begin(const DescriptorPool*) {
     info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     const auto& vk = m_Device.GetDispatchTable();
-    VkResult result = vk.BeginCommandBuffer(m_Handle, &info);
-    RETURN_ON_FAILURE(&m_Device, result == VK_SUCCESS, GetReturnCode(result), "vkBeginCommandBuffer returned %d", (int32_t)result);
+    VkResult vkResult = vk.BeginCommandBuffer(m_Handle, &info);
+    RETURN_ON_FAILURE(&m_Device, vkResult == VK_SUCCESS, GetReturnCode(vkResult), "vkBeginCommandBuffer returned %d", (int32_t)vkResult);
 
     m_PipelineLayout = nullptr;
     m_Pipeline = nullptr;
@@ -44,8 +44,8 @@ NRI_INLINE Result CommandBufferVK::Begin(const DescriptorPool*) {
 
 NRI_INLINE Result CommandBufferVK::End() {
     const auto& vk = m_Device.GetDispatchTable();
-    VkResult result = vk.EndCommandBuffer(m_Handle);
-    RETURN_ON_FAILURE(&m_Device, result == VK_SUCCESS, GetReturnCode(result), "vkEndCommandBuffer returned %d", (int32_t)result);
+    VkResult vkResult = vk.EndCommandBuffer(m_Handle);
+    RETURN_ON_FAILURE(&m_Device, vkResult == VK_SUCCESS, GetReturnCode(vkResult), "vkEndCommandBuffer returned %d", (int32_t)vkResult);
 
     return Result::SUCCESS;
 }
@@ -97,7 +97,7 @@ NRI_INLINE void CommandBufferVK::SetStencilReference(uint8_t frontRef, uint8_t b
     const auto& vk = m_Device.GetDispatchTable();
 
     if (frontRef == backRef)
-        vk.CmdSetStencilReference(m_Handle, VK_STENCIL_FRONT_AND_BACK, frontRef);
+        vk.CmdSetStencilReference(m_Handle, VK_STENCIL_FACE_FRONT_AND_BACK, frontRef);
     else {
         vk.CmdSetStencilReference(m_Handle, VK_STENCIL_FACE_FRONT_BIT, frontRef);
         vk.CmdSetStencilReference(m_Handle, VK_STENCIL_FACE_BACK_BIT, backRef);
@@ -420,10 +420,17 @@ NRI_INLINE void CommandBufferVK::SetRootConstants(uint32_t rootConstantIndex, co
 
 NRI_INLINE void CommandBufferVK::SetRootDescriptor(uint32_t rootDescriptorIndex, Descriptor& descriptor) {
     const DescriptorVK& descriptorVK = (DescriptorVK&)descriptor;
+
     DescriptorTypeVK descriptorType = descriptorVK.GetType();
+    VkDescriptorBufferInfo bufferInfo = descriptorVK.GetBufferInfo();
+    VkAccelerationStructureKHR accelerationStructure = descriptorVK.GetAccelerationStructure();
 
     const auto& bindingInfo = m_PipelineLayout->GetBindingInfo();
     const PushDescriptorBindingDesc& pushDescriptorBindingDesc = bindingInfo.pushDescriptorBindings[rootDescriptorIndex];
+
+    VkWriteDescriptorSetAccelerationStructureKHR accelerationStructureWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR};
+    accelerationStructureWrite.accelerationStructureCount = 1;
+    accelerationStructureWrite.pAccelerationStructures = &accelerationStructure;
 
     VkWriteDescriptorSet descriptorWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
     descriptorWrite.dstSet = VK_NULL_HANDLE;
@@ -431,14 +438,16 @@ NRI_INLINE void CommandBufferVK::SetRootDescriptor(uint32_t rootDescriptorIndex,
     descriptorWrite.dstArrayElement = 0;
     descriptorWrite.descriptorCount = 1;
 
-    VkDescriptorBufferInfo bufferInfo = descriptorVK.GetBufferInfo();
-
     // Let's match D3D12 spec (no textures, no typed buffers)
     if (descriptorType == DescriptorTypeVK::BUFFER_VIEW) {
         const DescriptorBufDesc& bufDesc = descriptorVK.GetBufDesc();
         descriptorWrite.descriptorType = bufDesc.viewType == BufferViewType::CONSTANT ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         descriptorWrite.pBufferInfo = &bufferInfo;
-    }
+    } else if (descriptorType == DescriptorTypeVK::ACCELERATION_STRUCTURE) {
+        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+        descriptorWrite.pNext = &accelerationStructureWrite;
+    } else
+        CHECK(false, "Unexpected");
 
     VkPipelineLayout pipelineLayout = *m_PipelineLayout;
     VkPipelineBindPoint pipelineBindPoint = m_PipelineLayout->GetPipelineBindPoint();
@@ -913,9 +922,11 @@ NRI_INLINE void CommandBufferVK::EndQuery(QueryPool& queryPool, uint32_t offset)
     QueryPoolVK& queryPoolImpl = (QueryPoolVK&)queryPool;
     const auto& vk = m_Device.GetDispatchTable();
 
-    if (queryPoolImpl.GetType() == VK_QUERY_TYPE_TIMESTAMP)
-        vk.CmdWriteTimestamp2(m_Handle, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, queryPoolImpl.GetHandle(), offset);
-    else
+    if (queryPoolImpl.GetType() == VK_QUERY_TYPE_TIMESTAMP) {
+        // TODO: https://registry.khronos.org/vulkan/specs/latest/man/html/vkCmdWriteTimestamp.html
+        // https://docs.vulkan.org/samples/latest/samples/api/timestamp_queries/README.html
+        vk.CmdWriteTimestamp2(m_Handle, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, queryPoolImpl.GetHandle(), offset);
+    } else
         vk.CmdEndQuery(m_Handle, queryPoolImpl.GetHandle(), offset);
 }
 
@@ -923,7 +934,7 @@ NRI_INLINE void CommandBufferVK::CopyQueries(const QueryPool& queryPool, uint32_
     const QueryPoolVK& queryPoolImpl = (const QueryPoolVK&)queryPool;
     const BufferVK& bufferVK = (const BufferVK&)dstBuffer;
 
-    // TODO: wait is questionable here, but it's needed to ensure that CopyQueries copies to the destination buffer "complete" values (perf seems unaffected)
+    // TODO: wait is questionable here, but it's needed to ensure that the destination buffer gets "complete" values (perf seems unaffected)
     VkQueryResultFlags flags = VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT;
 
     const auto& vk = m_Device.GetDispatchTable();

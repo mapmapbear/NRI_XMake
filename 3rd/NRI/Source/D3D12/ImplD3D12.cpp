@@ -19,11 +19,10 @@
 #include "SwapChainD3D12.h"
 #include "TextureD3D12.h"
 
-#include "HelperDataUpload.h"
-#include "HelperDeviceMemoryAllocator.h"
-#include "HelperWaitIdle.h"
-#include "Streamer.h"
-#include "Upscaler.h"
+#include "HelperInterface.h"
+#include "ImguiInterface.h"
+#include "StreamerInterface.h"
+#include "UpscalerInterface.h"
 
 using namespace nri;
 
@@ -479,12 +478,11 @@ static void NRI_CALL ResetCommandAllocator(CommandAllocator& commandAllocator) {
     ((CommandAllocatorD3D12&)commandAllocator).Reset();
 }
 
-static void* NRI_CALL MapBuffer(Buffer& buffer, uint64_t offset, uint64_t size) {
-    return ((BufferD3D12&)buffer).Map(offset, size);
+static void* NRI_CALL MapBuffer(Buffer& buffer, uint64_t offset, uint64_t) {
+    return ((BufferD3D12&)buffer).Map(offset);
 }
 
-static void NRI_CALL UnmapBuffer(Buffer& buffer) {
-    ((BufferD3D12&)buffer).Unmap();
+static void NRI_CALL UnmapBuffer(Buffer&) {
 }
 
 static void NRI_CALL SetDebugName(Object* object, const char* name) {
@@ -697,6 +695,54 @@ Result DeviceD3D12::FillFunctionTable(HelperInterface& table) const {
 
     return Result::SUCCESS;
 }
+
+#pragma endregion
+
+//============================================================================================================================================================================================
+#pragma region[  Imgui  ]
+
+#if NRI_ENABLE_IMGUI_EXTENSION
+
+static Result NRI_CALL CreateImgui(Device& device, const ImguiDesc& imguiDesc, Imgui*& imgui) {
+    DeviceD3D12& deviceD3D12 = (DeviceD3D12&)device;
+    ImguiImpl* impl = Allocate<ImguiImpl>(deviceD3D12.GetAllocationCallbacks(), device, deviceD3D12.GetCoreInterface());
+    Result result = impl->Create(imguiDesc);
+
+    if (result != Result::SUCCESS) {
+        Destroy(impl);
+        imgui = nullptr;
+    } else
+        imgui = (Imgui*)impl;
+
+    return result;
+}
+
+static void NRI_CALL DestroyImgui(Imgui& imgui) {
+    Destroy((ImguiImpl*)&imgui);
+}
+
+static void NRI_CALL CmdCopyImguiData(CommandBuffer& commandBuffer, Streamer& streamer, Imgui& imgui, const CopyImguiDataDesc& copyImguiDataDesc) {
+    ImguiImpl& imguiImpl = (ImguiImpl&)imgui;
+
+    return imguiImpl.CmdCopyData(commandBuffer, streamer, copyImguiDataDesc);
+}
+
+static void NRI_CALL CmdDrawImgui(CommandBuffer& commandBuffer, Imgui& imgui, const DrawImguiDesc& drawImguiDesc) {
+    ImguiImpl& imguiImpl = (ImguiImpl&)imgui;
+
+    return imguiImpl.CmdDraw(commandBuffer, drawImguiDesc);
+}
+
+Result DeviceD3D12::FillFunctionTable(ImguiInterface& table) const {
+    table.CreateImgui = ::CreateImgui;
+    table.DestroyImgui = ::DestroyImgui;
+    table.CmdCopyImguiData = ::CmdCopyImguiData;
+    table.CmdDrawImgui = ::CmdDrawImgui;
+
+    return Result::SUCCESS;
+}
+
+#endif
 
 #pragma endregion
 
@@ -1001,40 +1047,35 @@ static Buffer* NRI_CALL GetStreamerConstantBuffer(Streamer& streamer) {
     return ((StreamerImpl&)streamer).GetConstantBuffer();
 }
 
-static uint32_t NRI_CALL UpdateStreamerConstantBuffer(Streamer& streamer, const void* data, uint32_t dataSize) {
-    return ((StreamerImpl&)streamer).UpdateConstantBuffer(data, dataSize);
+static uint32_t NRI_CALL StreamConstantData(Streamer& streamer, const void* data, uint32_t dataSize) {
+    return ((StreamerImpl&)streamer).StreamConstantData(data, dataSize);
 }
 
-static uint64_t NRI_CALL AddStreamerBufferUpdateRequest(Streamer& streamer, const BufferUpdateRequestDesc& bufferUpdateRequestDesc) {
-    return ((StreamerImpl&)streamer).AddBufferUpdateRequest(bufferUpdateRequestDesc);
+static BufferOffset NRI_CALL StreamBufferData(Streamer& streamer, const StreamBufferDataDesc& streamBufferDataDesc) {
+    return ((StreamerImpl&)streamer).StreamBufferData(streamBufferDataDesc);
 }
 
-static uint64_t NRI_CALL AddStreamerTextureUpdateRequest(Streamer& streamer, const TextureUpdateRequestDesc& textureUpdateRequestDesc) {
-    return ((StreamerImpl&)streamer).AddTextureUpdateRequest(textureUpdateRequestDesc);
+static BufferOffset NRI_CALL StreamTextureData(Streamer& streamer, const StreamTextureDataDesc& streamTextureDataDesc) {
+    return ((StreamerImpl&)streamer).StreamTextureData(streamTextureDataDesc);
 }
 
-static Result NRI_CALL CopyStreamerUpdateRequests(Streamer& streamer) {
-    return ((StreamerImpl&)streamer).CopyUpdateRequests();
+static void NRI_CALL EndStreamerFrame(Streamer& streamer) {
+    ((StreamerImpl&)streamer).EndFrame();
 }
 
-static Buffer* NRI_CALL GetStreamerDynamicBuffer(Streamer& streamer) {
-    return ((StreamerImpl&)streamer).GetDynamicBuffer();
-}
-
-static void NRI_CALL CmdUploadStreamerUpdateRequests(CommandBuffer& commandBuffer, Streamer& streamer) {
-    ((StreamerImpl&)streamer).CmdUploadUpdateRequests(commandBuffer);
+static void NRI_CALL CmdCopyStreamedData(CommandBuffer& commandBuffer, Streamer& streamer) {
+    ((StreamerImpl&)streamer).CmdCopyStreamedData(commandBuffer);
 }
 
 Result DeviceD3D12::FillFunctionTable(StreamerInterface& table) const {
     table.CreateStreamer = ::CreateStreamer;
     table.DestroyStreamer = ::DestroyStreamer;
     table.GetStreamerConstantBuffer = ::GetStreamerConstantBuffer;
-    table.GetStreamerDynamicBuffer = ::GetStreamerDynamicBuffer;
-    table.AddStreamerBufferUpdateRequest = ::AddStreamerBufferUpdateRequest;
-    table.AddStreamerTextureUpdateRequest = ::AddStreamerTextureUpdateRequest;
-    table.UpdateStreamerConstantBuffer = ::UpdateStreamerConstantBuffer;
-    table.CopyStreamerUpdateRequests = ::CopyStreamerUpdateRequests;
-    table.CmdUploadStreamerUpdateRequests = ::CmdUploadStreamerUpdateRequests;
+    table.StreamBufferData = ::StreamBufferData;
+    table.StreamTextureData = ::StreamTextureData;
+    table.StreamConstantData = ::StreamConstantData;
+    table.EndStreamerFrame = ::EndStreamerFrame;
+    table.CmdCopyStreamedData = ::CmdCopyStreamedData;
 
     return Result::SUCCESS;
 }
@@ -1056,20 +1097,20 @@ static Texture* const* NRI_CALL GetSwapChainTextures(const SwapChain& swapChain,
     return ((SwapChainD3D12&)swapChain).GetTextures(textureNum);
 }
 
-static uint32_t NRI_CALL AcquireNextSwapChainTexture(SwapChain& swapChain) {
-    return ((SwapChainD3D12&)swapChain).AcquireNextTexture();
+static Result NRI_CALL GetDisplayDesc(SwapChain& swapChain, DisplayDesc& displayDesc) {
+    return ((SwapChainD3D12&)swapChain).GetDisplayDesc(displayDesc);
+}
+
+static Result NRI_CALL AcquireNextTexture(SwapChain& swapChain, Fence&, uint32_t& textureIndex) {
+    return ((SwapChainD3D12&)swapChain).AcquireNextTexture(textureIndex);
 }
 
 static Result NRI_CALL WaitForPresent(SwapChain& swapChain) {
     return ((SwapChainD3D12&)swapChain).WaitForPresent();
 }
 
-static Result NRI_CALL QueuePresent(SwapChain& swapChain) {
+static Result NRI_CALL QueuePresent(SwapChain& swapChain, Fence&) {
     return ((SwapChainD3D12&)swapChain).Present();
-}
-
-static Result NRI_CALL GetDisplayDesc(SwapChain& swapChain, DisplayDesc& displayDesc) {
-    return ((SwapChainD3D12&)swapChain).GetDisplayDesc(displayDesc);
 }
 
 Result DeviceD3D12::FillFunctionTable(SwapChainInterface& table) const {
@@ -1079,10 +1120,10 @@ Result DeviceD3D12::FillFunctionTable(SwapChainInterface& table) const {
     table.CreateSwapChain = ::CreateSwapChain;
     table.DestroySwapChain = ::DestroySwapChain;
     table.GetSwapChainTextures = ::GetSwapChainTextures;
-    table.AcquireNextSwapChainTexture = ::AcquireNextSwapChainTexture;
+    table.GetDisplayDesc = ::GetDisplayDesc;
+    table.AcquireNextTexture = ::AcquireNextTexture;
     table.WaitForPresent = ::WaitForPresent;
     table.QueuePresent = ::QueuePresent;
-    table.GetDisplayDesc = ::GetDisplayDesc;
 
     return Result::SUCCESS;
 }

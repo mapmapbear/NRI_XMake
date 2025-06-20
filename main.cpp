@@ -96,7 +96,7 @@ private:
 	nri::Texture *m_ColorTexture = nullptr;
 
 	std::array<Frame, BUFFERED_FRAME_MAX_NUM> m_Frames = {};
-	std::vector<BackBuffer> m_SwapChainBuffers;
+	std::vector<SwapChainTexture> m_SwapChainTextures;
 	std::vector<nri::Memory *> m_MemoryAllocations;
 
 	uint64_t m_GeometryOffset = 0;
@@ -121,8 +121,8 @@ Sample::~Sample() {
 		NRI.DestroyDescriptor(*frame.constantBufferView);
 	}
 
-	for (BackBuffer &backBuffer : m_SwapChainBuffers) {
-		NRI.DestroyDescriptor(*backBuffer.colorAttachment);
+	for (SwapChainTexture &swapChainTexture : m_SwapChainTextures) {
+		NRI.DestroyDescriptor(*swapChainTexture.colorAttachment);
 	}
 
 	NRI.DestroyPipeline(*m_Pipeline);
@@ -154,16 +154,15 @@ Sample::~Sample() {
 		NRI.FreeMemory(*memory);
 	}
 
-	DestroyUI(NRI);
+	DestroyImgui();
 
 	nri::nriDestroyDevice(*m_Device);
 }
 
 bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
-	nri::AdapterDesc bestAdapterDesc = {};
-	uint32_t adapterDescsNum = 1;
-	NRI_ABORT_ON_FAILURE(
-			nri::nriEnumerateAdapters(&bestAdapterDesc, adapterDescsNum));
+	nri::AdapterDesc adapterDesc[2] = {};
+	uint32_t adapterDescsNum = helper::GetCountOf(adapterDesc);
+	NRI_ABORT_ON_FAILURE(nri::nriEnumerateAdapters(adapterDesc, adapterDescsNum));
 
 	nri::QueueFamilyDesc queueFamilies[3] = {};
 	queueFamilies[0].queueNum = 1;
@@ -176,20 +175,14 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	// Device
 	nri::DeviceCreationDesc deviceCreationDesc = {};
 	deviceCreationDesc.graphicsAPI = graphicsAPI;
-	deviceCreationDesc.queueFamilies = queueFamilies;
-	deviceCreationDesc.queueFamilyNum = helper::GetCountOf(queueFamilies);
-#ifdef DEBUG
 	deviceCreationDesc.enableGraphicsAPIValidation = true;
 	deviceCreationDesc.enableNRIValidation = true;
-#else
-	deviceCreationDesc.enableGraphicsAPIValidation = false;
-	deviceCreationDesc.enableNRIValidation = false;
-#endif
-	deviceCreationDesc.enableD3D11CommandBufferEmulation =
-			D3D11_COMMANDBUFFER_EMULATION;
+	deviceCreationDesc.enableD3D11CommandBufferEmulation = D3D11_COMMANDBUFFER_EMULATION;
 	deviceCreationDesc.vkBindingOffsets = VK_BINDING_OFFSETS;
-	deviceCreationDesc.adapterDesc = &bestAdapterDesc;
+	deviceCreationDesc.adapterDesc = &adapterDesc[std::min(m_AdapterIndex, adapterDescsNum - 1)];
 	deviceCreationDesc.allocationCallbacks = m_AllocationCallbacks;
+	deviceCreationDesc.queueFamilies = queueFamilies;
+	deviceCreationDesc.queueFamilyNum = helper::GetCountOf(queueFamilies);
 	NRI_ABORT_ON_FAILURE(nri::nriCreateDevice(deviceCreationDesc, m_Device));
 
 	// NRI
@@ -212,7 +205,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	streamerDesc.dynamicBufferUsageBits =
 			nri::BufferUsageBits::VERTEX_BUFFER | nri::BufferUsageBits::INDEX_BUFFER;
 	streamerDesc.constantBufferMemoryLocation = nri::MemoryLocation::HOST_UPLOAD;
-	streamerDesc.frameInFlightNum = BUFFERED_FRAME_MAX_NUM;
+	streamerDesc.queuedFrameNum = GetQueuedFrameNum();
 	NRI_ABORT_ON_FAILURE(NRI.CreateStreamer(*m_Device, streamerDesc, m_Streamer));
 
 	// Command queue
@@ -232,35 +225,39 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		nri::SwapChainDesc swapChainDesc = {};
 		swapChainDesc.window = GetWindow();
 		swapChainDesc.queue = m_GraphicsQueue;
-#ifdef HDR_ENABLE
-		swapChainDesc.format = nri::SwapChainFormat::BT709_G22_10BIT;
-#else
 		swapChainDesc.format = nri::SwapChainFormat::BT709_G22_8BIT;
-#endif
-		swapChainDesc.verticalSyncInterval = m_VsyncInterval;
+		swapChainDesc.flags = (m_Vsync ? nri::SwapChainBits::VSYNC : nri::SwapChainBits::NONE) | nri::SwapChainBits::ALLOW_TEARING;
 		swapChainDesc.width = (uint16_t)GetWindowResolution().first;
 		swapChainDesc.height = (uint16_t)GetWindowResolution().second;
-		swapChainDesc.textureNum = SWAP_CHAIN_TEXTURE_NUM;
-		NRI_ABORT_ON_FAILURE(
-				NRI.CreateSwapChain(*m_Device, swapChainDesc, m_SwapChain));
+		swapChainDesc.textureNum = GetOptimalSwapChainTextureNum();
+		swapChainDesc.queuedFrameNum = GetQueuedFrameNum();
+		NRI_ABORT_ON_FAILURE(NRI.CreateSwapChain(*m_Device, swapChainDesc, m_SwapChain));
 
 		uint32_t swapChainTextureNum;
-		nri::Texture *const *swapChainTextures =
-				NRI.GetSwapChainTextures(*m_SwapChain, swapChainTextureNum);
+		nri::Texture *const *swapChainTextures = NRI.GetSwapChainTextures(*m_SwapChain, swapChainTextureNum);
+
 		swapChainFormat = NRI.GetTextureDesc(*swapChainTextures[0]).format;
 
 		for (uint32_t i = 0; i < swapChainTextureNum; i++) {
-			nri::Texture2DViewDesc textureViewDesc = {
-				swapChainTextures[i], nri::Texture2DViewType::COLOR_ATTACHMENT,
-				swapChainFormat
-			};
+			nri::Texture2DViewDesc textureViewDesc = { swapChainTextures[i], nri::Texture2DViewType::COLOR_ATTACHMENT, swapChainFormat };
 
-			nri::Descriptor *colorAttachment;
-			NRI_ABORT_ON_FAILURE(
-					NRI.CreateTexture2DView(textureViewDesc, colorAttachment));
+			nri::Descriptor *colorAttachment = nullptr;
+			NRI_ABORT_ON_FAILURE(NRI.CreateTexture2DView(textureViewDesc, colorAttachment));
 
-			BackBuffer backBuffer = { colorAttachment, swapChainTextures[i] };
-			m_SwapChainBuffers.push_back(backBuffer);
+			nri::Fence *acquireSemaphore = nullptr;
+			NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, nri::SWAPCHAIN_SEMAPHORE, acquireSemaphore));
+
+			nri::Fence *releaseSemaphore = nullptr;
+			NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, nri::SWAPCHAIN_SEMAPHORE, releaseSemaphore));
+
+			SwapChainTexture &swapChainTexture = m_SwapChainTextures.emplace_back();
+
+			swapChainTexture = {};
+			swapChainTexture.acquireSemaphore = acquireSemaphore;
+			swapChainTexture.releaseSemaphore = releaseSemaphore;
+			swapChainTexture.texture = swapChainTextures[i];
+			swapChainTexture.colorAttachment = colorAttachment;
+			swapChainTexture.attachmentFormat = swapChainFormat;
 		}
 	}
 
@@ -309,7 +306,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 #ifdef RZ
 		textureDesc.clearValue = { { 0.0f, 0u } };
 #else
-		textureDesc.clearValue = { { 1.0f, 0u } };
+		textureDesc.optimizedClearValue = { { 1.0f, 0u } };
 #endif
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture(*m_Device, textureDesc, m_DepthTexture));
@@ -389,7 +386,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	testRenderPtr->InitPresentPass(m_ColorTexture, m_SwapChain);
 
 	// User interface
-	bool initialized = InitUI(NRI, NRI, *m_Device, swapChainFormat);
+	bool initialized = InitImgui(*m_Device);
 
 	// testRenderPtr->BindCamera(m_Camera);
 
@@ -452,34 +449,40 @@ void ShowNode(utils::NodeData node) {
 // }
 
 void Sample::PrepareFrame(uint32_t frameIndex) {
-	BeginUI();
-	ImGui::SetNextWindowPos(ImVec2(30, 30), ImGuiCond_Once);
-	ImGui::SetNextWindowSize(ImVec2(0, 0));
-	ImGui::Begin("Render Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+	ImGui::NewFrame();
 	{
-		ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-		ImGui::Text("Frame: %u", frameIndex);
-		ImGui::Checkbox("Show Indirect", &testRenderPtr->m_config.IndirectDrawState);
-		ImGui::Checkbox("Show BoundingBox", &testRenderPtr->m_config.DebugBoxState);
-		ImGui::Checkbox("Show SSAO", &testRenderPtr->m_config.DebugSSAOState);
-		// ImGui::SliderFloat("Transparency", &m_Transparency, 0.0f, 1.0f);
-		// ImGui::SliderFloat("Scale", &m_Scale, 0.75f, 1.25f);
-		// ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f, "%.0f");
-		// ImGui::SliderInt("Tex Index", &testRenderPtr->testIndex, 0, 10);
-		// ImGui::SliderFloat("Metallic", &testRenderPtr->testMaterial, 0.0, 1.0);
-		// ImGui::SliderFloat("Roughness", &testRenderPtr->testRoughness, 0.0, 1.0);
-		// ImGui::SliderFloat4("Mat Debug", &testRenderPtr->testVec.x, 0.0, 1.0);
-		// ImGui::Text("Light Rotation");
-		ImGui::SliderFloat("Yaw", &testRenderPtr->testVec.x, 0.0f, 1.0f);
-		ImGui::SliderFloat("Pitch", &testRenderPtr->testVec.y, 0.0f, 1.0f);
-		// ImGui::SliderFloat("Roll", &testRenderPtr->testVec.z, 0.0f, 360.0f);
-		// ImGui::SliderFloat("radius", &testRenderPtr->testVec.x, 0.0f, 1.0f);
-		// ImGui::SliderFloat("att", &testRenderPtr->testVec.y, 0.0f, 3.0f);
-		// ImGui::SliderFloat("dist", &testRenderPtr->testVec.z, 0.0f, 3.0f);
-		// ImGui::SliderFloat("radius", &testRenderPtr->testVec.x, 0.0f, 1.0f);
-		// ImGui::SliderFloat4("Roll", &testRenderPtr->testVec[0], 0.0f, 360.0f);
+		ImGui::SetNextWindowPos(ImVec2(30, 30), ImGuiCond_Once);
+		ImGui::SetNextWindowSize(ImVec2(0, 0));
+		ImGui::Begin("Render Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+		{
+			ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+			ImGui::Text("Frame: %u", frameIndex);
+			ImGui::Checkbox("Show Indirect", &testRenderPtr->m_config.IndirectDrawState);
+			ImGui::Checkbox("Show BoundingBox", &testRenderPtr->m_config.DebugBoxState);
+			ImGui::Checkbox("Show SSAO", &testRenderPtr->m_config.DebugSSAOState);
+			// ImGui::SliderFloat("Transparency", &m_Transparency, 0.0f, 1.0f);
+			// ImGui::SliderFloat("Scale", &m_Scale, 0.75f, 1.25f);
+			// ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f, "%.0f");
+			// ImGui::SliderInt("Tex Index", &testRenderPtr->testIndex, 0, 10);
+			// ImGui::SliderFloat("Metallic", &testRenderPtr->testMaterial, 0.0, 1.0);
+			// ImGui::SliderFloat("Roughness", &testRenderPtr->testRoughness, 0.0, 1.0);
+			// ImGui::SliderFloat4("Mat Debug", &testRenderPtr->testVec.x, 0.0, 1.0);
+			// ImGui::Text("Light Rotation");
+			ImGui::SliderFloat("Yaw", &testRenderPtr->testVec.x, 0.0f, 1.0f);
+			ImGui::SliderFloat("Pitch", &testRenderPtr->testVec.y, 0.0f, 1.0f);
+			// ImGui::SliderFloat("Roll", &testRenderPtr->testVec.z, 0.0f, 360.0f);
+			// ImGui::SliderFloat("radius", &testRenderPtr->testVec.x, 0.0f, 1.0f);
+			// ImGui::SliderFloat("att", &testRenderPtr->testVec.y, 0.0f, 3.0f);
+			// ImGui::SliderFloat("dist", &testRenderPtr->testVec.z, 0.0f, 3.0f);
+			// ImGui::SliderFloat("radius", &testRenderPtr->testVec.x, 0.0f, 1.0f);
+			// ImGui::SliderFloat4("Roll", &testRenderPtr->testVec[0], 0.0f, 360.0f);
+		}
+		ImGui::End();
 	}
-	ImGui::End();
+	ImGui::ShowDemoWindow();
+
+	ImGui::EndFrame();
+	ImGui::Render();
 
 	std::unordered_map<std::string, utils::NodeData> nodeNameMap;
 
@@ -496,11 +499,6 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	// 	// ImGui::Text("SwapChain Format: BT709_G22_8BIT");
 	// }
 	// ImGui::End();
-
-	ImGui::ShowDemoWindow();
-
-	EndUI(NRI, *m_Streamer);
-	NRI.CopyStreamerUpdateRequests(*m_Streamer);
 
 	CameraDesc desc = {};
 	desc.aspectRatio = float(testRenderPtr->m_OutputResolution.first) / float(testRenderPtr->m_OutputResolution.second);
@@ -532,9 +530,17 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 
 	Frame &frame = m_Frames[bufferedFrameIndex];
 
-	const uint32_t currentTextureIndex =
-			NRI.AcquireNextSwapChainTexture(*m_SwapChain);
-	BackBuffer &currentBackBuffer = m_SwapChainBuffers[currentTextureIndex];
+	// const uint32_t currentTextureIndex =
+	// 		NRI.AcquireNextSwapChainTexture(*m_SwapChain);
+	// BackBuffer &currentBackBuffer = m_SwapChainBuffers[currentTextureIndex];
+
+	uint32_t recycledSemaphoreIndex = frameIndex % (uint32_t)m_SwapChainTextures.size();
+	nri::Fence *swapChainAcquireSemaphore = m_SwapChainTextures[recycledSemaphoreIndex].acquireSemaphore;
+
+	uint32_t currentSwapChainTextureIndex = 0;
+	NRI.AcquireNextTexture(*m_SwapChain, *swapChainAcquireSemaphore, currentSwapChainTextureIndex);
+
+	const SwapChainTexture &swapChainTexture = m_SwapChainTextures[currentSwapChainTextureIndex];
 
 	// Record
 	nri::CommandBuffer *commandBuffer = frame.commandBuffer;
@@ -546,7 +552,7 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		// Transform Back Buffer
 		{
 			nri::TextureBarrierDesc textureBarrierDescs = {};
-			textureBarrierDescs.texture = currentBackBuffer.texture;
+			textureBarrierDescs.texture = swapChainTexture.texture;
 			textureBarrierDescs.after = { nri::AccessBits::COLOR_ATTACHMENT, nri::Layout::COLOR_ATTACHMENT };
 
 			nri::BarrierGroupDesc barrierGroupDesc = {};
@@ -597,7 +603,7 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		attachmentsDesc.viewMask = 0;
 
 		presentDesc = attachmentsDesc;
-		presentDesc.colors = &currentBackBuffer.colorAttachment;
+		presentDesc.colors = &swapChainTexture.colorAttachment;
 		presentDesc.depthStencil = nullptr;
 
 		nri::AttachmentsDesc depthAttachmentsDesc = attachmentsDesc;
@@ -665,13 +671,15 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 			NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
 		}
 
+		CmdCopyImguiData(*commandBuffer, *m_Streamer);
+
 		NRI.CmdBeginRendering(*commandBuffer, presentDesc);
 		{
 			RenderInfo presentinfo = { .desc = presentDesc, .cmdBuffer = *commandBuffer };
 			NRI.CmdSetDescriptorPool(*commandBuffer, *m_DescriptorPool);
 			testRenderPtr->OnPresent(presentinfo);
 			helper::Annotation annotation(NRI, *commandBuffer, "UI");
-			RenderUI(NRI, NRI, *m_Streamer, *commandBuffer, 1.0f, true);
+			CmdDrawImgui(*commandBuffer, swapChainTexture.attachmentFormat, 1.0f, true);
 		}
 		NRI.CmdEndRendering(*commandBuffer);
 
@@ -720,7 +728,7 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		// Transform Back Buffer -> Next Frame
 		{
 			nri::TextureBarrierDesc textureBarrierDescs = {};
-			textureBarrierDescs.texture = currentBackBuffer.texture;
+			textureBarrierDescs.texture = swapChainTexture.texture;
 			textureBarrierDescs.before = textureBarrierDescs.after;
 			textureBarrierDescs.after = { nri::AccessBits::UNKNOWN,
 				nri::Layout::PRESENT };
@@ -753,7 +761,8 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		NRI.QueueSubmit(*m_GraphicsQueue, queueSubmitDesc);
 	}
 
-	NRI.QueuePresent(*m_SwapChain);
+	// Present
+	NRI.QueuePresent(*m_SwapChain, *swapChainTexture.releaseSemaphore);
 
 	if (frameIndex >= BUFFERED_FRAME_MAX_NUM) {
 		NRI.Wait(*m_FrameFence[bufferedFrameIndex], frame.fenceValue);

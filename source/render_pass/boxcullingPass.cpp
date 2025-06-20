@@ -85,7 +85,7 @@ void BoxCullingPass::BindMemory() {
 		nri::BufferUploadDesc bufferData = {};
 		bufferData.buffer = m_vertexPosBuffer->GetBuffer();
 		bufferData.data = &geometryBufferData[0];
-		bufferData.dataSize = geometryBufferData.size();
+		// bufferData.dataSize = geometryBufferData.size();
 		bufferData.after = { .access = nri::AccessBits::SHADER_RESOURCE, .stages = nri::StageBits::COMPUTE_SHADER };
 
 		const uint64_t positionDataSize = helper::GetByteSizeOf(instancePositions);
@@ -95,7 +95,7 @@ void BoxCullingPass::BindMemory() {
 		nri::BufferUploadDesc bufferData1 = {};
 		bufferData1.buffer = m_positionBuffer->GetBuffer();
 		bufferData1.data = positionBufferData.data();
-		bufferData1.dataSize = positionBufferData.size();
+		// bufferData1.dataSize = positionBufferData.size();
 		bufferData1.after = { .access = nri::AccessBits::SHADER_RESOURCE, .stages = nri::StageBits::COMPUTE_SHADER };
 
 		nri::DrawDesc indirectBufferData = {};
@@ -107,7 +107,7 @@ void BoxCullingPass::BindMemory() {
 		nri::BufferUploadDesc bufferData2 = {};
 		bufferData2.buffer = m_indirectBuffer->GetBuffer();
 		bufferData2.data = &indirectBufferData;
-		bufferData2.dataSize = sizeof(nri::DrawDesc);
+		// bufferData2.dataSize = sizeof(nri::DrawDesc);
 		bufferData2.after = { .access = nri::AccessBits::ARGUMENT_BUFFER, .stages = nri::StageBits::INDIRECT };
 
 		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData, bufferData1, bufferData2 };

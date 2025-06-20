@@ -2,7 +2,11 @@
 
 #pragma once
 
+#define NRI_WRAPPER_D3D11_H 1
+
 #include "NRIDeviceCreation.h"
+
+typedef int32_t DXGIFormat;
 
 NonNriForwardStruct(AGSContext);
 NonNriForwardStruct(ID3D11Device);
@@ -36,7 +40,7 @@ NriStruct(BufferD3D11Desc) {
 
 NriStruct(TextureD3D11Desc) {
     ID3D11Resource* d3d11Resource;
-    NriOptional const NriPtr(TextureDesc) desc; // not all information can be retrieved from the resource if not provided
+    NriOptional DXGIFormat format;             // must be provided "as a compatible typed format" if the resource is typeless
 };
 
 // Threadsafe: yes

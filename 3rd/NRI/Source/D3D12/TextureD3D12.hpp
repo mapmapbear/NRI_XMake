@@ -1,7 +1,5 @@
 // © 2021 NVIDIA Corporation
 
-#include <float.h>
-
 Result TextureD3D12::Create(const TextureDesc& textureDesc) {
     m_Desc = FixTextureDesc(textureDesc);
 
@@ -9,9 +7,7 @@ Result TextureD3D12::Create(const TextureDesc& textureDesc) {
 }
 
 Result TextureD3D12::Create(const TextureD3D12Desc& textureDesc) {
-    if (textureDesc.desc)
-        m_Desc = FixTextureDesc(*textureDesc.desc);
-    else if (!GetTextureDesc(textureDesc, m_Desc))
+    if (!GetTextureDesc(textureDesc, m_Desc))
         return Result::INVALID_ARGUMENT;
 
     m_Texture = (ID3D12ResourceBest*)textureDesc.d3d12Resource;
@@ -23,16 +19,18 @@ Result TextureD3D12::BindMemory(const MemoryD3D12* memory, uint64_t offset) {
     // Texture was already created externally
     if (m_Texture)
         return Result::SUCCESS;
-    const DxgiFormat& formatInfo = GetDxgiFormat(m_Desc.format);
-    D3D12_CLEAR_VALUE clearValue = {formatInfo.typed};
-    if (formatInfo.isDepthStencil) {
-        clearValue.DepthStencil.Depth = m_Desc.clearValue.depthStencil.depth;
-        clearValue.DepthStencil.Stencil = m_Desc.clearValue.depthStencil.stencil;
+
+    D3D12_CLEAR_VALUE clearValue = {GetDxgiFormat(m_Desc.format).typed};
+
+    const FormatProps& formatProps = GetFormatProps(m_Desc.format);
+    if (formatProps.isDepth || formatProps.isStencil) {
+        clearValue.DepthStencil.Depth = m_Desc.optimizedClearValue.depthStencil.depth;
+        clearValue.DepthStencil.Stencil = m_Desc.optimizedClearValue.depthStencil.stencil;
     } else {
-        clearValue.Color[0] = m_Desc.clearValue.color.f.x;
-        clearValue.Color[1] = m_Desc.clearValue.color.f.y;
-        clearValue.Color[2] = m_Desc.clearValue.color.f.z;
-        clearValue.Color[3] = m_Desc.clearValue.color.f.w;
+        clearValue.Color[0] = m_Desc.optimizedClearValue.color.f.x;
+        clearValue.Color[1] = m_Desc.optimizedClearValue.color.f.y;
+        clearValue.Color[2] = m_Desc.optimizedClearValue.color.f.z;
+        clearValue.Color[3] = m_Desc.optimizedClearValue.color.f.w;
     }
 
     const D3D12_HEAP_DESC& heapDesc = memory->GetHeapDesc();

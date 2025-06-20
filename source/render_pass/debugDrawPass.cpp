@@ -343,21 +343,21 @@ void DebugDrawPass::BindMemory() {
 	nri::BufferUploadDesc bufferData = {};
 	bufferData.buffer = m_GeometryBuffer->GetBuffer();
 	bufferData.data = &geometryBufferData[0];
-	bufferData.dataSize = geometryBufferData.size();
+	// bufferData.dataSize = geometryBufferData.size();
 	bufferData.after = { nri::AccessBits::INDEX_BUFFER |
 		nri::AccessBits::VERTEX_BUFFER };
 
 	nri::BufferUploadDesc bufferData_sphere = {};
 	bufferData_sphere.buffer = m_GeometryBuffer_sphere->GetBuffer();
 	bufferData_sphere.data = &geometryBufferData_sphere[0];
-	bufferData_sphere.dataSize = geometryBufferData_sphere.size();
+	// bufferData_sphere.dataSize = geometryBufferData_sphere.size();
 	bufferData_sphere.after = { nri::AccessBits::INDEX_BUFFER |
 		nri::AccessBits::VERTEX_BUFFER };
 
 	nri::BufferUploadDesc bufferData_frustum = {};
 	bufferData_frustum.buffer = m_GeometryBuffer_frustum->GetBuffer();
 	bufferData_frustum.data = &geometryBufferData_frustum[0];
-	bufferData_frustum.dataSize = geometryBufferData_frustum.size();
+	// bufferData_frustum.dataSize = geometryBufferData_frustum.size();
 	bufferData_frustum.after = { nri::AccessBits::INDEX_BUFFER |
 		nri::AccessBits::VERTEX_BUFFER };
 
@@ -626,7 +626,7 @@ void DebugDrawPass::GenerateBoxBuffer() {
 	nri::BufferUploadDesc desc = {};
 	desc.buffer = m_boxDataBuffer->GetBuffer();
 	desc.data = boxWorldMats.data();
-	desc.dataSize = helper::GetByteSizeOf(boxWorldMats);
+	// desc.dataSize = helper::GetByteSizeOf(boxWorldMats);
 	desc.after = { nri::AccessBits::SHADER_RESOURCE,
 		nri::StageBits::VERTEX_SHADER };
 

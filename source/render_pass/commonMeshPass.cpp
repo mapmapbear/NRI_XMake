@@ -130,19 +130,19 @@ void CommonMeshPass::AllocGPUMemory() {
 		nri::BufferUploadDesc bufferData = {};
 		bufferData.buffer = m_indirectBuffer->GetBuffer();
 		bufferData.data = indirectBufferData.data();
-		bufferData.dataSize = sizeof(nri::DrawIndexedDesc) * indirectBufferData.size();
+		// bufferData.dataSize = sizeof(nri::DrawIndexedDesc) * indirectBufferData.size();
 		bufferData.after = { .access = nri::AccessBits::ARGUMENT_BUFFER, .stages = nri::StageBits::INDIRECT };
 
 		nri::BufferUploadDesc bufferData2 = {};
 		bufferData2.buffer = m_worldMatBuffer->GetBuffer();
 		bufferData2.data = worldMatData.data();
-		bufferData2.dataSize = helper::GetByteSizeOf(worldMatData);
+		// bufferData2.dataSize = helper::GetByteSizeOf(worldMatData);
 		bufferData2.after = { .access = nri::AccessBits::SHADER_RESOURCE, .stages = nri::StageBits::VERTEX_SHADER };
 
 		nri::BufferUploadDesc bufferData3 = {};
 		bufferData3.buffer = m_sphereCullBuffer->GetBuffer();
 		bufferData3.data = cullDatas.data();
-		bufferData3.dataSize = sizeof(CullData) * cullDatas.size();
+		// bufferData3.dataSize = sizeof(CullData) * cullDatas.size();
 		bufferData3.after = { .access = nri::AccessBits::SHADER_RESOURCE, .stages = nri::StageBits::VERTEX_SHADER };
 
 		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData, bufferData2, bufferData3 };

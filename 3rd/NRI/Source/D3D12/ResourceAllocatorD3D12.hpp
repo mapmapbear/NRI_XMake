@@ -2,26 +2,37 @@
 
 #if defined(__GNUC__)
 #    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wswitch"
 #    pragma GCC diagnostic ignored "-Wunused-parameter"
 #    pragma GCC diagnostic ignored "-Wunused-variable"
-#    pragma GCC diagnostic ignored "-Wswitch"
+#    pragma GCC diagnostic ignored "-Wsometimes-uninitialized"
 #elif defined(__clang__)
 #    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wswitch"
 #    pragma clang diagnostic ignored "-Wunused-parameter"
 #    pragma clang diagnostic ignored "-Wunused-variable"
-#    pragma clang diagnostic ignored "-Wswitch"
+#    pragma clang diagnostic ignored "-Wsometimes-uninitialized"
 #else
 #    pragma warning(push)
+#    pragma warning(disable : 4063) // case 'identifier' is not a valid value for switch of enum 'enumeration'
 #    pragma warning(disable : 4100) // unreferenced formal parameter
 #    pragma warning(disable : 4189) // local variable is initialized but not referenced
 #    pragma warning(disable : 4505) // unreferenced function with internal linkage has been removed
-#    pragma warning(disable : 4063) // case 'identifier' is not a valid value for switch of enum 'enumeration'
+#    pragma warning(disable : 4701) // potentially uninitialized local variable
 #endif
 
 #define D3D12MA_D3D12_HEADERS_ALREADY_INCLUDED
 
-#include "D3D12MemAlloc.h"
+#ifndef NDEBUG
+#    define D3D12MA_DEBUG_LOG(format, ...) \
+        do { \
+            wprintf(format, __VA_ARGS__); \
+            wprintf(L"\n"); \
+        } while (false)
+#endif
+
 // #include "D3D12MemAlloc.cpp"
+#include "D3D12MemAlloc.h"
 
 #if defined(__GNUC__)
 #    pragma GCC diagnostic pop
@@ -68,17 +79,23 @@ Result DeviceD3D12::CreateVma() {
 }
 
 Result BufferD3D12::Create(const AllocateBufferDesc& bufferDesc) {
-    Result nriResult = m_Device.CreateVma();
-    if (nriResult != Result::SUCCESS)
-        return nriResult;
+    Result result = m_Device.CreateVma();
+    if (result != Result::SUCCESS)
+        return result;
 
     uint32_t flags = D3D12MA::ALLOCATION_FLAG_CAN_ALIAS | D3D12MA::ALLOCATION_FLAG_STRATEGY_MIN_MEMORY;
     if (bufferDesc.dedicated)
         flags |= D3D12MA::ALLOCATION_FLAG_COMMITTED;
 
+    const DeviceDesc& deviceDesc = m_Device.GetDesc();
+    D3D12_HEAP_FLAGS heapFlags = D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES;
+    if (deviceDesc.tiers.memory == 0)
+        heapFlags = D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS;
+
     D3D12MA::ALLOCATION_DESC allocationDesc = {};
     allocationDesc.HeapType = m_Device.GetHeapType(bufferDesc.memoryLocation);
     allocationDesc.Flags = (D3D12MA::ALLOCATION_FLAGS)flags;
+    allocationDesc.ExtraHeapFlags = heapFlags;
 
 #ifdef NRI_ENABLE_AGILITY_SDK_SUPPORT
     if (m_Device.GetVersion() >= 10) {
@@ -117,19 +134,40 @@ Result BufferD3D12::Create(const AllocateBufferDesc& bufferDesc) {
 }
 
 Result TextureD3D12::Create(const AllocateTextureDesc& textureDesc) {
-    Result nriResult = m_Device.CreateVma();
-    if (nriResult != Result::SUCCESS)
-        return nriResult;
+    Result result = m_Device.CreateVma();
+    if (result != Result::SUCCESS)
+        return result;
 
     D3D12_CLEAR_VALUE clearValue = {GetDxgiFormat(textureDesc.desc.format).typed};
+
+    const FormatProps& formatProps = GetFormatProps(textureDesc.desc.format);
+    if (formatProps.isDepth || formatProps.isStencil) {
+        clearValue.DepthStencil.Depth = textureDesc.desc.optimizedClearValue.depthStencil.depth;
+        clearValue.DepthStencil.Stencil = textureDesc.desc.optimizedClearValue.depthStencil.stencil;
+    } else {
+        clearValue.Color[0] = textureDesc.desc.optimizedClearValue.color.f.x;
+        clearValue.Color[1] = textureDesc.desc.optimizedClearValue.color.f.y;
+        clearValue.Color[2] = textureDesc.desc.optimizedClearValue.color.f.z;
+        clearValue.Color[3] = textureDesc.desc.optimizedClearValue.color.f.w;
+    }
 
     uint32_t flags = D3D12MA::ALLOCATION_FLAG_CAN_ALIAS | D3D12MA::ALLOCATION_FLAG_STRATEGY_MIN_MEMORY;
     if (textureDesc.dedicated)
         flags |= D3D12MA::ALLOCATION_FLAG_COMMITTED;
 
+    const DeviceDesc& deviceDesc = m_Device.GetDesc();
+    D3D12_HEAP_FLAGS heapFlags = D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES;
+    if (deviceDesc.tiers.memory == 0) {
+        if (textureDesc.desc.usage & (TextureUsageBits::COLOR_ATTACHMENT | TextureUsageBits::DEPTH_STENCIL_ATTACHMENT) )
+            heapFlags = D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES;
+        else
+            heapFlags = D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES;
+    }
+
     D3D12MA::ALLOCATION_DESC allocationDesc = {};
     allocationDesc.HeapType = m_Device.GetHeapType(textureDesc.memoryLocation);
     allocationDesc.Flags = (D3D12MA::ALLOCATION_FLAGS)flags;
+    allocationDesc.ExtraHeapFlags = heapFlags;
 
 #ifdef NRI_ENABLE_AGILITY_SDK_SUPPORT
     if (m_Device.GetVersion() >= 10) {
@@ -160,15 +198,15 @@ Result TextureD3D12::Create(const AllocateTextureDesc& textureDesc) {
         RETURN_ON_BAD_HRESULT(&m_Device, hr, "ID3D12Device1::SetResidencyPriority()");
     }
 
-    m_Desc = textureDesc.desc;
+    m_Desc = FixTextureDesc(textureDesc.desc);
 
     return Result::SUCCESS;
 }
 
 Result AccelerationStructureD3D12::Create(const AllocateAccelerationStructureDesc& accelerationStructureDesc) {
-    Result nriResult = m_Device.CreateVma();
-    if (nriResult != Result::SUCCESS)
-        return nriResult;
+    Result result = m_Device.CreateVma();
+    if (result != Result::SUCCESS)
+        return result;
 
     m_Device.GetAccelerationStructurePrebuildInfo(accelerationStructureDesc.desc, m_PrebuildInfo);
     m_Flags = accelerationStructureDesc.desc.flags;
@@ -183,9 +221,9 @@ Result AccelerationStructureD3D12::Create(const AllocateAccelerationStructureDes
 }
 
 Result MicromapD3D12::Create(const AllocateMicromapDesc& micromapDesc) {
-    Result nriResult = m_Device.CreateVma();
-    if (nriResult != Result::SUCCESS)
-        return nriResult;
+    Result result = m_Device.CreateVma();
+    if (result != Result::SUCCESS)
+        return result;
 
     m_Device.GetMicromapPrebuildInfo(micromapDesc.desc, m_PrebuildInfo);
     m_Flags = micromapDesc.desc.flags;

@@ -19,23 +19,12 @@ struct DeviceNONE final : public DeviceBase {
             m_Desc.adapterDesc.queueNum[i] = 4;
 
         m_Desc.graphicsAPI = GraphicsAPI::NONE;
-        m_Desc.nriVersionMajor = NRI_VERSION_MAJOR;
-        m_Desc.nriVersionMinor = NRI_VERSION_MINOR;
+        m_Desc.nriVersion = NRI_VERSION;
         m_Desc.shaderModel = 69;
 
         m_Desc.viewport.maxNum = 16;
         m_Desc.viewport.boundsMin = -32768;
         m_Desc.viewport.boundsMax = 32767;
-
-        m_Desc.multisampling.zeroAttachmentsSampleMaxNum = 32;
-        m_Desc.multisampling.attachmentColorSampleMaxNum = 32;
-        m_Desc.multisampling.attachmentDepthSampleMaxNum = 32;
-        m_Desc.multisampling.attachmentStencilSampleMaxNum = 32;
-        m_Desc.multisampling.textureColorSampleMaxNum = 32;
-        m_Desc.multisampling.textureDepthSampleMaxNum = 32;
-        m_Desc.multisampling.textureStencilSampleMaxNum = 32;
-        m_Desc.multisampling.textureIntegerSampleMaxNum = 32;
-        m_Desc.multisampling.storageTextureSampleMaxNum = 32;
 
         m_Desc.dimensions.attachmentMaxDim = 16384;
         m_Desc.dimensions.attachmentLayerMaxNum = 2048;
@@ -188,6 +177,10 @@ struct DeviceNONE final : public DeviceBase {
     Result FillFunctionTable(StreamerInterface& table) const override;
     Result FillFunctionTable(SwapChainInterface& table) const override;
     Result FillFunctionTable(UpscalerInterface& table) const override;
+
+#if NRI_ENABLE_IMGUI_EXTENSION
+    Result FillFunctionTable(ImguiInterface& table) const override;
+#endif
 
 private:
     DeviceDesc m_Desc = {};
@@ -745,6 +738,39 @@ Result DeviceNONE::FillFunctionTable(HelperInterface& table) const {
 #pragma endregion
 
 //============================================================================================================================================================================================
+#pragma region[  Imgui  ]
+
+#if NRI_ENABLE_IMGUI_EXTENSION
+
+static Result NRI_CALL CreateImgui(Device&, const ImguiDesc&, Imgui*& imgui) {
+    imgui = DummyObject<Imgui>();
+
+    return Result::SUCCESS;
+}
+
+static void NRI_CALL DestroyImgui(Imgui&) {
+}
+
+static void NRI_CALL CmdCopyImguiData(CommandBuffer&, Streamer&, Imgui&, const CopyImguiDataDesc&) {
+}
+
+static void NRI_CALL CmdDrawImgui(CommandBuffer&, Imgui&, const DrawImguiDesc&) {
+}
+
+Result DeviceNONE::FillFunctionTable(ImguiInterface& table) const {
+    table.CreateImgui = ::CreateImgui;
+    table.DestroyImgui = ::DestroyImgui;
+    table.CmdCopyImguiData = ::CmdCopyImguiData;
+    table.CmdDrawImgui = ::CmdDrawImgui;
+
+    return Result::SUCCESS;
+}
+
+#endif
+
+#pragma endregion
+
+//============================================================================================================================================================================================
 #pragma region[  LowLatency  ]
 
 static Result NRI_CALL SetLatencySleepMode(SwapChain&, const LatencySleepMode&) {
@@ -1003,39 +1029,33 @@ static Buffer* NRI_CALL GetStreamerConstantBuffer(Streamer&) {
     return nullptr;
 }
 
-static uint32_t NRI_CALL UpdateStreamerConstantBuffer(Streamer&, const void*, uint32_t) {
+static uint32_t NRI_CALL StreamConstantData(Streamer&, const void*, uint32_t) {
     return 0;
 }
 
-static uint64_t NRI_CALL AddStreamerBufferUpdateRequest(Streamer&, const BufferUpdateRequestDesc&) {
-    return 0;
+static BufferOffset NRI_CALL StreamBufferData(Streamer&, const StreamBufferDataDesc&) {
+    return {};
 }
 
-static uint64_t NRI_CALL AddStreamerTextureUpdateRequest(Streamer&, const TextureUpdateRequestDesc&) {
-    return 0;
+static BufferOffset NRI_CALL StreamTextureData(Streamer&, const StreamTextureDataDesc&) {
+    return {};
 }
 
-static Result NRI_CALL CopyStreamerUpdateRequests(Streamer&) {
-    return Result::SUCCESS;
+static void NRI_CALL EndStreamerFrame(Streamer&) {
 }
 
-static Buffer* GetStreamerDynamicBuffer(Streamer&) {
-    return nullptr;
-}
-
-static void NRI_CALL CmdUploadStreamerUpdateRequests(CommandBuffer&, Streamer&) {
+static void NRI_CALL CmdCopyStreamedData(CommandBuffer&, Streamer&) {
 }
 
 Result DeviceNONE::FillFunctionTable(StreamerInterface& table) const {
     table.CreateStreamer = ::CreateStreamer;
     table.DestroyStreamer = ::DestroyStreamer;
     table.GetStreamerConstantBuffer = ::GetStreamerConstantBuffer;
-    table.GetStreamerDynamicBuffer = ::GetStreamerDynamicBuffer;
-    table.AddStreamerBufferUpdateRequest = ::AddStreamerBufferUpdateRequest;
-    table.AddStreamerTextureUpdateRequest = ::AddStreamerTextureUpdateRequest;
-    table.UpdateStreamerConstantBuffer = ::UpdateStreamerConstantBuffer;
-    table.CopyStreamerUpdateRequests = ::CopyStreamerUpdateRequests;
-    table.CmdUploadStreamerUpdateRequests = ::CmdUploadStreamerUpdateRequests;
+    table.StreamBufferData = ::StreamBufferData;
+    table.StreamTextureData = ::StreamTextureData;
+    table.StreamConstantData = ::StreamConstantData;
+    table.EndStreamerFrame = ::EndStreamerFrame;
+    table.CmdCopyStreamedData = ::CmdCopyStreamedData;
 
     return Result::SUCCESS;
 }
@@ -1061,21 +1081,23 @@ static Texture* const* NRI_CALL GetSwapChainTextures(const SwapChain&, uint32_t&
     return (Texture**)textures;
 }
 
-static uint32_t NRI_CALL AcquireNextSwapChainTexture(SwapChain&) {
-    return 0;
+static Result NRI_CALL GetDisplayDesc(SwapChain&, DisplayDesc& displayDesc) {
+    displayDesc = {};
+
+    return Result::SUCCESS;
+}
+
+static Result NRI_CALL AcquireNextTexture(SwapChain&, Fence&, uint32_t& textureIndex) {
+    textureIndex = 0;
+
+    return Result::SUCCESS;
 }
 
 static Result NRI_CALL WaitForPresent(SwapChain&) {
     return Result::SUCCESS;
 }
 
-static Result NRI_CALL QueuePresent(SwapChain&) {
-    return Result::SUCCESS;
-}
-
-static Result NRI_CALL GetDisplayDesc(SwapChain&, DisplayDesc& displayDesc) {
-    displayDesc = {};
-
+static Result NRI_CALL QueuePresent(SwapChain&, Fence&) {
     return Result::SUCCESS;
 }
 
@@ -1083,10 +1105,10 @@ Result DeviceNONE::FillFunctionTable(SwapChainInterface& table) const {
     table.CreateSwapChain = ::CreateSwapChain;
     table.DestroySwapChain = ::DestroySwapChain;
     table.GetSwapChainTextures = ::GetSwapChainTextures;
-    table.AcquireNextSwapChainTexture = ::AcquireNextSwapChainTexture;
+    table.GetDisplayDesc = ::GetDisplayDesc;
+    table.AcquireNextTexture = ::AcquireNextTexture;
     table.WaitForPresent = ::WaitForPresent;
     table.QueuePresent = ::QueuePresent;
-    table.GetDisplayDesc = ::GetDisplayDesc;
 
     return Result::SUCCESS;
 }

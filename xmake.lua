@@ -33,18 +33,27 @@ target("TinyddsLoader")
     add_includedirs("3rd/tinyddsLoader/", {public = true})
     add_files("3rd/tinyddsLoader/tinyddsLoader.cpp")
 
+target("ShaderMake")
+    set_kind("static")
+    add_includedirs("3rd/ShaderMake/", {public = true})
+    add_files("3rd/ShaderMake/*.cpp")
+    add_files("3rd/ShaderMake/*.c")
+
 target("NRI")
     set_kind("static")
     add_deps("D3D12Ma")
-    add_defines("NOMINMAX", "NRI_ENABLE_D3D12_SUPPORT")
+    add_deps("ShaderMake")
+    add_defines("NOMINMAX", "NRI_ENABLE_D3D12_SUPPORT", "NRI_ENABLE_IMGUI_EXTENSION")
     if is_mode("debug") then
         add_defines("NRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS", "NRI_ENABLE_AGILITY_SDK_SUPPORT", "NRI_ENABLE_VALIDATION_SUPPORT")
     end
+    add_includedirs("3rd/", {public = true})
     add_includedirs("3rd/NRI/Include", {public = true})
     add_includedirs("3rd/NRI/Source/Shared/", {public = true})
     add_includedirs("3rd/d3d12ma/include/", {public = true})
     add_includedirs("3rd/WinPixEventRuntime/Include/WinPixEventRuntime/")
     add_includedirs("3rd/Directx12Agility/build/native/include", {public = true})
+    add_includedirs("3rd/NRI/_Shaders/", {public = true})
     add_files("3rd/NRI/Source/Creation/*.cpp")
     add_files("3rd/NRI/Source/D3D12/*.cpp")
     add_files("3rd/NRI/Source/Shared/*.cpp")
@@ -54,7 +63,7 @@ target("NRI")
     add_syslinks("dxgi", "d3d12", "dxguid")
     -- on_config(function(target)
     --     local header_path = "3rd/NRI/Include/NRIAgilitySDK.h"
-    --     local agility_sdk_version = "615"
+    --     local agility_sdk_version = "616"
     --     local agility_sdk_dir = "AgilitySDK"
 
     --     local content = [[
@@ -134,7 +143,7 @@ target("ShaderCompiler")
             "-c", path.join(os.scriptdir(), "Shaders.cfg"),
             "-o", shader_output_path,
             "-I", path.join(os.scriptdir(), "3rd/NRI/Include"),
-            "-p", "DXIL", "--compiler", "D:/GitProject/dxc_2025_05_24/bin/x64/dxc.exe"
+            "-p", "DXIL", "--compiler", "D:/Source/GitProject/dxc_2025_02_20/bin/x64/dxc.exe"
         }
         os.execv(shaderMakePath, args)
     end)
