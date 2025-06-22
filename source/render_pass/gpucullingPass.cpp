@@ -141,9 +141,13 @@ void GPUCullingPass::AllocGPUMemory() {
 			indirectBufferData[i].baseInstance = (uint32_t)i;
 
 			glm::mat4 transMat = node.globalTransform;
-			glm::vec4 center = glm::vec4(node.mesh->aabb2.first, 1.0);
-			center = transMat * center;
-			glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
+			glm::vec3 min = glm::vec4(node.mesh->aabb.first, 1.0);
+			glm::vec3 max = glm::vec4(node.mesh->aabb.second, 1.0);
+			min = transMat * glm::vec4(min, 1.0);
+			max = transMat * glm::vec4(max, 1.0);
+
+			glm::vec3 center = (min + max) * 0.5f;
+			glm::vec3 extent = (max - min) * 0.5f;
 
 			cullDatas[i].center = center;
 			cullDatas[i].extents = extent;
@@ -434,7 +438,7 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 		glm::vec4 frustumB = normalizePlane(projMat[3] - projMat[1]);
 
 		PushConstants block = {
-			.viewMat = p * camera.statePrev.mWorldToView,// * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f)),
+			.viewMat = p * camera.statePrev.mWorldToView, // * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f)),
 			.cameraArgs = glm::vec4(camera.m_desc.nearZ, camera.m_desc.farZ, camera.m_desc.farZ + 20, 0.0f),
 			.frustum = { glm::vec4(frustumL.x, frustumL.y, frustumL.z, frustumL.w),
 					glm::vec4(frustumR.x, frustumR.y, frustumR.z, frustumR.w),
@@ -445,7 +449,7 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 		};
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(PushConstants));
 		NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_CullingDescriptorConstantBufferSet, nullptr);
-		NRI.CmdDispatch(info.cmdBuffer, { (uint32_t)m_renderer->m_OpaqueRenderNodes.size() / 8 + 1, 1, 1 });
+		NRI.CmdDispatch(info.cmdBuffer, { (uint32_t)floor(m_renderer->m_OpaqueRenderNodes.size() / 8), 1, 1 });
 	}
 }
 
@@ -455,8 +459,8 @@ void GPUCullingPass::RenderHiZ(struct RenderInfo &info) {
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Hi-Z Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_HiZPipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_HiZPipeline);
-		uint32_t srcWidth = m_renderer->m_OutputResolution.first;
-		uint32_t srcHeight = m_renderer->m_OutputResolution.second;
+		uint32_t srcWidth = m_renderer->m_OutputResolution.first / 2;
+		uint32_t srcHeight = m_renderer->m_OutputResolution.second / 2;
 
 		for (uint32_t i = 0; i < m_HiZTexture->GetMipNum(); i++) {
 			UINT destWidth = std::max(1u, (UINT)(srcWidth >> i));

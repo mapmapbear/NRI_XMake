@@ -106,7 +106,7 @@ bool SphereCullFrustum(uint objectIndex) {
 }
 
 bool HizCull(uint objectIndex) {
-    StructuredBuffer<CullData> sphereCullData =ResourceDescriptorHeap[1015];
+    StructuredBuffer<CullData> sphereCullData = ResourceDescriptorHeap[1015];
     Texture2D<float> HizBuffer = ResourceDescriptorHeap[1021];
     SamplerState HizSampler = ResourceDescriptorHeap[5];
 

@@ -80,7 +80,7 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 		m_Meshes.push_back(LoadMesh(pScene->mMeshes[meshTransforms[i].first], renderer));
 	}
 
-	m_GPUMesh = LoadGPUMesh(pScene, (uint32_t)meshTransforms.size(), renderer);
+	m_GPUMesh = LoadGPUMesh(pScene, (uint32_t)pScene->mNumMeshes, renderer);
 
 	auto loadTexture = [renderer](std::string &basepath, aiMaterial *mat, aiTextureType type) {
 		std::shared_ptr<Texture> tex = std::make_shared<Texture>();

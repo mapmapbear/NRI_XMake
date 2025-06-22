@@ -331,10 +331,11 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = {};
 	// meshFile = utils::GetFullPath("Sponza/sponza.gltf", utils::DataFolder::ROOT);
-	meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
-	// meshFile = utils::GetFullPath("plane.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("cubes.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
-	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S2.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("GLTF_OW/OW.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S1.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this);
 	debugdrawPass = std::make_shared<DebugDrawPass>(this);
 
@@ -377,10 +378,19 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	for (int i = 0; i < m_OpaqueRenderNodes.size(); ++i) {
 		RenderNode &node = m_OpaqueRenderNodes[i];
 		glm::mat4 transMat = node.globalTransform;
-		glm::vec4 center = glm::vec4(node.mesh->aabb2.first, 1.0);
-		center = transMat * center;
-		glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
+		// glm::vec4 center = glm::vec4(node.mesh->aabb2.first, 1.0);
+		// center = transMat * center;
+		// glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
 		// extent = transMat * extent;
+
+		glm::vec3 min = glm::vec4(node.mesh->aabb.first, 1.0);
+		glm::vec3 max = glm::vec4(node.mesh->aabb.second, 1.0);
+		min = transMat * glm::vec4(min, 1.0);
+		max = transMat * glm::vec4(max, 1.0);
+	
+		glm::vec3 center = (min + max) * 0.5f;
+		glm::vec3 extent = (max - min) * 0.5f;
+
 		debugdrawPass->DrawBox(center, extent, glm::vec4(1.0));
 	}
 

@@ -651,7 +651,8 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 			}
 		} else {
 			nri::Buffer *indirectBuffer = m_renderer->gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
-			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *indirectBuffer, 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
+			nri::Buffer *counterBuffer = m_renderer->gpuCullingPass->m_VisibleObjectCounterBuffer->GetBuffer();
+			NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *indirectBuffer, 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), counterBuffer, 0);
 		}
 	}
 }
