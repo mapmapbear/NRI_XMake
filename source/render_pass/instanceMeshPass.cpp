@@ -291,7 +291,7 @@ void InstanceMeshPass::BindMemory() {
 		nri::BufferUploadDesc bufferData = {};
 		bufferData.buffer = m_GeometryBuffer;
 		bufferData.data = &geometryBufferData[0];
-		bufferData.dataSize = geometryBufferData.size();
+		// bufferData.dataSize = geometryBufferData.size();
 		bufferData.after = { nri::AccessBits::INDEX_BUFFER |
 			nri::AccessBits::VERTEX_BUFFER };
 		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData };

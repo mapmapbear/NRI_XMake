@@ -1,7 +1,7 @@
 // © 2021 NVIDIA Corporation
 
 static constexpr VkBufferUsageFlags GetBufferUsageFlags(BufferUsageBits bufferUsageBits, uint32_t structureStride, bool isDeviceAddressSupported) {
-    VkBufferUsageFlags flags = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    VkBufferUsageFlags flags = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT; // TODO: ban "the opposite" for UPLOAD/READBACK?
 
     if (isDeviceAddressSupported)
         flags |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
@@ -105,17 +105,18 @@ static void VKAPI_PTR vkFreeHostMemory(void* pUserData, void* pMemory) {
 static VkBool32 VKAPI_PTR MessageCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData) {
     DeviceVK& device = *(DeviceVK*)userData;
 
-    // TODO: some messages can be muted here
-    { 
+    { // TODO: some messages can be muted here
         // Loader info message
         if (callbackData->messageIdNumber == 0)
             return VK_FALSE;
-        // Validation Warning: [ WARNING-DEBUG-PRINTF ] Internal Warning: Setting VkPhysicalDeviceVulkan12Properties::maxUpdateAfterBindDescriptorsInAllPools to 32
-        if (callbackData->messageIdNumber == 0x76589099)
+        // Validation Information: [ WARNING-CreateInstance-status-message ] vkCreateInstance(): Khronos Validation Layer Active ...
+        if (callbackData->messageIdNumber == 601872502)
             return VK_FALSE;
-        // (v1.4.309 issue) The storage image descriptor is accessed by a OpTypeImage that has a Format operand which doesn't match the VkImageView format
-        // TODO: there is no way to enable "storageWithoutFormat" capability in SPIRV in the current version of DXC, so ignore the warning if this feature is supported by the device
-        if (callbackData->messageIdNumber == 0x013365B2 && device.m_IsSupported.storageWithoutFormat)
+        // Validation Warning: [ VALIDATION-SETTINGS ] vkCreateInstance(): DebugPrintf logs to the Information message severity, enabling Information level logging otherwise the message will not be seen.
+        if (callbackData->messageIdNumber == 2132353751)
+            return VK_FALSE;
+        // Validation Warning: [ WARNING-DEBUG-PRINTF ] Internal Warning: Setting VkPhysicalDeviceVulkan12Properties::maxUpdateAfterBindDescriptorsInAllPools to 32
+        if (callbackData->messageIdNumber == 1985515673)
             return VK_FALSE;
     }
 
@@ -125,7 +126,7 @@ static VkBool32 VKAPI_PTR MessageCallback(VkDebugUtilsMessageSeverityFlagBitsEXT
     else if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
         severity = Message::WARNING;
 
-    device.ReportMessage(severity, __FILE__, __LINE__, "%s", callbackData->pMessage);
+    device.ReportMessage(severity, __FILE__, __LINE__, "[%u] %s", callbackData->messageIdNumber, callbackData->pMessage);
 
     return VK_FALSE;
 }
@@ -174,17 +175,20 @@ void DeviceVK::ProcessInstanceExtensions(Vector<const char*>& desiredInstanceExt
     if (IsExtensionSupported(VK_KHR_SURFACE_EXTENSION_NAME, supportedExts)) {
         desiredInstanceExts.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 
+        if (IsExtensionSupported(VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME, supportedExts))
+            desiredInstanceExts.push_back(VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME);
+
 #ifdef VK_USE_PLATFORM_WIN32_KHR
         desiredInstanceExts.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
-#endif
-#ifdef VK_USE_PLATFORM_METAL_EXT
-        desiredInstanceExts.push_back(VK_EXT_METAL_SURFACE_EXTENSION_NAME);
 #endif
 #ifdef VK_USE_PLATFORM_XLIB_KHR
         desiredInstanceExts.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
 #endif
 #ifdef VK_USE_PLATFORM_WAYLAND_KHR
         desiredInstanceExts.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
+#endif
+#ifdef VK_USE_PLATFORM_METAL_EXT
+        desiredInstanceExts.push_back(VK_EXT_METAL_SURFACE_EXTENSION_NAME);
 #endif
     }
 
@@ -280,6 +284,12 @@ void DeviceVK::ProcessDeviceExtensions(Vector<const char*>& desiredDeviceExts, b
         desiredDeviceExts.push_back(VK_KHR_SHADER_CLOCK_EXTENSION_NAME);
 
     // Optional (EXT)
+    if (IsExtensionSupported(VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, supportedExts))
+        desiredDeviceExts.push_back(VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME);
+
+    if (IsExtensionSupported(VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, supportedExts))
+        desiredDeviceExts.push_back(VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME);
+
     if (IsExtensionSupported(VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME, supportedExts) && !disableRayTracing)
         desiredDeviceExts.push_back(VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME);
 
@@ -347,8 +357,7 @@ DeviceVK::DeviceVK(const CallbackInterface& callbacks, const AllocationCallbacks
     m_AllocationCallbacks.pfnFree = vkFreeHostMemory;
 
     m_Desc.graphicsAPI = GraphicsAPI::VK;
-    m_Desc.nriVersionMajor = NRI_VERSION_MAJOR;
-    m_Desc.nriVersionMinor = NRI_VERSION_MINOR;
+    m_Desc.nriVersion = NRI_VERSION;
 }
 
 DeviceVK::~DeviceVK() {
@@ -428,8 +437,8 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
 
         if (!isWrapper) {
             uint32_t deviceGroupNum = 0;
-            VkResult result = m_VK.EnumeratePhysicalDeviceGroups(m_Instance, &deviceGroupNum, nullptr);
-            RETURN_ON_FAILURE(this, result == VK_SUCCESS, GetReturnCode(result), "vkEnumeratePhysicalDeviceGroups returned %d", (int32_t)result);
+            VkResult vkResult = m_VK.EnumeratePhysicalDeviceGroups(m_Instance, &deviceGroupNum, nullptr);
+            RETURN_ON_FAILURE(this, vkResult == VK_SUCCESS, GetReturnCode(vkResult), "vkEnumeratePhysicalDeviceGroups returned %d", (int32_t)vkResult);
 
             Scratch<VkPhysicalDeviceGroupProperties> deviceGroups = AllocateScratch(*this, VkPhysicalDeviceGroupProperties, deviceGroupNum);
             for (uint32_t j = 0; j < deviceGroupNum; j++) {
@@ -437,8 +446,8 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
                 deviceGroups[j].pNext = nullptr;
             }
 
-            result = m_VK.EnumeratePhysicalDeviceGroups(m_Instance, &deviceGroupNum, deviceGroups);
-            RETURN_ON_FAILURE(this, result == VK_SUCCESS, GetReturnCode(result), "vkEnumeratePhysicalDeviceGroups returned %d", (int32_t)result);
+            vkResult = m_VK.EnumeratePhysicalDeviceGroups(m_Instance, &deviceGroupNum, deviceGroups);
+            RETURN_ON_FAILURE(this, vkResult == VK_SUCCESS, GetReturnCode(vkResult), "vkEnumeratePhysicalDeviceGroups returned %d", (int32_t)vkResult);
 
             uint32_t i = 0;
             for (i = 0; i < deviceGroupNum; i++) {
@@ -449,8 +458,8 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
 
                 m_VK.GetPhysicalDeviceProperties2(deviceGroups[i].physicalDevices[0], &props);
 
-                uint32_t majorVersion = VK_VERSION_MAJOR(props.properties.apiVersion);
-                m_MinorVersion = VK_VERSION_MINOR(props.properties.apiVersion);
+                uint32_t majorVersion = VK_API_VERSION_MAJOR(props.properties.apiVersion);
+                m_MinorVersion = VK_API_VERSION_MINOR(props.properties.apiVersion);
 
                 bool isSupported = (majorVersion * 10 + m_MinorVersion) >= 12;
                 if (desc.adapterDesc) {
@@ -720,6 +729,16 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
         APPEND_EXT(fragmentShaderInterlockFeatures);
     }
 
+    VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT swapchainMaintenance1Features = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT};
+    if (IsExtensionSupported(VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, desiredDeviceExts)) {
+        APPEND_EXT(swapchainMaintenance1Features);
+    }
+
+    VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT presentModeFifoLatestReadyFeaturesEXT = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT};
+    if (IsExtensionSupported(VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, desiredDeviceExts)) {
+        APPEND_EXT(presentModeFifoLatestReadyFeaturesEXT);
+    }
+
     if (IsExtensionSupported(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME, desiredDeviceExts))
         m_IsSupported.memoryBudget = true;
 
@@ -729,7 +748,6 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
     m_IsSupported.deviceAddress = features12.bufferDeviceAddress;
     m_IsSupported.swapChainMutableFormat = IsExtensionSupported(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME, desiredDeviceExts);
     m_IsSupported.presentId = presentIdFeatures.presentId;
-    m_IsSupported.lowLatency = presentIdFeatures.presentId != 0 && IsExtensionSupported(VK_NV_LOW_LATENCY_2_EXTENSION_NAME, desiredDeviceExts);
     m_IsSupported.memoryPriority = memoryPriorityFeatures.memoryPriority;
     m_IsSupported.maintenance4 = features13.maintenance4 != 0 || maintenance4Features.maintenance4 != 0;
     m_IsSupported.maintenance5 = maintenance5Features.maintenance5;
@@ -739,7 +757,8 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
     m_IsSupported.robustness = features.features.robustBufferAccess != 0 && (imageRobustnessFeatures.robustImageAccess != 0 || features13.robustImageAccess != 0);
     m_IsSupported.robustness2 = robustness2Features.robustBufferAccess2 != 0 && robustness2Features.robustImageAccess2 != 0;
     m_IsSupported.pipelineRobustness = pipelineRobustnessFeatures.pipelineRobustness;
-    m_IsSupported.storageWithoutFormat = features.features.shaderStorageImageWriteWithoutFormat != 0 && features.features.shaderStorageImageReadWithoutFormat != 0;
+    m_IsSupported.swapChainMaintenance1 = swapchainMaintenance1Features.swapchainMaintenance1;
+    m_IsSupported.fifoLatestReady = presentModeFifoLatestReadyFeaturesEXT.presentModeFifoLatestReady;
 
     { // Check hard requirements
         bool hasDynamicRendering = features13.dynamicRendering != 0 || (dynamicRenderingFeatures.dynamicRendering != 0 && extendedDynamicStateFeatures.extendedDynamicState != 0);
@@ -788,8 +807,8 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
                 }
             }
 
-            VkResult result = m_VK.CreateDevice(m_PhysicalDevice, &deviceCreateInfo, m_AllocationCallbackPtr, &m_Device);
-            RETURN_ON_FAILURE(this, result == VK_SUCCESS, GetReturnCode(result), "vkCreateDevice returned %d", (int32_t)result);
+            VkResult vkResult = m_VK.CreateDevice(m_PhysicalDevice, &deviceCreateInfo, m_AllocationCallbackPtr, &m_Device);
+            RETURN_ON_FAILURE(this, vkResult == VK_SUCCESS, GetReturnCode(vkResult), "vkCreateDevice returned %d", (int32_t)vkResult);
         }
 
         Result res = ResolveDispatchTable(desiredDeviceExts);
@@ -938,16 +957,6 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
         m_Desc.viewport.boundsMin = (int16_t)limits.viewportBoundsRange[0];
         m_Desc.viewport.boundsMax = (int16_t)limits.viewportBoundsRange[1];
 
-        m_Desc.multisampling.zeroAttachmentsSampleMaxNum = (Sample_t)limits.framebufferNoAttachmentsSampleCounts;
-        m_Desc.multisampling.attachmentColorSampleMaxNum = (Sample_t)limits.framebufferColorSampleCounts;
-        m_Desc.multisampling.attachmentDepthSampleMaxNum = (Sample_t)limits.framebufferDepthSampleCounts;
-        m_Desc.multisampling.attachmentStencilSampleMaxNum = (Sample_t)limits.framebufferStencilSampleCounts;
-        m_Desc.multisampling.textureColorSampleMaxNum = (Sample_t)limits.sampledImageColorSampleCounts;
-        m_Desc.multisampling.textureIntegerSampleMaxNum = (Sample_t)limits.sampledImageIntegerSampleCounts;
-        m_Desc.multisampling.textureDepthSampleMaxNum = (Sample_t)limits.sampledImageDepthSampleCounts;
-        m_Desc.multisampling.textureStencilSampleMaxNum = (Sample_t)limits.sampledImageStencilSampleCounts;
-        m_Desc.multisampling.storageTextureSampleMaxNum = (Sample_t)limits.storageImageSampleCounts;
-
         m_Desc.dimensions.attachmentMaxDim = (Dim_t)std::min(limits.maxFramebufferWidth, limits.maxFramebufferHeight);
         m_Desc.dimensions.attachmentLayerMaxNum = (Dim_t)limits.maxFramebufferLayers;
         m_Desc.dimensions.texture1DMaxDim = (Dim_t)limits.maxImageDimension1D;
@@ -975,10 +984,17 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
         m_Desc.memory.bufferTextureGranularity = (uint32_t)limits.bufferImageGranularity;
         m_Desc.memory.bufferMaxSize = m_MinorVersion >= 3 ? props13.maxBufferSize : maintenance4Props.maxBufferSize;
 
+        // VUID-VkCopyBufferToImageInfo2-dstImage-07975: If "dstImage" does not have either a depth/stencil format or a multi-planar format,
+        //      "bufferOffset" must be a multiple of the texel block size
+        // VUID-VkCopyBufferToImageInfo2-dstImage-07978: If "dstImage" has a depth/stencil format,
+        //      "bufferOffset" must be a multiple of 4
+        // Least Common Multiple stride across all formats: 1, 2, 4, 8, 16 // TODO: rarely used "12" fucks up the beauty of power-of-2 numbers, such formats must be avoided!
+        constexpr uint32_t leastCommonMultipleStrideAccrossAllFormats = 16;
+
         m_Desc.memoryAlignment.uploadBufferTextureRow = (uint32_t)limits.optimalBufferCopyRowPitchAlignment;
-        m_Desc.memoryAlignment.uploadBufferTextureSlice = (uint32_t)limits.optimalBufferCopyOffsetAlignment; // TODO: ?
+        m_Desc.memoryAlignment.uploadBufferTextureSlice = std::lcm((uint32_t)limits.optimalBufferCopyOffsetAlignment, leastCommonMultipleStrideAccrossAllFormats);
         m_Desc.memoryAlignment.shaderBindingTable = rayTracingProps.shaderGroupBaseAlignment;
-        m_Desc.memoryAlignment.bufferShaderResourceOffset = (uint32_t)std::max(limits.minTexelBufferOffsetAlignment, limits.minStorageBufferOffsetAlignment);
+        m_Desc.memoryAlignment.bufferShaderResourceOffset = std::lcm((uint32_t)limits.minTexelBufferOffsetAlignment, (uint32_t)limits.minStorageBufferOffsetAlignment);
         m_Desc.memoryAlignment.constantBufferOffset = (uint32_t)limits.minUniformBufferOffsetAlignment;
         m_Desc.memoryAlignment.scratchBufferOffset = accelerationStructureProps.minAccelerationStructureScratchOffsetAlignment;
         m_Desc.memoryAlignment.accelerationStructureOffset = 256; // see the spec
@@ -1084,7 +1100,8 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
         }
 
         if (m_Desc.tiers.sampleLocations) {
-            if (sampleLocationsProps.variableSampleLocations) // TODO: it's weird...
+            constexpr VkSampleCountFlags allSampleCounts = VK_SAMPLE_COUNT_1_BIT | VK_SAMPLE_COUNT_2_BIT | VK_SAMPLE_COUNT_4_BIT | VK_SAMPLE_COUNT_8_BIT | VK_SAMPLE_COUNT_16_BIT;
+            if (sampleLocationsProps.sampleLocationSampleCounts == allSampleCounts) // like in D3D12 spec
                 m_Desc.tiers.sampleLocations = 2;
         }
 
@@ -1113,7 +1130,7 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
         m_Desc.features.swapChain = IsExtensionSupported(VK_KHR_SWAPCHAIN_EXTENSION_NAME, desiredDeviceExts);
         m_Desc.features.rayTracing = m_Desc.tiers.rayTracing != 0;
         m_Desc.features.meshShader = meshShaderFeatures.meshShader != 0 && meshShaderFeatures.taskShader != 0;
-        m_Desc.features.lowLatency = IsExtensionSupported(VK_NV_LOW_LATENCY_2_EXTENSION_NAME, desiredDeviceExts);
+        m_Desc.features.lowLatency = m_IsSupported.presentId != 0 && IsExtensionSupported(VK_NV_LOW_LATENCY_2_EXTENSION_NAME, desiredDeviceExts);
         m_Desc.features.micromap = micromapFeatures.micromap != 0;
 
         m_Desc.features.independentFrontAndBackStencilReferenceAndMasks = true;
@@ -1130,6 +1147,7 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
         m_Desc.features.layerBasedMultiview = features11.multiview;
         m_Desc.features.presentFromCompute = true;
         m_Desc.features.waitableSwapChain = presentIdFeatures.presentId != 0 && presentWaitFeatures.presentWait != 0;
+        m_Desc.features.pipelineStatistics = features.features.pipelineStatisticsQuery;
 
         m_Desc.shaderFeatures.nativeI16 = features.features.shaderInt16;
         m_Desc.shaderFeatures.nativeF16 = features12.shaderFloat16;
@@ -1145,6 +1163,8 @@ Result DeviceVK::Create(const DeviceCreationDesc& desc, const DeviceCreationVKDe
         m_Desc.shaderFeatures.rasterizedOrderedView = fragmentShaderInterlockFeatures.fragmentShaderPixelInterlock != 0 && fragmentShaderInterlockFeatures.fragmentShaderSampleInterlock != 0;
         m_Desc.shaderFeatures.barycentric = fragmentShaderBarycentricFeatures.fragmentShaderBarycentric;
         m_Desc.shaderFeatures.rayTracingPositionFetch = rayTracingPositionFetchFeatures.rayTracingPositionFetch;
+        m_Desc.shaderFeatures.storageReadWithoutFormat = features.features.shaderStorageImageReadWithoutFormat;
+        m_Desc.shaderFeatures.storageWriteWithoutFormat = features.features.shaderStorageImageWriteWithoutFormat;
 
         // Estimate shader model last since it depends on many "m_Desc" fields
         // Based on https://docs.vulkan.org/guide/latest/hlsl.html#_shader_model_coverage // TODO: code below needs to be improved
@@ -1184,7 +1204,7 @@ void DeviceVK::FillCreateInfo(const BufferDesc& bufferDesc, VkBufferCreateInfo& 
 void DeviceVK::FillCreateInfo(const TextureDesc& textureDesc, VkImageCreateInfo& info) const {
     VkImageCreateFlags flags = VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT | VK_IMAGE_CREATE_EXTENDED_USAGE_BIT; // typeless
     const FormatProps& formatProps = GetFormatProps(textureDesc.format);
-    if (formatProps.blockWidth > 1)
+    if (formatProps.blockWidth > 1 && (textureDesc.usage & TextureUsageBits::SHADER_RESOURCE_STORAGE))
         flags |= VK_IMAGE_CREATE_BLOCK_TEXEL_VIEW_COMPATIBLE_BIT; // format can be used to create a view with an uncompressed format (1 texel covers 1 block)
     if (textureDesc.layerNum >= 6 && textureDesc.width == textureDesc.height)
         flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT; // allow cube maps
@@ -1472,42 +1492,50 @@ Result DeviceVK::CreateInstance(bool enableGraphicsAPIValidation, const Vector<c
     appInfo.apiVersion = VK_API_VERSION_1_3;
 
     const VkValidationFeatureEnableEXT enabledValidationFeatures[] = {
-        VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
+        VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT, // TODO: add VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT?
     };
+
+    VkInstanceCreateInfo instanceCreateInfo = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
+#ifdef __APPLE__
+    instanceCreateInfo.flags = (VkInstanceCreateFlags)VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
+#endif
+    instanceCreateInfo.pApplicationInfo = &appInfo;
+    instanceCreateInfo.enabledLayerCount = (uint32_t)layers.size();
+    instanceCreateInfo.ppEnabledLayerNames = layers.data();
+    instanceCreateInfo.enabledExtensionCount = (uint32_t)desiredInstanceExts.size();
+    instanceCreateInfo.ppEnabledExtensionNames = desiredInstanceExts.data();
+
+    const void** tail = &instanceCreateInfo.pNext;
+
+    VkDebugUtilsMessengerCreateInfoEXT messengerCreateInfo = {VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
+    messengerCreateInfo.pUserData = this;
+    messengerCreateInfo.pfnUserCallback = MessageCallback;
+    messengerCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
+        | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT
+        | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
+        | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    messengerCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+        | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+        | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+
+    APPEND_EXT(messengerCreateInfo);
 
     VkValidationFeaturesEXT validationFeatures = {VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
     validationFeatures.enabledValidationFeatureCount = GetCountOf(enabledValidationFeatures);
     validationFeatures.pEnabledValidationFeatures = enabledValidationFeatures;
 
-    VkInstanceCreateInfo info = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
-    info.pNext = enableGraphicsAPIValidation ? &validationFeatures : nullptr;
-#ifdef __APPLE__
-    info.flags = (VkInstanceCreateFlags)VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
-#endif
-    info.pApplicationInfo = &appInfo;
-    info.enabledLayerCount = (uint32_t)layers.size();
-    info.ppEnabledLayerNames = layers.data();
-    info.enabledExtensionCount = (uint32_t)desiredInstanceExts.size();
-    info.ppEnabledExtensionNames = desiredInstanceExts.data();
+    if (enableGraphicsAPIValidation) {
+        APPEND_EXT(validationFeatures);
+    }
 
-    VkResult result = m_VK.CreateInstance(&info, m_AllocationCallbackPtr, &m_Instance);
-    RETURN_ON_FAILURE(this, result == VK_SUCCESS, GetReturnCode(result), "vkCreateInstance returned %d", (int32_t)result);
+    VkResult vkResult = m_VK.CreateInstance(&instanceCreateInfo, m_AllocationCallbackPtr, &m_Instance);
+    RETURN_ON_FAILURE(this, vkResult == VK_SUCCESS, GetReturnCode(vkResult), "vkCreateInstance returned %d", (int32_t)vkResult);
 
     if (enableGraphicsAPIValidation) {
-        VkDebugUtilsMessengerCreateInfoEXT createInfo = {VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
-        createInfo.pUserData = this;
-        createInfo.pfnUserCallback = MessageCallback;
-
-        createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
-        createInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-
-        createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-        createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-
         PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)m_VK.GetInstanceProcAddr(m_Instance, "vkCreateDebugUtilsMessengerEXT");
-        result = vkCreateDebugUtilsMessengerEXT(m_Instance, &createInfo, m_AllocationCallbackPtr, &m_Messenger);
+        vkResult = vkCreateDebugUtilsMessengerEXT(m_Instance, &messengerCreateInfo, m_AllocationCallbackPtr, &m_Messenger);
 
-        RETURN_ON_FAILURE(this, result == VK_SUCCESS, GetReturnCode(result), "vkCreateDebugUtilsMessengerEXT returned %d", (int32_t)result);
+        RETURN_ON_FAILURE(this, vkResult == VK_SUCCESS, GetReturnCode(vkResult), "vkCreateDebugUtilsMessengerEXT returned %d", (int32_t)vkResult);
     }
 
     return Result::SUCCESS;
@@ -1517,10 +1545,10 @@ void DeviceVK::SetDebugNameToTrivialObject(VkObjectType objectType, uint64_t han
     if (!m_VK.SetDebugUtilsObjectNameEXT)
         return;
 
-    VkDebugUtilsObjectNameInfoEXT info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT, nullptr, objectType, (uint64_t)handle, name};
+    VkDebugUtilsObjectNameInfoEXT objectNameInfo = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT, nullptr, objectType, (uint64_t)handle, name};
 
-    VkResult result = m_VK.SetDebugUtilsObjectNameEXT(m_Device, &info);
-    RETURN_ON_FAILURE(this, result == VK_SUCCESS, ReturnVoid(), "vkSetDebugUtilsObjectNameEXT returned %d", (int32_t)result);
+    VkResult vkResult = m_VK.SetDebugUtilsObjectNameEXT(m_Device, &objectNameInfo);
+    RETURN_ON_FAILURE(this, vkResult == VK_SUCCESS, ReturnVoid(), "vkSetDebugUtilsObjectNameEXT returned %d", (int32_t)vkResult);
 }
 
 void DeviceVK::ReportDeviceGroupInfo() {
@@ -1573,7 +1601,7 @@ void DeviceVK::ReportDeviceGroupInfo() {
     }
 }
 
-#define MERGE_TOKENS2(a, b) a##b
+#define MERGE_TOKENS2(a, b)    a##b
 #define MERGE_TOKENS3(a, b, c) a##b##c
 
 #define GET_DEVICE_OPTIONAL_CORE_FUNC(name) \
@@ -1630,6 +1658,7 @@ Result DeviceVK::ResolveInstanceDispatchTable(const Vector<const char*>& desired
     GET_INSTANCE_FUNC(GetPhysicalDeviceMemoryProperties2);
     GET_INSTANCE_FUNC(GetDeviceGroupPeerMemoryFeatures);
     GET_INSTANCE_FUNC(GetPhysicalDeviceFormatProperties2);
+    GET_INSTANCE_FUNC(GetPhysicalDeviceImageFormatProperties2);
     GET_INSTANCE_FUNC(CreateDevice);
     GET_INSTANCE_FUNC(GetDeviceQueue2);
     GET_INSTANCE_FUNC(EnumeratePhysicalDeviceGroups);
@@ -1662,17 +1691,14 @@ Result DeviceVK::ResolveInstanceDispatchTable(const Vector<const char*>& desired
         GET_INSTANCE_FUNC(CreateWin32SurfaceKHR);
         GET_INSTANCE_FUNC(GetMemoryWin32HandlePropertiesKHR);
 #endif
-
-#ifdef VK_USE_PLATFORM_METAL_EXT
-        GET_INSTANCE_FUNC(CreateMetalSurfaceEXT);
-#endif
-
 #ifdef VK_USE_PLATFORM_XLIB_KHR
         GET_INSTANCE_FUNC(CreateXlibSurfaceKHR);
 #endif
-
 #ifdef VK_USE_PLATFORM_WAYLAND_KHR
         GET_INSTANCE_FUNC(CreateWaylandSurfaceKHR);
+#endif
+#ifdef VK_USE_PLATFORM_METAL_EXT
+        GET_INSTANCE_FUNC(CreateMetalSurfaceEXT);
 #endif
     }
 
@@ -1712,7 +1738,6 @@ Result DeviceVK::ResolveDispatchTable(const Vector<const char*>& desiredDeviceEx
     GET_DEVICE_CORE_FUNC(DestroyPipeline);
     GET_DEVICE_CORE_FUNC(FreeMemory);
     GET_DEVICE_CORE_FUNC(FreeCommandBuffers);
-    GET_DEVICE_CORE_FUNC(FreeDescriptorSets);
 
     GET_DEVICE_CORE_FUNC(MapMemory);
     GET_DEVICE_CORE_FUNC(FlushMappedMemoryRanges);
@@ -1790,7 +1815,7 @@ Result DeviceVK::ResolveDispatchTable(const Vector<const char*>& desiredDeviceEx
     }
 
     if (IsExtensionSupported(VK_KHR_SWAPCHAIN_EXTENSION_NAME, desiredDeviceExts)) {
-        GET_DEVICE_FUNC(AcquireNextImageKHR);
+        GET_DEVICE_FUNC(AcquireNextImage2KHR);
         GET_DEVICE_FUNC(QueuePresentKHR);
         GET_DEVICE_FUNC(CreateSwapchainKHR);
         GET_DEVICE_FUNC(DestroySwapchainKHR);
@@ -1913,8 +1938,8 @@ NRI_INLINE Result DeviceVK::BindBufferMemory(const BufferMemoryBindingDesc* memo
         info.memoryOffset = memoryBindingDesc.offset;
     }
 
-    VkResult result = m_VK.BindBufferMemory2(m_Device, memoryBindingDescNum, infos);
-    RETURN_ON_FAILURE(this, result == VK_SUCCESS, GetReturnCode(result), "vkBindBufferMemory2 returned %d", (int32_t)result);
+    VkResult vkResult = m_VK.BindBufferMemory2(m_Device, memoryBindingDescNum, infos);
+    RETURN_ON_FAILURE(this, vkResult == VK_SUCCESS, GetReturnCode(vkResult), "vkBindBufferMemory2 returned %d", (int32_t)vkResult);
 
     for (uint32_t i = 0; i < memoryBindingDescNum; i++) {
         const BufferMemoryBindingDesc& memoryBindingDesc = memoryBindingDescs[i];
@@ -1951,8 +1976,8 @@ NRI_INLINE Result DeviceVK::BindTextureMemory(const TextureMemoryBindingDesc* me
         info.memoryOffset = memoryBindingDesc.offset;
     }
 
-    VkResult result = m_VK.BindImageMemory2(m_Device, memoryBindingDescNum, infos);
-    RETURN_ON_FAILURE(this, result == VK_SUCCESS, GetReturnCode(result), "vkBindImageMemory2 returned %d", (int32_t)result);
+    VkResult vkResult = m_VK.BindImageMemory2(m_Device, memoryBindingDescNum, infos);
+    RETURN_ON_FAILURE(this, vkResult == VK_SUCCESS, GetReturnCode(vkResult), "vkBindImageMemory2 returned %d", (int32_t)vkResult);
 
     return Result::SUCCESS;
 }
@@ -2011,40 +2036,66 @@ NRI_INLINE Result DeviceVK::BindMicromapMemory(const MicromapMemoryBindingDesc* 
     return result;
 }
 
+#define UPDATE_TEXTURE_SUPPORT_BITS(required, bit) \
+    if ((props3.optimalTilingFeatures & (required)) == (required)) \
+        supportBits |= bit;
+
+#define UPDATE_BUFFER_SUPPORT_BITS(required, bit) \
+    if ((props3.bufferFeatures & (required)) == (required)) \
+        supportBits |= bit;
+
 NRI_INLINE FormatSupportBits DeviceVK::GetFormatSupport(Format format) const {
-    FormatSupportBits mask = FormatSupportBits::UNSUPPORTED;
+    FormatSupportBits supportBits = FormatSupportBits::UNSUPPORTED;
+    VkFormat vkFormat = GetVkFormat(format);
 
-    const VkFormat vkFormat = GetVkFormat(format);
+    VkFormatProperties3 props3 = {VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_3};
+    VkFormatProperties2 props2 = {VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2, &props3};
+    m_VK.GetPhysicalDeviceFormatProperties2(m_PhysicalDevice, vkFormat, &props2);
 
-    VkFormatProperties2 props = {VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2};
-    m_VK.GetPhysicalDeviceFormatProperties2(m_PhysicalDevice, vkFormat, &props);
+    UPDATE_TEXTURE_SUPPORT_BITS(VK_FORMAT_FEATURE_2_SAMPLED_IMAGE_BIT, FormatSupportBits::TEXTURE);
+    UPDATE_TEXTURE_SUPPORT_BITS(VK_FORMAT_FEATURE_2_STORAGE_IMAGE_BIT, FormatSupportBits::STORAGE_TEXTURE);
+    UPDATE_TEXTURE_SUPPORT_BITS(VK_FORMAT_FEATURE_2_COLOR_ATTACHMENT_BIT, FormatSupportBits::COLOR_ATTACHMENT);
+    UPDATE_TEXTURE_SUPPORT_BITS(VK_FORMAT_FEATURE_2_DEPTH_STENCIL_ATTACHMENT_BIT, FormatSupportBits::DEPTH_STENCIL_ATTACHMENT);
+    UPDATE_TEXTURE_SUPPORT_BITS(VK_FORMAT_FEATURE_2_COLOR_ATTACHMENT_BLEND_BIT, FormatSupportBits::BLEND);
+    UPDATE_TEXTURE_SUPPORT_BITS(VK_FORMAT_FEATURE_2_STORAGE_IMAGE_ATOMIC_BIT, FormatSupportBits::STORAGE_TEXTURE_ATOMICS);
 
-#define UPDATE_SUPPORT_BITS(required, bit) \
-    if ((props.formatProperties.optimalTilingFeatures & (required)) == (required)) \
-        mask |= bit;
+    UPDATE_BUFFER_SUPPORT_BITS(VK_FORMAT_FEATURE_2_UNIFORM_TEXEL_BUFFER_BIT, FormatSupportBits::BUFFER);
+    UPDATE_BUFFER_SUPPORT_BITS(VK_FORMAT_FEATURE_2_STORAGE_TEXEL_BUFFER_BIT, FormatSupportBits::STORAGE_BUFFER);
+    UPDATE_BUFFER_SUPPORT_BITS(VK_FORMAT_FEATURE_2_VERTEX_BUFFER_BIT, FormatSupportBits::VERTEX_BUFFER);
+    UPDATE_BUFFER_SUPPORT_BITS(VK_FORMAT_FEATURE_2_STORAGE_TEXEL_BUFFER_ATOMIC_BIT, FormatSupportBits::STORAGE_BUFFER_ATOMICS);
 
-    UPDATE_SUPPORT_BITS(VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT, FormatSupportBits::TEXTURE);
-    UPDATE_SUPPORT_BITS(VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT, FormatSupportBits::STORAGE_TEXTURE);
-    UPDATE_SUPPORT_BITS(VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT, FormatSupportBits::COLOR_ATTACHMENT);
-    UPDATE_SUPPORT_BITS(VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT, FormatSupportBits::DEPTH_STENCIL_ATTACHMENT);
-    UPDATE_SUPPORT_BITS(VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT, FormatSupportBits::BLEND);
-    UPDATE_SUPPORT_BITS(VK_FORMAT_FEATURE_STORAGE_IMAGE_ATOMIC_BIT, FormatSupportBits::STORAGE_TEXTURE_ATOMICS);
+    if ((props3.optimalTilingFeatures | props3.bufferFeatures) & VK_FORMAT_FEATURE_2_STORAGE_READ_WITHOUT_FORMAT_BIT)
+        supportBits |= FormatSupportBits::STORAGE_LOAD_WITHOUT_FORMAT;
 
-#undef UPDATE_SUPPORT_BITS
+    VkPhysicalDeviceImageFormatInfo2 imageInfo = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2};
+    imageInfo.format = vkFormat;
+    imageInfo.type = VK_IMAGE_TYPE_2D;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.flags = 0; // TODO: kinda needed, but unknown here
 
-#define UPDATE_SUPPORT_BITS(required, bit) \
-    if ((props.formatProperties.bufferFeatures & (required)) == (required)) \
-        mask |= bit;
+    imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    if (supportBits & FormatSupportBits::TEXTURE)
+        imageInfo.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    if (supportBits & FormatSupportBits::DEPTH_STENCIL_ATTACHMENT)
+        imageInfo.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    if (supportBits & FormatSupportBits::COLOR_ATTACHMENT)
+        imageInfo.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    UPDATE_SUPPORT_BITS(VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT, FormatSupportBits::BUFFER);
-    UPDATE_SUPPORT_BITS(VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT, FormatSupportBits::STORAGE_BUFFER);
-    UPDATE_SUPPORT_BITS(VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT, FormatSupportBits::VERTEX_BUFFER);
-    UPDATE_SUPPORT_BITS(VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_ATOMIC_BIT, FormatSupportBits::STORAGE_BUFFER_ATOMICS);
+    VkImageFormatProperties2 imageProps = {VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2};
+    m_VK.GetPhysicalDeviceImageFormatProperties2(m_PhysicalDevice, &imageInfo, &imageProps);
 
-#undef UPDATE_SUPPORT_BITS
+    if (imageProps.imageFormatProperties.sampleCounts & VK_SAMPLE_COUNT_2_BIT)
+        supportBits |= FormatSupportBits::MULTISAMPLE_2X;
+    if (imageProps.imageFormatProperties.sampleCounts & VK_SAMPLE_COUNT_4_BIT)
+        supportBits |= FormatSupportBits::MULTISAMPLE_4X;
+    if (imageProps.imageFormatProperties.sampleCounts & VK_SAMPLE_COUNT_8_BIT)
+        supportBits |= FormatSupportBits::MULTISAMPLE_8X;
 
-    return mask;
+    return supportBits;
 }
+
+#undef UPDATE_TEXTURE_SUPPORT_BITS
+#undef UPDATE_BUFFER_SUPPORT_BITS
 
 NRI_INLINE Result DeviceVK::QueryVideoMemoryInfo(MemoryLocation memoryLocation, VideoMemoryInfo& videoMemoryInfo) const {
     videoMemoryInfo = {};

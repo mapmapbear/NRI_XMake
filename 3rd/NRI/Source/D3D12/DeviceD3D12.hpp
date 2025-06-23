@@ -50,7 +50,7 @@ static void __stdcall MessageCallback(D3D12_MESSAGE_CATEGORY category, D3D12_MES
         messageType = Message::WARNING;
 
     DeviceD3D12& device = *(DeviceD3D12*)context;
-    device.ReportMessage(messageType, __FILE__, __LINE__, "%s", message);
+    device.ReportMessage(messageType, __FILE__, __LINE__, "[%u] %s", id, message);
 }
 
 #else
@@ -68,7 +68,7 @@ static void __stdcall NvapiMessageCallback(void* context, NVAPI_D3D12_RAYTRACING
 
     DeviceD3D12& device = *(DeviceD3D12*)context;
     device.ReportMessage(messageType, __FILE__, __LINE__, "%s: %s", messageCode, message);
-    device.ReportMessage(messageType, __FILE__, __LINE__, "Details: %s", messageDetails);
+    device.ReportMessage(messageType, __FILE__, __LINE__, "Details: %s", messageDetails); // TODO: break only here
 }
 
 #endif
@@ -81,6 +81,7 @@ static D3D12_RESOURCE_FLAGS GetBufferFlags(BufferUsageBits bufferUsage) {
 
     if (bufferUsage & (BufferUsageBits::ACCELERATION_STRUCTURE_STORAGE | BufferUsageBits::MICROMAP_STORAGE)) {
         flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
 #if (D3D12_SDK_VERSION >= 6)
         flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
 #endif
@@ -123,8 +124,7 @@ DeviceD3D12::DeviceD3D12(const CallbackInterface& callbacks, const AllocationCal
     m_FreeDescriptors.resize(D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES, Vector<DescriptorHandle>(GetStdAllocator()));
 
     m_Desc.graphicsAPI = GraphicsAPI::D3D12;
-    m_Desc.nriVersionMajor = NRI_VERSION_MAJOR;
-    m_Desc.nriVersionMinor = NRI_VERSION_MINOR;
+    m_Desc.nriVersion = NRI_VERSION;
 }
 
 DeviceD3D12::~DeviceD3D12() {
@@ -210,9 +210,9 @@ Result DeviceD3D12::Create(const DeviceCreationDesc& desc, const DeviceCreationD
 
 #if NRI_ENABLE_D3D_EXTENSIONS
             if (HasNvExt()) {
-                REPORT_ERROR_ON_BAD_STATUS(this, NvAPI_D3D12_SetNvShaderExtnSlotSpace(deviceTemp, d3dShaderExtRegister, 0));
-                REPORT_ERROR_ON_BAD_STATUS(this, NvAPI_D3D12_IsNvShaderExtnOpCodeSupported(deviceTemp, NV_EXTN_OP_UINT64_ATOMIC, &isShaderAtomicsI64Supported));
-                REPORT_ERROR_ON_BAD_STATUS(this, NvAPI_D3D12_IsNvShaderExtnOpCodeSupported(deviceTemp, NV_EXTN_OP_GET_SPECIAL, &isShaderClockSupported));
+                REPORT_ERROR_ON_BAD_NVAPI_STATUS(this, NvAPI_D3D12_SetNvShaderExtnSlotSpace(deviceTemp, d3dShaderExtRegister, 0));
+                REPORT_ERROR_ON_BAD_NVAPI_STATUS(this, NvAPI_D3D12_IsNvShaderExtnOpCodeSupported(deviceTemp, NV_EXTN_OP_UINT64_ATOMIC, &isShaderAtomicsI64Supported));
+                REPORT_ERROR_ON_BAD_NVAPI_STATUS(this, NvAPI_D3D12_IsNvShaderExtnOpCodeSupported(deviceTemp, NV_EXTN_OP_GET_SPECIAL, &isShaderClockSupported));
             }
         }
 
@@ -241,8 +241,10 @@ Result DeviceD3D12::Create(const DeviceCreationDesc& desc, const DeviceCreationD
                 // It's almost impossible to match. Doesn't hurt perf on modern HW
                 D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE,
                 D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
+#ifndef NRI_ENABLE_AGILITY_SDK_SUPPORT
                 // Descriptor validation doesn't understand acceleration structures used outside of RAYGEN shaders
                 D3D12_MESSAGE_ID_COMMAND_LIST_STATIC_DESCRIPTOR_RESOURCE_DIMENSION_MISMATCH,
+#endif
             };
 
             D3D12_INFO_QUEUE_FILTER filter = {};
@@ -303,7 +305,7 @@ Result DeviceD3D12::Create(const DeviceCreationDesc& desc, const DeviceCreationD
     if (HasNvExt()) {
         { // Check position fetch support
             bool isSupported = false;
-            REPORT_ERROR_ON_BAD_STATUS(this, NvAPI_D3D12_IsNvShaderExtnOpCodeSupported(m_Device, NV_EXTN_OP_RT_TRIANGLE_OBJECT_POSITIONS, &isSupported));
+            REPORT_ERROR_ON_BAD_NVAPI_STATUS(this, NvAPI_D3D12_IsNvShaderExtnOpCodeSupported(m_Device, NV_EXTN_OP_RT_TRIANGLE_OBJECT_POSITIONS, &isSupported));
             m_Desc.shaderFeatures.rayTracingPositionFetch = isSupported;
         }
 
@@ -311,7 +313,7 @@ Result DeviceD3D12::Create(const DeviceCreationDesc& desc, const DeviceCreationD
         if (desc.enableD3D12RayTracingValidation) {
             NvAPI_Status status = NvAPI_D3D12_EnableRaytracingValidation(m_Device, NVAPI_D3D12_RAYTRACING_VALIDATION_FLAG_NONE);
             if (status == NVAPI_OK)
-                REPORT_ERROR_ON_BAD_STATUS(this, NvAPI_D3D12_RegisterRaytracingValidationMessageCallback(m_Device, NvapiMessageCallback, this, &m_CallbackHandle));
+                REPORT_ERROR_ON_BAD_NVAPI_STATUS(this, NvAPI_D3D12_RegisterRaytracingValidationMessageCallback(m_Device, NvapiMessageCallback, this, &m_CallbackHandle));
 
             // TODO: add "NvAPI_D3D12_FlushRaytracingValidationMessages" somewhere?
         }
@@ -551,16 +553,6 @@ void DeviceD3D12::FillDesc() {
     m_Desc.viewport.boundsMin = D3D12_VIEWPORT_BOUNDS_MIN;
     m_Desc.viewport.boundsMax = D3D12_VIEWPORT_BOUNDS_MAX;
 
-    m_Desc.multisampling.zeroAttachmentsSampleMaxNum = D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT;
-    m_Desc.multisampling.attachmentColorSampleMaxNum = D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT;
-    m_Desc.multisampling.attachmentDepthSampleMaxNum = D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT;
-    m_Desc.multisampling.attachmentStencilSampleMaxNum = D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT;
-    m_Desc.multisampling.textureColorSampleMaxNum = D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT;
-    m_Desc.multisampling.textureDepthSampleMaxNum = D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT;
-    m_Desc.multisampling.textureStencilSampleMaxNum = D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT;
-    m_Desc.multisampling.textureIntegerSampleMaxNum = 1;
-    m_Desc.multisampling.storageTextureSampleMaxNum = 1;
-
     m_Desc.dimensions.attachmentMaxDim = D3D12_REQ_RENDER_TO_BUFFER_WINDOW_WIDTH;
     m_Desc.dimensions.attachmentLayerMaxNum = D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION;
     m_Desc.dimensions.texture1DMaxDim = D3D12_REQ_TEXTURE1D_U_DIMENSION;
@@ -724,13 +716,14 @@ void DeviceD3D12::FillDesc() {
     m_Desc.features.layerBasedMultiview = options3.ViewInstancingTier != D3D12_VIEW_INSTANCING_TIER_NOT_SUPPORTED;
     m_Desc.features.viewportBasedMultiview = options3.ViewInstancingTier != D3D12_VIEW_INSTANCING_TIER_NOT_SUPPORTED;
     m_Desc.features.waitableSwapChain = true; // TODO: swap chain version >= 2?
+    m_Desc.features.pipelineStatistics = true;
 
     bool isShaderAtomicsF16Supported = false;
     bool isShaderAtomicsF32Supported = false;
 #if NRI_ENABLE_D3D_EXTENSIONS
     if (HasNvExt()) {
-        REPORT_ERROR_ON_BAD_STATUS(this, NvAPI_D3D12_IsNvShaderExtnOpCodeSupported(m_Device, NV_EXTN_OP_FP16_ATOMIC, &isShaderAtomicsF16Supported));
-        REPORT_ERROR_ON_BAD_STATUS(this, NvAPI_D3D12_IsNvShaderExtnOpCodeSupported(m_Device, NV_EXTN_OP_FP32_ATOMIC, &isShaderAtomicsF32Supported));
+        REPORT_ERROR_ON_BAD_NVAPI_STATUS(this, NvAPI_D3D12_IsNvShaderExtnOpCodeSupported(m_Device, NV_EXTN_OP_FP16_ATOMIC, &isShaderAtomicsF16Supported));
+        REPORT_ERROR_ON_BAD_NVAPI_STATUS(this, NvAPI_D3D12_IsNvShaderExtnOpCodeSupported(m_Device, NV_EXTN_OP_FP32_ATOMIC, &isShaderAtomicsF32Supported));
     }
 #endif
 
@@ -748,6 +741,8 @@ void DeviceD3D12::FillDesc() {
     m_Desc.shaderFeatures.layerIndex = options.VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation;
     m_Desc.shaderFeatures.rasterizedOrderedView = options.ROVsSupported;
     m_Desc.shaderFeatures.barycentric = options3.BarycentricsSupported;
+    m_Desc.shaderFeatures.storageReadWithoutFormat = true; // All desktop GPUs support it since 2014
+    m_Desc.shaderFeatures.storageWriteWithoutFormat = true;
 }
 
 void DeviceD3D12::InitializeNvExt(bool isNVAPILoadedInApp, bool isImported) {
@@ -763,7 +758,7 @@ void DeviceD3D12::InitializeNvExt(bool isNVAPILoadedInApp, bool isImported) {
     else {
         NvAPI_Status status = NvAPI_Initialize();
         if (status != NVAPI_OK)
-            REPORT_ERROR(this, "NvAPI_Initialize(): failed, result = %d!", (int32_t)status);
+            REPORT_ERROR(this, "NvAPI_Initialize(): failed, result=%d!", (int32_t)status);
         m_NvExt.available = (status == NVAPI_OK);
     }
 #endif
@@ -832,13 +827,13 @@ void DeviceD3D12::InitializePixExt() {
     m_Pix.BeginEventOnCommandList = (PIX_BEGINEVENTONCOMMANDLIST)GetSharedLibraryFunction(*pixLibrary, "PIXBeginEventOnCommandList");
     m_Pix.EndEventOnCommandList = (PIX_ENDEVENTONCOMMANDLIST)GetSharedLibraryFunction(*pixLibrary, "PIXEndEventOnCommandList");
     m_Pix.SetMarkerOnCommandList = (PIX_SETMARKERONCOMMANDLIST)GetSharedLibraryFunction(*pixLibrary, "PIXSetMarkerOnCommandList");
-    // m_Pix.BeginEventOnQueue = (PIX_BEGINEVENTONCOMMANDQUEUE)GetSharedLibraryFunction(*pixLibrary, "PIXBeginEventOnQueue");
-    // m_Pix.EndEventOnQueue = (PIX_ENDEVENTONCOMMANDQUEUE)GetSharedLibraryFunction(*pixLibrary, "PIXEndEventOnQueue");
-    // m_Pix.SetMarkerOnQueue = (PIX_SETMARKERONCOMMANDQUEUE)GetSharedLibraryFunction(*pixLibrary, "PIXSetMarkerOnQueue");
+    m_Pix.BeginEventOnQueue = (PIX_BEGINEVENTONCOMMANDQUEUE)GetSharedLibraryFunction(*pixLibrary, "PIXBeginEventOnQueue");
+    m_Pix.EndEventOnQueue = (PIX_ENDEVENTONCOMMANDQUEUE)GetSharedLibraryFunction(*pixLibrary, "PIXEndEventOnQueue");
+    m_Pix.SetMarkerOnQueue = (PIX_SETMARKERONCOMMANDQUEUE)GetSharedLibraryFunction(*pixLibrary, "PIXSetMarkerOnQueue");
 
     // Verify
     const void** functionArray = (const void**)&m_Pix;
-    const size_t functionArraySize = 3;
+    const size_t functionArraySize = 6;
     size_t i = 0;
     for (; i < functionArraySize && functionArray[i] != nullptr; i++)
         ;
@@ -997,6 +992,7 @@ void DeviceD3D12::GetMemoryDesc(MemoryLocation memoryLocation, const D3D12_RESOU
         heapFlags |= HEAP_FLAG_MSAA_ALIGNMENT;
 
     D3D12_RESOURCE_ALLOCATION_INFO resourceAllocationInfo = m_Device->GetResourceAllocationInfo(NODE_MASK, 1, &resourceDesc);
+    CHECK(resourceAllocationInfo.SizeInBytes != UINT64_MAX, "Invalid arg?");
 
     MemoryTypeInfo memoryTypeInfo = {};
     memoryTypeInfo.heapFlags = (uint16_t)heapFlags;
@@ -1046,6 +1042,29 @@ void DeviceD3D12::GetAccelerationStructurePrebuildInfo(const AccelerationStructu
 
 void DeviceD3D12::GetMicromapPrebuildInfo(const MicromapDesc& micromapDesc, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO& prebuildInfo) const {
 #ifdef NRI_D3D12_HAS_OPACITY_MICROMAP
+    Scratch<D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY> usages = AllocateScratch(*this, D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY, micromapDesc.usageNum);
+    for (uint32_t i = 0; i < micromapDesc.usageNum; i++) {
+        const MicromapUsageDesc& in = micromapDesc.usages[i];
+
+        D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY& out = usages[i];
+        out = {};
+        out.Count = in.triangleNum;
+        out.SubdivisionLevel = in.subdivisionLevel;
+        out.Format = (D3D12_RAYTRACING_OPACITY_MICROMAP_FORMAT)in.format;
+    }
+
+    D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC opacityMicromapArrayDesc = {};
+    opacityMicromapArrayDesc.NumOmmHistogramEntries = micromapDesc.usageNum;
+    opacityMicromapArrayDesc.pOmmHistogram = usages;
+
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS accelerationStructureInputs = {};
+    accelerationStructureInputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_OPACITY_MICROMAP_ARRAY;
+    accelerationStructureInputs.Flags = GetMicromapFlags(micromapDesc.flags);
+    accelerationStructureInputs.NumDescs = 1;
+    accelerationStructureInputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY; // TODO: D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS support?
+    accelerationStructureInputs.pOpacityMicromapArrayDesc = &opacityMicromapArrayDesc;
+
+    m_Device->GetRaytracingAccelerationStructurePrebuildInfo(&accelerationStructureInputs, &prebuildInfo);
 #else
     MaybeUnused(micromapDesc, prebuildInfo);
 #endif
@@ -1210,17 +1229,21 @@ NRI_INLINE Result DeviceD3D12::BindMicromapMemory(const MicromapMemoryBindingDes
     return Result::SUCCESS;
 }
 
-NRI_INLINE FormatSupportBits DeviceD3D12::GetFormatSupport(Format format) const {
-    FormatSupportBits mask = FormatSupportBits::UNSUPPORTED;
-
-    D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport = {GetDxgiFormat(format).typed};
-    HRESULT hr = m_Device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport, sizeof(formatSupport));
-
-    if (SUCCEEDED(hr)) {
 #define UPDATE_SUPPORT_BITS(required, optional, bit) \
     if ((formatSupport.Support1 & (required)) == (required) && ((formatSupport.Support1 & (optional)) != 0 || (optional) == 0)) \
-        mask |= bit;
+        supportBits |= bit;
 
+#define UPDATE_SUPPORT2_BITS(optional, bit) \
+    if ((formatSupport.Support2 & (optional)) != 0) \
+        supportBits |= bit;
+
+NRI_INLINE FormatSupportBits DeviceD3D12::GetFormatSupport(Format format) const {
+    DXGI_FORMAT dxgiFormat = GetDxgiFormat(format).typed;
+    D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport = {dxgiFormat};
+    HRESULT hr = m_Device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport, sizeof(formatSupport));
+
+    FormatSupportBits supportBits = FormatSupportBits::UNSUPPORTED;
+    if (SUCCEEDED(hr)) {
         UPDATE_SUPPORT_BITS(0, D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE | D3D12_FORMAT_SUPPORT1_SHADER_LOAD, FormatSupportBits::TEXTURE);
         UPDATE_SUPPORT_BITS(D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW, 0, FormatSupportBits::STORAGE_TEXTURE);
         UPDATE_SUPPORT_BITS(D3D12_FORMAT_SUPPORT1_RENDER_TARGET, 0, FormatSupportBits::COLOR_ATTACHMENT);
@@ -1231,22 +1254,32 @@ NRI_INLINE FormatSupportBits DeviceD3D12::GetFormatSupport(Format format) const 
         UPDATE_SUPPORT_BITS(D3D12_FORMAT_SUPPORT1_BUFFER | D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW, 0, FormatSupportBits::STORAGE_BUFFER);
         UPDATE_SUPPORT_BITS(D3D12_FORMAT_SUPPORT1_IA_VERTEX_BUFFER, 0, FormatSupportBits::VERTEX_BUFFER);
 
-#undef UPDATE_SUPPORT_BITS
+        constexpr uint32_t anyAtomics = D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_ADD
+            | D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_BITWISE_OPS
+            | D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_COMPARE_STORE_OR_COMPARE_EXCHANGE
+            | D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_EXCHANGE
+            | D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_SIGNED_MIN_OR_MAX
+            | D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_UNSIGNED_MIN_OR_MAX;
 
-#define UPDATE_SUPPORT_BITS(optional, bit) \
-    if ((formatSupport.Support2 & (optional)) != 0) \
-        mask |= bit;
+        if (supportBits & FormatSupportBits::STORAGE_TEXTURE)
+            UPDATE_SUPPORT2_BITS(anyAtomics, FormatSupportBits::STORAGE_TEXTURE_ATOMICS);
 
-        const uint32_t anyAtomics = D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_ADD | D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_BITWISE_OPS | D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_COMPARE_STORE_OR_COMPARE_EXCHANGE | D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_EXCHANGE | D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_SIGNED_MIN_OR_MAX | D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_UNSIGNED_MIN_OR_MAX;
+        if (supportBits & FormatSupportBits::STORAGE_BUFFER)
+            UPDATE_SUPPORT2_BITS(anyAtomics, FormatSupportBits::STORAGE_BUFFER_ATOMICS);
 
-        if (mask & FormatSupportBits::STORAGE_TEXTURE)
-            UPDATE_SUPPORT_BITS(anyAtomics, FormatSupportBits::STORAGE_TEXTURE_ATOMICS);
-
-        if (mask & FormatSupportBits::STORAGE_BUFFER)
-            UPDATE_SUPPORT_BITS(anyAtomics, FormatSupportBits::STORAGE_BUFFER_ATOMICS);
-
-#undef UPDATE_SUPPORT_BITS
+        D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels = {dxgiFormat};
+        for (uint32_t i = 0; i < 3; i++) {
+            qualityLevels.SampleCount = 2 << i;
+            if (SUCCEEDED(m_Device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels))) && qualityLevels.NumQualityLevels > 0)
+                supportBits |= (FormatSupportBits)((uint32_t)FormatSupportBits::MULTISAMPLE_2X << i);
+        }
     }
 
-    return mask;
+    if (supportBits & (FormatSupportBits::STORAGE_TEXTURE | FormatSupportBits::STORAGE_BUFFER))
+        supportBits |= FormatSupportBits::STORAGE_LOAD_WITHOUT_FORMAT;
+
+    return supportBits;
 }
+
+#undef UPDATE_SUPPORT_BITS
+#undef UPDATE_SUPPORT2_BITS

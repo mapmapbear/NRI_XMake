@@ -170,7 +170,7 @@ static Result EnumerateAdaptersVK(AdapterDesc* adapterDescs, uint32_t& adapterDe
     if (!vkCreateInstance)
         return Result::UNSUPPORTED;
 
-    Result nriResult = Result::FAILURE;
+    Result result = Result::FAILURE;
 
     // Create instance
     VkApplicationInfo applicationInfo = {};
@@ -188,9 +188,9 @@ static Result EnumerateAdaptersVK(AdapterDesc* adapterDescs, uint32_t& adapterDe
 #    endif
 
     VkInstance instance = VK_NULL_HANDLE;
-    VkResult result = vkCreateInstance(&instanceCreateInfo, nullptr, &instance);
+    VkResult vkResult = vkCreateInstance(&instanceCreateInfo, nullptr, &instance);
 
-    if (result == VK_SUCCESS) {
+    if (vkResult == VK_SUCCESS) {
         // Get needed functions
         const auto vkDestroyInstance = (PFN_vkDestroyInstance)vkGetInstanceProcAddr(instance, "vkDestroyInstance");
         if (!vkDestroyInstance)
@@ -203,9 +203,9 @@ static Result EnumerateAdaptersVK(AdapterDesc* adapterDescs, uint32_t& adapterDe
 
         if (vkEnumeratePhysicalDeviceGroups && vkGetPhysicalDeviceProperties2) {
             uint32_t deviceGroupNum = 0;
-            result = vkEnumeratePhysicalDeviceGroups(instance, &deviceGroupNum, nullptr);
+            vkResult = vkEnumeratePhysicalDeviceGroups(instance, &deviceGroupNum, nullptr);
 
-            if (result == VK_SUCCESS && deviceGroupNum) {
+            if (vkResult == VK_SUCCESS && deviceGroupNum) {
                 if (adapterDescs) {
                     // Save LUID for precreated physical device
                     uint64_t precreatedDeviceLuid = 0;
@@ -345,7 +345,7 @@ static Result EnumerateAdaptersVK(AdapterDesc* adapterDescs, uint32_t& adapterDe
                 } else
                     adapterDescNum = deviceGroupNum;
 
-                nriResult = Result::SUCCESS;
+                result = Result::SUCCESS;
             }
         }
 
@@ -355,7 +355,7 @@ static Result EnumerateAdaptersVK(AdapterDesc* adapterDescs, uint32_t& adapterDe
 
     UnloadSharedLibrary(*loader);
 
-    return nriResult;
+    return result;
 }
 
 #endif
@@ -399,6 +399,10 @@ NRI_API Result NRI_CALL nriGetInterface(const Device& device, const char* interf
         realInterfaceSize = sizeof(CoreInterface);
         if (realInterfaceSize == interfaceSize)
             result = deviceBase.FillFunctionTable(*(CoreInterface*)interfacePtr);
+    } else if (hash == Hash(NRI_STRINGIFY(ImguiInterface))) {
+        realInterfaceSize = sizeof(ImguiInterface);
+        if (realInterfaceSize == interfaceSize)
+            result = deviceBase.FillFunctionTable(*(ImguiInterface*)interfacePtr);
     } else if (hash == Hash(NRI_STRINGIFY(HelperInterface))) {
         realInterfaceSize = sizeof(HelperInterface);
         if (realInterfaceSize == interfaceSize)
@@ -448,7 +452,7 @@ NRI_API Result NRI_CALL nriGetInterface(const Device& device, const char* interf
     if (result == Result::INVALID_ARGUMENT)
         REPORT_ERROR(&deviceBase, "Unknown interface '%s'!", interfaceName);
     else if (interfaceSize != realInterfaceSize)
-        REPORT_ERROR(&deviceBase, "Interface '%s' has invalid size = %u bytes, while %u bytes expected by the implementation", interfaceName, interfaceSize, realInterfaceSize);
+        REPORT_ERROR(&deviceBase, "Interface '%s' has invalid size=%u bytes, while %u bytes expected by the implementation", interfaceName, interfaceSize, realInterfaceSize);
     else if (result == Result::UNSUPPORTED)
         REPORT_WARNING(&deviceBase, "Interface '%s' is not supported by the device!", interfaceName);
     else {
@@ -731,7 +735,7 @@ NRI_API Result NRI_CALL nriCreateDeviceFromD3D12Device(const DeviceCreationD3D12
     return FinalizeDeviceCreation(deviceCreationDesc, *deviceImpl, device);
 }
 
-NRI_API Result NRI_CALL nriCreateDeviceFromVkDevice(const DeviceCreationVKDesc& deviceCreationVKDesc, Device*& device) {
+NRI_API Result NRI_CALL nriCreateDeviceFromVKDevice(const DeviceCreationVKDesc& deviceCreationVKDesc, Device*& device) {
     DeviceCreationDesc deviceCreationDesc = {};
     deviceCreationDesc.graphicsAPI = GraphicsAPI::VK;
 
@@ -779,6 +783,9 @@ NRI_API Result NRI_CALL nriCreateDeviceFromVkDevice(const DeviceCreationVKDesc& 
 }
 
 NRI_API void NRI_CALL nriDestroyDevice(Device& device) {
+    if (!(&device))
+        return;
+
     ((DeviceBase&)device).Destruct();
 }
 

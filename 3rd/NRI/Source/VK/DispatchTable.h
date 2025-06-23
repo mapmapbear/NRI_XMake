@@ -19,6 +19,7 @@ struct DispatchTable {
     VK_FUNC(GetPhysicalDeviceMemoryProperties2);
     VK_FUNC(GetDeviceGroupPeerMemoryFeatures);
     VK_FUNC(GetPhysicalDeviceFormatProperties2);
+    VK_FUNC(GetPhysicalDeviceImageFormatProperties2);
     VK_FUNC(CreateDevice);
     VK_FUNC(GetDeviceQueue2);
     VK_FUNC(EnumeratePhysicalDeviceGroups);
@@ -40,14 +41,14 @@ struct DispatchTable {
     VK_FUNC(CreateWin32SurfaceKHR);
     VK_FUNC(GetMemoryWin32HandlePropertiesKHR);
 #endif
-#ifdef VK_USE_PLATFORM_METAL_EXT
-    VK_FUNC(CreateMetalSurfaceEXT);
-#endif
 #ifdef VK_USE_PLATFORM_XLIB_KHR
     VK_FUNC(CreateXlibSurfaceKHR);
 #endif
 #ifdef VK_USE_PLATFORM_WAYLAND_KHR
     VK_FUNC(CreateWaylandSurfaceKHR);
+#endif
+#ifdef VK_USE_PLATFORM_METAL_EXT
+    VK_FUNC(CreateMetalSurfaceEXT);
 #endif
 
     // VK_EXT_debug_utils
@@ -94,7 +95,6 @@ struct DispatchTable {
     VK_FUNC(DestroyPipeline);                             // - | +
     VK_FUNC(FreeMemory);                                  // - | +
     VK_FUNC(FreeCommandBuffers);                          // - | +
-    VK_FUNC(FreeDescriptorSets);                          // - | ? TODO: unused, add "FreeDescriptorSet"?
                                                           // -----
     VK_FUNC(MapMemory);                                   // - | + TODO: replace with 2 (VK_KHR_map_memory2 or VK 1.4)
     VK_FUNC(FlushMappedMemoryRanges);                     // + | +
@@ -160,7 +160,7 @@ struct DispatchTable {
                                                           // VK_KHR_fragment_shading_rate
     VK_FUNC(CmdSetFragmentShadingRateKHR);                // - | +
                                                           // VK_KHR_swapchain
-    VK_FUNC(AcquireNextImageKHR);                         // - | ?
+    VK_FUNC(AcquireNextImage2KHR);                        // - | ?
     VK_FUNC(QueuePresentKHR);                             // - | ?
     VK_FUNC(CreateSwapchainKHR);                          // + | ?
     VK_FUNC(DestroySwapchainKHR);                         // - | +

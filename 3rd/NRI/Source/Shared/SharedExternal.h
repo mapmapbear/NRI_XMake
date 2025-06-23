@@ -4,8 +4,10 @@
 
 #include <array>
 #include <cassert>
+#include <cinttypes>
 #include <cstring>
 #include <map>
+#include <numeric>
 
 #if (NRI_ENABLE_D3D11_SUPPORT || NRI_ENABLE_D3D12_SUPPORT)
 #    include <dxgi1_6.h>
@@ -16,9 +18,11 @@ typedef uint32_t DXGI_FORMAT;
 
 // IMPORTANT: "SharedExternal.h" must be included after inclusion of "windows.h" (can be implicit) because ERROR gets undef-ed below
 #include "NRI.h"
+#include "NRI.hlsl"
 
 #include "Extensions/NRIDeviceCreation.h"
 #include "Extensions/NRIHelper.h"
+#include "Extensions/NRIImgui.h"
 #include "Extensions/NRILowLatency.h"
 #include "Extensions/NRIMeshShader.h"
 #include "Extensions/NRIRayTracing.h"
@@ -29,8 +33,6 @@ typedef uint32_t DXGI_FORMAT;
 #include "Extensions/NRIWrapperD3D11.h"
 #include "Extensions/NRIWrapperD3D12.h"
 #include "Extensions/NRIWrapperVK.h"
-
-#include "NRI.hlsl"
 
 #include "Lock.h"
 
@@ -164,11 +166,18 @@ typedef nri::AllocationCallbacks AllocationCallbacks;
 #    define FILE_SEPARATOR '/'
 #endif
 
+#ifdef NDEBUG
+#    define CHECK(condition, message) MaybeUnused(condition)
+#else
+#    define CHECK(condition, message) assert((condition) && message)
+#endif
+
 #define NRI_INLINE inline // we want to inline all functions, which are actually wrappers for the interface functions
 
 #define NRI_STRINGIFY_(token) #token
-#define NRI_STRINGIFY(token) NRI_STRINGIFY_(token)
+#define NRI_STRINGIFY(token)  NRI_STRINGIFY_(token)
 
+// Message reporting
 #define RETURN_ON_BAD_HRESULT(deviceBase, hr, format) \
     if (FAILED(hr)) { \
         (deviceBase)->ReportMessage(Message::ERROR, __FILE__, __LINE__, "%s: " format " failed, result = 0x%08X!", __FUNCTION__, hr); \
@@ -181,31 +190,23 @@ typedef nri::AllocationCallbacks AllocationCallbacks;
         return returnCode; \
     }
 
-#define REPORT_ERROR_ON_BAD_STATUS(deviceBase, expression) \
-    if ((expression) != 0) \
-    (deviceBase)->ReportMessage(Message::ERROR, __FILE__, __LINE__, "%s: " NRI_STRINGIFY(expression) " failed!", __FUNCTION__)
+#define REPORT_ERROR_ON_BAD_NVAPI_STATUS(deviceBase, expression) \
+    if ((expression) != 0) { \
+        (deviceBase)->ReportMessage(Message::ERROR, __FILE__, __LINE__, "%s: " NRI_STRINGIFY(expression) " failed!", __FUNCTION__); \
+    }
 
-#ifdef NDEBUG
-#    define CHECK(condition, message) MaybeUnused(condition)
-#else
-#    define CHECK(condition, message) assert((condition) && message)
-#endif
-
-#define SET_D3D_DEBUG_OBJECT_NAME(obj, name) \
-    if (obj) \
-    obj->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)std::strlen(name), name)
-
-#define REPORT_INFO(deviceBase, format, ...) (deviceBase)->ReportMessage(Message::INFO, __FILE__, __LINE__, format, ##__VA_ARGS__)
+#define REPORT_INFO(deviceBase, format, ...)    (deviceBase)->ReportMessage(Message::INFO, __FILE__, __LINE__, format, ##__VA_ARGS__)
 #define REPORT_WARNING(deviceBase, format, ...) (deviceBase)->ReportMessage(Message::WARNING, __FILE__, __LINE__, "%s(): " format, __FUNCTION__, ##__VA_ARGS__)
-#define REPORT_ERROR(deviceBase, format, ...) (deviceBase)->ReportMessage(Message::ERROR, __FILE__, __LINE__, "%s(): " format, __FUNCTION__, ##__VA_ARGS__)
+#define REPORT_ERROR(deviceBase, format, ...)   (deviceBase)->ReportMessage(Message::ERROR, __FILE__, __LINE__, "%s(): " format, __FUNCTION__, ##__VA_ARGS__)
 
-// TODO: improve queue scores (at least the code is not duplicated)
+// Queue scores // TODO: improve?
 #define GRAPHICS_QUEUE_SCORE ((graphics ? 100 : 0) + (compute ? 10 : 0) + (copy ? 10 : 0) + (sparse ? 5 : 0) + (videoDecode ? 2 : 0) + (videoEncode ? 2 : 0) + (protect ? 1 : 0) + (opticalFlow ? 1 : 0))
-#define COMPUTE_QUEUE_SCORE ((!graphics ? 10 : 0) + (compute ? 100 : 0) + (!copy ? 10 : 0) + (sparse ? 5 : 0) + (!videoDecode ? 2 : 0) + (!videoEncode ? 2 : 0) + (protect ? 1 : 0) + (!opticalFlow ? 1 : 0))
-#define COPY_QUEUE_SCORE ((!graphics ? 10 : 0) + (!compute ? 10 : 0) + (copy ? 100 * familyProps.queueCount : 0) + (sparse ? 5 : 0) + (!videoDecode ? 2 : 0) + (!videoEncode ? 2 : 0) + (protect ? 1 : 0) + (!opticalFlow ? 1 : 0))
+#define COMPUTE_QUEUE_SCORE  ((!graphics ? 10 : 0) + (compute ? 100 : 0) + (!copy ? 10 : 0) + (sparse ? 5 : 0) + (!videoDecode ? 2 : 0) + (!videoEncode ? 2 : 0) + (protect ? 1 : 0) + (!opticalFlow ? 1 : 0))
+#define COPY_QUEUE_SCORE     ((!graphics ? 10 : 0) + (!compute ? 10 : 0) + (copy ? 100 * familyProps.queueCount : 0) + (sparse ? 5 : 0) + (!videoDecode ? 2 : 0) + (!videoEncode ? 2 : 0) + (protect ? 1 : 0) + (!opticalFlow ? 1 : 0))
 
-#define VALIDATE_ARRAY(x) static_assert((size_t)x[x.size() - 1] != 0, "Some elements are missing in '" NRI_STRINGIFY(x) "'");
-#define VALIDATE_ARRAY_BY_PTR(x) static_assert(x[x.size() - 1] != nullptr, "Some elements are missing in '" NRI_STRINGIFY(x) "'");
+// Array validation
+#define VALIDATE_ARRAY(x)                 static_assert((size_t)x[x.size() - 1] != 0, "Some elements are missing in '" NRI_STRINGIFY(x) "'");
+#define VALIDATE_ARRAY_BY_PTR(x)          static_assert(x[x.size() - 1] != nullptr, "Some elements are missing in '" NRI_STRINGIFY(x) "'");
 #define VALIDATE_ARRAY_BY_FILED(x, field) static_assert(x[x.size() - 1].field != 0, "Some elements are missing in '" NRI_STRINGIFY(x) "'");
 
 // Shared library
@@ -228,6 +229,11 @@ constexpr uint32_t ROOT_SIGNATURE_DWORD_NUM = 64; // https://learn.microsoft.com
 constexpr uint32_t ZERO_BUFFER_DEFAULT_SIZE = 4 * 1024 * 1024;
 
 // Helpers
+template <typename T, typename U>
+constexpr uint32_t GetOffsetOf(U T::* member) {
+    return (uint32_t)((char*)&((T*)nullptr->*member) - (char*)nullptr);
+}
+
 template <typename T, uint32_t N>
 constexpr uint32_t GetCountOf(T const (&)[N]) {
     return N;
@@ -282,7 +288,6 @@ constexpr void ReturnVoid() {
 struct DxgiFormat {
     DXGI_FORMAT typeless;
     DXGI_FORMAT typed;
-    bool isDepthStencil;
 };
 
 const DxgiFormat& GetDxgiFormat(Format format);
@@ -339,6 +344,7 @@ inline TextureDesc FixTextureDesc(const TextureDesc& textureDesc) {
     desc.mipNum = std::max(desc.mipNum, (Mip_t)1);
     desc.layerNum = std::max(desc.layerNum, (Dim_t)1);
     desc.sampleNum = std::max(desc.sampleNum, (Sample_t)1);
+
     return desc;
 }
 
@@ -358,6 +364,10 @@ inline uint64_t GetPresentIndex(uint64_t presentId) {
 
 // Windows/D3D specific
 #if (NRI_ENABLE_D3D11_SUPPORT || NRI_ENABLE_D3D12_SUPPORT)
+
+#    define SET_D3D_DEBUG_OBJECT_NAME(obj, name) \
+        if (obj) \
+        obj->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)std::strlen(name), name)
 
 bool HasOutput();
 Result QueryVideoMemoryInfoDXGI(uint64_t luid, MemoryLocation memoryLocation, VideoMemoryInfo& videoMemoryInfo);

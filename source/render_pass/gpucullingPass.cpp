@@ -156,26 +156,26 @@ void GPUCullingPass::AllocGPUMemory() {
 		nri::BufferUploadDesc bufferData = {};
 		bufferData.buffer = m_GPUSceneObjectsBuffer->GetBuffer();
 		bufferData.data = indirectBufferData.data();
-		bufferData.dataSize = sizeof(nri::DrawIndexedDesc) * indirectBufferData.size();
+		// bufferData.dataSize = sizeof(nri::DrawIndexedDesc) * indirectBufferData.size();
 		bufferData.after = { .access = nri::AccessBits::SHADER_RESOURCE, .stages = nri::StageBits::COMPUTE_SHADER };
 
 		nri::BufferUploadDesc bufferData2 = {};
 		bufferData2.buffer = m_CullGPUSceneObjectsBuffer->GetBuffer();
 		bufferData2.data = cullIndirectBufferData.data();
-		bufferData2.dataSize = sizeof(nri::DrawIndexedDesc) * cullIndirectBufferData.size();
+		// bufferData2.dataSize = sizeof(nri::DrawIndexedDesc) * cullIndirectBufferData.size();
 		bufferData2.after = { .access = nri::AccessBits::SHADER_RESOURCE_STORAGE, .stages = nri::StageBits::COMPUTE_SHADER };
 
 		nri::BufferUploadDesc bufferData3 = {};
 		bufferData3.buffer = m_CullDataBuffer->GetBuffer();
 		bufferData3.data = cullDatas.data();
-		bufferData3.dataSize = sizeof(CullData) * cullDatas.size();
+		// bufferData3.dataSize = sizeof(CullData) * cullDatas.size();
 		bufferData3.after = { .access = nri::AccessBits::SHADER_RESOURCE, .stages = nri::StageBits::COMPUTE_SHADER };
 
 		uint32_t visibleObjectCounter = 0;
 		nri::BufferUploadDesc bufferData4 = {};
 		bufferData4.buffer = m_VisibleObjectCounterBuffer->GetBuffer();
 		bufferData4.data = &visibleObjectCounter;
-		bufferData4.dataSize = sizeof(uint32_t);
+		// bufferData4.dataSize = sizeof(uint32_t);
 		bufferData4.after = { .access = nri::AccessBits::SHADER_RESOURCE_STORAGE, .stages = nri::StageBits::COMPUTE_SHADER };
 
 		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData, bufferData2, bufferData3, bufferData4 };
@@ -463,8 +463,8 @@ void GPUCullingPass::RenderHiZ(struct RenderInfo &info) {
 		uint32_t srcHeight = m_renderer->m_OutputResolution.second / 2;
 
 		for (uint32_t i = 0; i < m_HiZTexture->GetMipNum(); i++) {
-			UINT destWidth = std::max(1u, (UINT)(srcWidth >> i));
-			UINT destHeight = std::max(1u, (UINT)(srcHeight >> i));
+			uint32_t destWidth = std::max(1u, (uint32_t)(srcWidth >> i));
+			uint32_t destHeight = std::max(1u, (uint32_t)(srcHeight >> i));
 			HiZPushConstants block = {
 				.DimensionsInv = 1.0f / glm::vec2(destWidth, destHeight),
 				.texDepth = 1020,

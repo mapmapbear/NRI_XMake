@@ -20,6 +20,7 @@
 #include "glm/gtc/type_ptr.hpp"
 #include "glm/vector_relational.hpp"
 #include "tinyddsloader.h"
+#include "spdlog/spdlog.h"
 
 struct Shader {
 	const char *ext;

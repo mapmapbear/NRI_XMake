@@ -5,7 +5,7 @@
 *NRI* is a modular extensible low-level abstract render interface, which has been designed to support all low level features of D3D12 and Vulkan GAPIs, but at the same time to simplify usage and reduce the amount of code needed (especially compared with VK).
 
 Goals:
-- generalization of D3D12 ([spec](https://microsoft.github.io/DirectX-Specs/)) and VK ([spec](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html)) GAPIs
+- generalization of D3D12 ([spec](https://microsoft.github.io/DirectX-Specs/)) and VK ([spec](https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html)) GAPIs
 - explicitness (providing access to low-level features of modern GAPIs)
 - "quality of life" features (providing high-level improving utilities, organized as extensions)
 - low overhead
@@ -17,8 +17,8 @@ Non-goals (exceptions apply to some extensions, where high-level abstraction and
 - exposing entities not existing in GAPIs
 - hidden management of any kind
 
-Currently supported GAPIs:
-- Vulkan (VK 1.3 or extended 1.2 + additional features)
+Supported GAPIs:
+- Vulkan
 - D3D12
 - D3D11
 - Metal (through [MoltenVK](https://github.com/KhronosGroup/MoltenVK))
@@ -45,6 +45,7 @@ Available interfaces:
  - `NRI.h` - core functionality
  - `NRIDeviceCreation.h` - device creation and related functionality
  - `NRIHelper.h` - a collection of various helpers to ease use of the core interface
+ - `NRIImgui.h` - a light-weight ImGui renderer (no ImGui dependency)
  - `NRILowLatency.h` - low latency support (aka *NVIDIA REFLEX*)
  - `NRIMeshShader.h` - mesh shaders
  - `NRIRayTracing.h` - ray tracing
@@ -157,11 +158,7 @@ Repository organization:
 
 ## BUILD INSTRUCTIONS
 
-- Install [*Cmake*](https://cmake.org/download/) 3.18+
-- Install on
-    - Windows: latest *WindowsSDK* and *VulkanSDK*
-    - Linux (x86-64): latest *VulkanSDK* and optional *libx11-dev* and *libwayland-dev*
-    - Linux (aarch64): optional *libx11-dev* and *libwayland-dev*
+- Install [*Cmake*](https://cmake.org/download/) 3.30+
 - Build (variant 1) - using *Git* and *CMake* explicitly
     - Clone project and init submodules
     - Generate and build the project using *CMake*
@@ -185,12 +182,13 @@ Notes:
 - `NRI_ENABLE_D3D11_SUPPORT` - enable D3D11 backend (`on` by default on Windows)
 - `NRI_ENABLE_D3D12_SUPPORT` - enable D3D12 backend (`on` by default on Windows)
 - `NRI_ENABLE_AGILITY_SDK_SUPPORT` - enable D3D12 Agility SDK (`on` by default)
-- `NRI_ENABLE_XLIB_SUPPORT` - enable *Xlib* support (`on` by default)
-- `NRI_ENABLE_WAYLAND_SUPPORT` - enable *Wayland* support (`on` by default)
+- `NRI_ENABLE_XLIB_SUPPORT` - enable *Xlib* support (if `libx11-dev` installed)
+- `NRI_ENABLE_WAYLAND_SUPPORT` - enable *Wayland* support (if `libwayland-dev` installed)
 - `NRI_ENABLE_D3D_EXTENSIONS` - enable vendor specific extension libraries for D3D (NVAPI and AMD AGS) (`on` by default if there is a D3D backend)
 - `NRI_ENABLE_NIS_SDK` - enable NVIDIA Image Sharpening SDK (`off` by default)
 - `NRI_ENABLE_NGX_SDK` - enable NVIDIA NGX (DLSS) SDK (`off` by default)
 - `NRI_ENABLE_FFX_SDK` - enable AMD FidelityFX SDK (`off` by default)
+- `NRI_ENABLE_XESS_SDK` - enable INTEL XeSS SDK (`off` by default)
 - `NRI_AGILITY_SDK_DIR` - directory where Agility SDK binaries will be copied to relative to `CMAKE_RUNTIME_OUTPUT_DIRECTORY` (`AgilitySDK` by default)
 - `NRI_AGILITY_SDK_VERSION` - Agility SDK version
 
@@ -198,11 +196,11 @@ Notes:
 
 *Overview* and *Download* sections can be found [*here*](https://devblogs.microsoft.com/directx/directx12agility/).
 
-D3D12 backend uses Agility SDK to get access to most recent D3D12 features.
+D3D12 backend uses Agility SDK to get access to most recent D3D12 features. It's highly recommended to use it.
 
-Installation steps:
-- set `NRI_AGILITY_SDK_VERSION_MAJOR` and `NRI_AGILITY_SDK_VERSION_MINOR` to the desired value
-- enable `NRI_ENABLE_AGILITY_SDK_SUPPORT`
+Steps (already enabled by default):
+- modify `NRI_AGILITY_SDK_VERSION_MAJOR` and `NRI_AGILITY_SDK_VERSION_MINOR` to the desired value
+- enable or disable `NRI_ENABLE_AGILITY_SDK_SUPPORT`
 - re-deploy project
 - include auto-generated `NRIAgilitySDK.h` header in the code of your executable using NRI
 

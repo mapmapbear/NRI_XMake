@@ -2,13 +2,40 @@
 
 #pragma once
 
-#include <stdint.h>
 #define NRI_FRAMEWORK_VERSION_MAJOR 0
-#define NRI_FRAMEWORK_VERSION_MINOR 15
-#define NRI_FRAMEWORK_VERSION_DATE "5 February 2025"
-#define NRI_FRAMEWORK 1
+#define NRI_FRAMEWORK_VERSION_MINOR 21
+#define NRI_FRAMEWORK_VERSION_DATE  "12 June 2025"
+#define NRI_FRAMEWORK               1
+
+// Platform detection
+#define NRIF_WINDOWS 0
+#define NRIF_X11     1
+#define NRIF_WAYLAND 2
+#define NRIF_COCOA   3
+
+#if defined(_WIN32)
+#    define NRIF_PLATFORM NRIF_WINDOWS
+#    define GLFW_EXPOSE_NATIVE_WIN32
+#    define VK_USE_PLATFORM_WIN32_KHR
+#elif defined(__APPLE__)
+#    define NRIF_PLATFORM NRIF_COCOA
+#    define GLFW_EXPOSE_NATIVE_COCOA
+#    define VK_USE_PLATFORM_METAL_EXT
+#elif (defined(__linux__) && NRIF_USE_WAYLAND)
+#    define NRIF_PLATFORM NRIF_WAYLAND
+#    define GLFW_EXPOSE_NATIVE_WAYLAND
+#    define VK_USE_PLATFORM_WAYLAND_KHR
+#elif (defined(__linux__))
+#    define NRIF_PLATFORM NRIF_X11
+#    define GLFW_EXPOSE_NATIVE_X11
+#    define VK_USE_PLATFORM_XLIB_KHR
+#else
+#    error "Unknown platform"
+#endif
 
 #include <array>
+#include <cinttypes>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -17,6 +44,7 @@
 #define GLFW_INCLUDE_NONE
 #endif
 #include "GLFW/glfw3.h"
+
 #include "imgui.h"
 
 // NRI: core & common extensions
@@ -24,6 +52,7 @@
 
 #include "Extensions/NRIDeviceCreation.h"
 #include "Extensions/NRIHelper.h"
+#include "Extensions/NRIImgui.h"
 #include "Extensions/NRILowLatency.h"
 #include "Extensions/NRIMeshShader.h"
 #include "Extensions/NRIRayTracing.h"
@@ -34,6 +63,7 @@
 
 // 3rd party
 #include "CmdLine.h" // https://github.com/tanakh/cmdline
+#include "spdlog/spdlog.h"
 
 // #include "ml.h"
 // #include "ml.hlsli"
@@ -45,196 +75,222 @@
 #include "Timer.h"
 #include "Utils.h"
 
-// STB
-#include "stb_image.h"
-
-// ASSIMP
-#include <assimp/cimport.h>
-#include <assimp/postprocess.h>
-#include <assimp/scene.h>
-#include <assimp/version.h>
-#include <vector>
-
-// TinyddsLoader
-#include "tinyddsloader.h"
-
-// Spdlog
-#include "spdlog/spdlog.h"
-
 // Settings
-constexpr nri::VKBindingOffsets VK_BINDING_OFFSETS = { 100, 200, 300, 400 }; // just ShaderMake defaults for simplicity
+constexpr nri::VKBindingOffsets VK_BINDING_OFFSETS = {0, 128, 32, 64}; // see CMake
 constexpr bool D3D11_COMMANDBUFFER_EMULATION = false;
-constexpr uint32_t DEFAULT_MEMORY_ALIGNMENT = 16;
-constexpr uint32_t BUFFERED_FRAME_MAX_NUM = 2;
-constexpr uint32_t SWAP_CHAIN_TEXTURE_NUM = 2;
 
-struct NRIInterface : public nri::CoreInterface,
-					  public nri::HelperInterface,
-					  public nri::StreamerInterface,
-					  public nri::SwapChainInterface {};
+#define BUFFERED_FRAME_MAX_NUM 2
 
-struct BackBuffer {
-	nri::Descriptor *colorAttachment;
-	// nri::Descriptor* depthAttachment;
-	nri::Texture *texture;
-	// nri::Texture* depthTexture;
+// Include everything for demo purposes
+struct NRIInterface
+    : public nri::CoreInterface,
+      public nri::HelperInterface,
+      public nri::LowLatencyInterface,
+      public nri::MeshShaderInterface,
+      public nri::RayTracingInterface,
+      public nri::ResourceAllocatorInterface,
+      public nri::StreamerInterface,
+      public nri::SwapChainInterface,
+      public nri::UpscalerInterface {
+    inline bool HasCore() const {
+        return GetDeviceDesc != nullptr;
+    }
+
+    inline bool HasHelper() const {
+        return CalculateAllocationNumber != nullptr;
+    }
+
+    inline bool HasLowLatency() const {
+        return SetLatencySleepMode != nullptr;
+    }
+
+    inline bool HasMeshShader() const {
+        return CmdDrawMeshTasks != nullptr;
+    }
+
+    inline bool HasRayTracing() const {
+        return CreateRayTracingPipeline != nullptr;
+    }
+
+    inline bool HasResourceAllocator() const {
+        return AllocateBuffer != nullptr;
+    }
+
+    inline bool HasStreamer() const {
+        return CreateStreamer != nullptr;
+    }
+
+    inline bool HasSwapChain() const {
+        return CreateSwapChain != nullptr;
+    }
+
+    inline bool HasUpscaler() const {
+        return CreateUpscaler != nullptr;
+    }
+};
+
+struct SwapChainTexture {
+    nri::Fence* acquireSemaphore;
+    nri::Fence* releaseSemaphore;
+    nri::Texture* texture;
+    nri::Descriptor* colorAttachment;
+    nri::Format attachmentFormat;
 };
 
 class SampleBase {
 public:
-	// Pre initialize
-	SampleBase();
+    // Pre initialize
+    SampleBase();
 
-	virtual void InitCmdLine([[maybe_unused]] cmdline::parser &cmdLine) {
-	}
+    virtual void InitCmdLine([[maybe_unused]] cmdline::parser& cmdLine) {
+    }
 
-	virtual void ReadCmdLine([[maybe_unused]] cmdline::parser &cmdLine) {
-	}
+    virtual void ReadCmdLine([[maybe_unused]] cmdline::parser& cmdLine) {
+    }
 
-	// Initialize
-	virtual bool Initialize(nri::GraphicsAPI graphicsAPI) = 0;
-	bool InitUI(const nri::CoreInterface &NRI, const nri::HelperInterface &helperInterface, nri::Device &device, nri::Format renderTargetFormat);
+    // Initialize
+    virtual bool Initialize(nri::GraphicsAPI graphicsAPI) = 0;
+    bool InitImgui(nri::Device& device);
 
-	// Wait before input (wait for latency and/or queued frames)
-	virtual void LatencySleep(uint32_t frameIndex) {
-		(void)frameIndex;
-	}
+    // Wait before input (wait for latency and/or queued frames)
+    virtual void LatencySleep([[maybe_unused]] uint32_t frameIndex) {
+    }
 
-	// Prepare
-	virtual void PrepareFrame(uint32_t frameIndex) = 0;
-	void BeginUI();
-	//      Imgui::
-	void EndUI(const nri::StreamerInterface &streamerInterface, nri::Streamer &streamer);
+    // Prepare
+    virtual void PrepareFrame([[maybe_unused]] uint32_t frameIndex) {
+    }
 
-	// Render
-	virtual void RenderFrame(uint32_t frameIndex) = 0;
-	void RenderUI(const nri::CoreInterface &NRI, const nri::StreamerInterface &streamerInterface, nri::Streamer &streamer, nri::CommandBuffer &commandBuffer, float sdrScale, bool isSrgb);
+    void GetCameraDescFromInputDevices(CameraDesc& cameraDesc);
 
-	// Destroy
-	virtual ~SampleBase();
-	void DestroyUI(const nri::CoreInterface &NRI);
+    // Render
+    virtual void RenderFrame(uint32_t frameIndex) = 0;
 
-	// Misc
-	virtual bool AppShouldClose() {
-		return false;
-	}
+    // UI
+    void CmdCopyImguiData(nri::CommandBuffer& commandBuffer, nri::Streamer& streamer);
+    void CmdDrawImgui(nri::CommandBuffer& commandBuffer, nri::Format attachmentFormat, float sdrScale, bool isSrgb);
 
-	inline bool IsKeyToggled(Key key) {
-		bool state = m_KeyToggled[(uint32_t)key];
-		m_KeyToggled[(uint32_t)key] = false;
+    // Destroy
+    virtual ~SampleBase();
+    void DestroyImgui();
 
-		return state;
-	}
+    // Misc
+    virtual bool AppShouldClose() {
+        return false;
+    }
 
-	inline bool IsKeyPressed(Key key) const {
-		return m_KeyState[(uint32_t)key];
-	}
+    inline bool IsKeyToggled(Key key) {
+        bool state = m_KeyToggled[(uint32_t)key];
+        m_KeyToggled[(uint32_t)key] = false;
 
-	inline bool IsButtonPressed(Button button) const {
-		return m_ButtonState[(uint8_t)button];
-	}
+        return state;
+    }
 
-	inline const vec2 &GetMouseDelta() const {
-		return m_MouseDelta;
-	}
+    inline bool IsKeyPressed(Key key) const {
+        return m_KeyState[(uint32_t)key];
+    }
 
-	inline float GetMouseWheel() const {
-		return m_MouseWheel;
-	}
+    inline bool IsButtonPressed(Button button) const {
+        return m_ButtonState[(uint8_t)button];
+    }
 
-	inline std::pair<uint32_t, uint32_t> GetWindowResolution() const {
-		return m_WindowResolution;
-	}
+    inline const float2& GetMouseDelta() const {
+        return m_MouseDelta;
+    }
 
-	inline void SetWindowResolution(const std::pair<uint32_t, uint32_t> &resolution) {
-		m_WindowResolution = resolution;
-	}
+    inline float GetMouseWheel() const {
+        return m_MouseWheel;
+    }
 
-	inline std::pair<uint32_t, uint32_t> GetOutputResolution() const {
-		return m_OutputResolution;
-	}
+    inline std::pair<uint32_t, uint32_t> GetWindowResolution() const {
+        return m_WindowResolution;
+    }
 
-	inline const nri::Window &GetWindow() const {
-		return m_NRIWindow;
-	}
+    inline std::pair<uint32_t, uint32_t> GetOutputResolution() const {
+        return m_OutputResolution;
+    }
 
-	void GetCameraDescFromInputDevices(CameraDesc &cameraDesc);
+    inline const nri::Window& GetWindow() const {
+        return m_NRIWindow;
+    }
 
-	static void EnableMemoryLeakDetection(uint32_t breakOnAllocationIndex);
+    inline uint8_t GetQueuedFrameNum() const {
+        return m_Vsync ? 2 : 3;
+    }
+
+    inline uint8_t GetOptimalSwapChainTextureNum() const {
+        return GetQueuedFrameNum() + 1;
+    }
+
+    static void EnableMemoryLeakDetection(uint32_t breakOnAllocationIndex);
 
 protected:
-	nri::AllocationCallbacks m_AllocationCallbacks = {};
-	std::string m_SceneFile = "ShaderBalls/ShaderBalls.gltf";
-	GLFWwindow *m_Window = nullptr;
-	Camera m_Camera;
-	Timer m_Timer;
-	std::pair<uint32_t, uint32_t> m_OutputResolution = { 1920, 1080 };//{ 900, 600 };
-	std::pair<uint32_t, uint32_t> m_WindowResolution = {};
-	uint8_t m_VsyncInterval = 0;
-	uint32_t m_DpiMode = 0;
-	uint32_t m_RngState = 0;
-	float m_MouseSensitivity = 1.0f;
-	bool m_DebugAPI = false;
-	bool m_DebugNRI = false;
-	bool m_IsActive = true;
+    nri::AllocationCallbacks m_AllocationCallbacks = {};
+    std::string m_SceneFile = "ShaderBalls/ShaderBalls.gltf";
+    GLFWwindow* m_Window = nullptr;
+    Camera m_Camera;
+    Timer m_Timer;
+    std::pair<uint32_t, uint32_t> m_OutputResolution = {1920, 1080};
+    std::pair<uint32_t, uint32_t> m_WindowResolution = {};
+    uint32_t m_DpiMode = 0;
+    uint32_t m_RngState = 0;
+    uint32_t m_AdapterIndex = 0;
+    float m_MouseSensitivity = 1.0f;
+    bool m_Vsync = false;
+    bool m_DebugAPI = false;
+    bool m_DebugNRI = false;
+    bool m_AlwaysActive = false;
 
-	// Private
+    // Private
 private:
-	void CursorMode(int32_t mode);
+    void CursorMode(int32_t mode);
 
 public:
-	inline bool HasUserInterface() const {
-		return m_TimePrev != 0.0;
-	}
+    inline bool HasUserInterface() const {
+        return m_ImguiRenderer != nullptr;
+    }
 
-	void InitCmdLineDefault(cmdline::parser &cmdLine);
-	void ReadCmdLineDefault(cmdline::parser &cmdLine);
-	bool Create(int32_t argc, char **argv, const char *windowTitle);
-	void RenderLoop();
+    void InitCmdLineDefault(cmdline::parser& cmdLine);
+    void ReadCmdLineDefault(cmdline::parser& cmdLine);
+    bool Create(int32_t argc, char** argv, const char* windowTitle);
+    void RenderLoop();
 
-	// Input (not public)
+    // Input (not public)
 public:
-	std::array<bool, (size_t)Key::NUM> m_KeyState = {};
-	std::array<bool, (size_t)Key::NUM> m_KeyToggled = {};
-	std::array<bool, (size_t)Button::NUM> m_ButtonState = {};
-	std::array<bool, (size_t)Button::NUM> m_ButtonJustPressed = {};
-	vec2 m_MouseDelta = {};
-	vec2 m_MousePosPrev = {};
-	float m_MouseWheel = 0.0f;
+    std::array<bool, (size_t)Key::NUM> m_KeyState = {};
+    std::array<bool, (size_t)Key::NUM> m_KeyToggled = {};
+    std::array<bool, (size_t)Button::NUM> m_ButtonState = {};
+    float2 m_MouseDelta = {};
+    float2 m_MousePosPrev = {};
+    float m_MouseWheel = 0.0f;
 
 private:
-	// UI
-	std::vector<uint8_t> m_UiData;
-	nri::DescriptorPool *m_DescriptorPool = nullptr;
-	nri::DescriptorSet *m_DescriptorSet = nullptr;
-	nri::Descriptor *m_FontShaderResource = nullptr;
-	nri::Descriptor *m_Sampler = nullptr;
-	nri::Pipeline *m_Pipeline = nullptr;
-	nri::PipelineLayout *m_PipelineLayout = nullptr;
-	nri::Texture *m_FontTexture = nullptr;
-	nri::Memory *m_FontTextureMemory = nullptr;
-	GLFWcursor *m_MouseCursors[ImGuiMouseCursor_COUNT] = {};
-	double m_TimePrev = 0.0;
-	uint64_t m_IbOffset = 0;
-	uint64_t m_VbOffset = 0;
+    // UI
+    nri::ImguiInterface m_iImgui = {};
+    nri::Imgui* m_ImguiRenderer = nullptr;
+    GLFWcursor* m_MouseCursors[ImGuiMouseCursor_COUNT] = {};
 
-	nri::Window m_NRIWindow = {};
-
-	// Rendering
-	uint32_t m_FrameNum = uint32_t(-1);
-	uint32_t m_StreamBufferSize = 0;
+    // Rendering
+    nri::Window m_NRIWindow = {};
+    double m_TimeLimit = 1e38;
+    uint32_t m_FrameNum = uint32_t(-1);
 };
 
 #define _STRINGIFY(s) #s
-#define STRINGIFY(s) _STRINGIFY(s)
+#define STRINGIFY(s)  _STRINGIFY(s)
 
-#define SAMPLE_MAIN(className, memoryAllocationIndexForBreak)                 \
-	int main(int argc, char **argv) {                                         \
-		SampleBase::EnableMemoryLeakDetection(memoryAllocationIndexForBreak); \
-		SampleBase *sample = new className;                                   \
-		bool result = sample->Create(argc, argv, STRINGIFY(PROJECT_NAME));    \
-		if (result)                                                           \
-			sample->RenderLoop();                                             \
-		delete sample;                                                        \
-		return result ? 0 : 1;                                                \
-	}
+
+#define SAMPLE_MAIN(className, memoryAllocationIndexForBreak) \
+    SampleBase* g_sample = nullptr; \
+    void Destroy() { \
+        if (g_sample) \
+            delete g_sample; \
+    } \
+    int main(int argc, char** argv) { \
+        SampleBase::EnableMemoryLeakDetection(memoryAllocationIndexForBreak); \
+        g_sample = new className; \
+        atexit(Destroy); \
+        bool result = g_sample->Create(argc, argv, STRINGIFY(PROJECT_NAME)); \
+        if (result) \
+            g_sample->RenderLoop(); \
+        return result ? 0 : 1; \
+    }

@@ -18,6 +18,7 @@
 #include <set>
 #include <utility>
 #include <vector>
+#include "spdlog/spdlog.h"
 
 void TraverseNodes(const aiScene *scene, const aiNode *node, const glm::mat4 &parentTransform, std::map<uint32_t, glm::mat4> &results) {
 	aiMatrix4x4 nodeTransform = node->mTransformation;
@@ -359,13 +360,13 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 	}
 
 	nri::BufferUploadDesc indexBufferUploadDesc = {};
-	indexBufferUploadDesc.dataSize = geometryData.size();
+	// indexBufferUploadDesc.dataSize = geometryData.size();
 	indexBufferUploadDesc.data = &geometryData[0];
 	indexBufferUploadDesc.buffer = pGPUMesh->m_indexbuffer->GetBuffer();
 	indexBufferUploadDesc.after = { nri::AccessBits::INDEX_BUFFER };
 
 	nri::BufferUploadDesc vertexBufferUploadDesc = {};
-	vertexBufferUploadDesc.dataSize = vertexData.size();
+	// vertexBufferUploadDesc.dataSize = vertexData.size();
 	vertexBufferUploadDesc.data = vertexData.data();
 	vertexBufferUploadDesc.buffer = pGPUMesh->m_vertexbuffer->GetBuffer();
 	vertexBufferUploadDesc.after = { nri::AccessBits::VERTEX_BUFFER };

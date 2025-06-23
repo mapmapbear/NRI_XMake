@@ -1,12 +1,6 @@
 // © 2021 NVIDIA Corporation
 
 DescriptorPoolVK::~DescriptorPoolVK() {
-    const auto& allocator = m_Device.GetAllocationCallbacks();
-    for (size_t i = 0; i < m_AllocatedSets.size(); i++) {
-        m_AllocatedSets[i]->~DescriptorSetVK();
-        allocator.Free(allocator.userArg, m_AllocatedSets[i]);
-    }
-
     if (m_OwnsNativeObjects) {
         const auto& vk = m_Device.GetDispatchTable();
         vk.DestroyDescriptorPool(m_Device, m_Handle, m_Device.GetVkAllocationCallbacks());
@@ -42,8 +36,10 @@ Result DescriptorPoolVK::Create(const DescriptorPoolDesc& descriptorPoolDesc) {
     info.pPoolSizes = poolSizes.data();
 
     const auto& vk = m_Device.GetDispatchTable();
-    VkResult result = vk.CreateDescriptorPool(m_Device, &info, m_Device.GetVkAllocationCallbacks(), &m_Handle);
-    RETURN_ON_FAILURE(&m_Device, result == VK_SUCCESS, GetReturnCode(result), "vkCreateDescriptorPool returned %d", (int32_t)result);
+    VkResult vkResult = vk.CreateDescriptorPool(m_Device, &info, m_Device.GetVkAllocationCallbacks(), &m_Handle);
+    RETURN_ON_FAILURE(&m_Device, vkResult == VK_SUCCESS, GetReturnCode(vkResult), "vkCreateDescriptorPool returned %d", (int32_t)vkResult);
+
+    m_DescriptorSets.resize(descriptorPoolDesc.descriptorSetMaxNum);
 
     return Result::SUCCESS;
 }
@@ -68,21 +64,8 @@ NRI_INLINE Result DescriptorPoolVK::AllocateDescriptorSets(const PipelineLayout&
     const PipelineLayoutVK& pipelineLayoutVK = (const PipelineLayoutVK&)pipelineLayout;
     VkDescriptorSetLayout setLayout = pipelineLayoutVK.GetDescriptorSetLayout(setIndex);
 
-    uint32_t freeSetNum = (uint32_t)m_AllocatedSets.size() - m_UsedSets;
-    if (freeSetNum < instanceNum) {
-        uint32_t newSetNum = instanceNum - freeSetNum;
-        uint32_t prevSetNum = (uint32_t)m_AllocatedSets.size();
-        m_AllocatedSets.resize(prevSetNum + newSetNum);
-
-        const auto& allocationCallbacks = m_Device.GetAllocationCallbacks();
-        for (size_t i = 0; i < newSetNum; i++) {
-            m_AllocatedSets[prevSetNum + i] = (DescriptorSetVK*)allocationCallbacks.Allocate(allocationCallbacks.userArg, sizeof(DescriptorSetVK), alignof(DescriptorSetVK));
-            Construct(m_AllocatedSets[prevSetNum + i], 1, m_Device);
-        }
-    }
-
     const auto& bindingInfo = pipelineLayoutVK.GetBindingInfo();
-    const DescriptorSetDesc& setDesc = bindingInfo.descriptorSetDescs[setIndex];
+    const DescriptorSetDesc* descriptorSetDesc = &bindingInfo.descriptorSetDescs[setIndex];
     bool hasVariableDescriptorNum = bindingInfo.hasVariableDescriptorNum[setIndex];
 
     VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescriptorCountInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO};
@@ -98,11 +81,13 @@ NRI_INLINE Result DescriptorPoolVK::AllocateDescriptorSets(const PipelineLayout&
     const auto& vk = m_Device.GetDispatchTable();
     for (uint32_t i = 0; i < instanceNum; i++) {
         VkDescriptorSet handle = VK_NULL_HANDLE;
-        VkResult result = vk.AllocateDescriptorSets(m_Device, &info, &handle);
-        RETURN_ON_FAILURE(&m_Device, result == VK_SUCCESS, GetReturnCode(result), "vkAllocateDescriptorSets returned %d", (int32_t)result);
+        VkResult vkResult = vk.AllocateDescriptorSets(m_Device, &info, &handle);
+        RETURN_ON_FAILURE(&m_Device, vkResult == VK_SUCCESS, GetReturnCode(vkResult), "vkAllocateDescriptorSets returned %d", (int32_t)vkResult);
 
-        descriptorSets[i] = (DescriptorSet*)m_AllocatedSets[m_UsedSets++];
-        ((DescriptorSetVK*)descriptorSets[i])->Create(handle, setDesc);
+        DescriptorSetVK* descriptorSet = &m_DescriptorSets[m_DescriptorSetNum++];
+        descriptorSet->Create(&m_Device, handle, descriptorSetDesc);
+
+        descriptorSets[i] = (DescriptorSet*)descriptorSet;
     }
 
     return Result::SUCCESS;
@@ -111,9 +96,9 @@ NRI_INLINE Result DescriptorPoolVK::AllocateDescriptorSets(const PipelineLayout&
 NRI_INLINE void DescriptorPoolVK::Reset() {
     ExclusiveScope lock(m_Lock);
 
-    m_UsedSets = 0;
-
     const auto& vk = m_Device.GetDispatchTable();
-    VkResult result = vk.ResetDescriptorPool(m_Device, m_Handle, (VkDescriptorPoolResetFlags)0);
-    RETURN_ON_FAILURE(&m_Device, result == VK_SUCCESS, ReturnVoid(), "vkResetDescriptorPool returned %d", (int32_t)result);
+    VkResult vkResult = vk.ResetDescriptorPool(m_Device, m_Handle, (VkDescriptorPoolResetFlags)0);
+    RETURN_ON_FAILURE(&m_Device, vkResult == VK_SUCCESS, ReturnVoid(), "vkResetDescriptorPool returned %d", (int32_t)vkResult);
+
+    m_DescriptorSetNum = 0;
 }

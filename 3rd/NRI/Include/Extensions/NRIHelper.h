@@ -2,6 +2,8 @@
 
 #pragma once
 
+#define NRI_HELPER_H 1
+
 NriNamespaceBegin
 
 NriStruct(VideoMemoryInfo) {
@@ -24,10 +26,8 @@ NriStruct(TextureUploadDesc) {
 };
 
 NriStruct(BufferUploadDesc) {
-    const void* data;
-    uint64_t dataSize;
+    NriOptional const void* data; // if provided, must be data for the whole buffer
     NriPtr(Buffer) buffer;
-    uint64_t bufferOffset;
     Nri(AccessStage) after;
 };
 
@@ -170,6 +170,7 @@ static inline Nri(PipelineLayoutSettingsDesc) NriFunc(FitPipelineLayoutSettingsI
     return modifiedPipelineLayoutLimitsDesc;
 }
 
+// Deprecated
 static inline Nri(TextureBarrierDesc) NriFunc(TextureBarrierFromUnknown)(NriPtr(Texture) texture,
     Nri(AccessLayoutStage) after,
     Nri(Mip_t) mipOffset NriDefault(0),
