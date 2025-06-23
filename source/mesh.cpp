@@ -16,6 +16,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 #include "spdlog/spdlog.h"
@@ -37,7 +38,7 @@ void TraverseNodes(const aiScene *scene, const aiNode *node, const glm::mat4 &pa
 		TraverseNodes(scene, node->mChildren[i], globalTransform, results);
 	}
 }
-void TraverseNodesWithMesh(const aiScene *scene, const aiNode *node, const glm::mat4 &parentTransform, std::vector<std::pair<uint32_t, glm::mat4>> &meshTransforms) {
+void TraverseNodesWithMesh(const aiScene *scene, const aiNode *node, const glm::mat4 &parentTransform, std::unordered_map<uint32_t, glm::mat4> &meshTransforms) {
 	// 将aiMatrix4x4转换为glm::mat4
 	aiMatrix4x4 nodeTransform = node->mTransformation;
 	glm::mat4 glmNodeTransform = glm::mat4(
@@ -52,7 +53,7 @@ void TraverseNodesWithMesh(const aiScene *scene, const aiNode *node, const glm::
 	// 如果当前节点包含mesh，存储mesh ID和对应的全局变换
 	for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
 		unsigned int meshID = node->mMeshes[i];
-		meshTransforms.push_back({ meshID, globalTransform });
+		meshTransforms.insert({ meshID, globalTransform });
 	}
 
 	// 递归处理所有子节点
@@ -74,11 +75,11 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 	glm::mat4 identity = glm::mat4(1.0f);
 	TraverseNodes(pScene, pScene->mRootNode, identity, results);
 
-	std::vector<std::pair<uint32_t, glm::mat4>> meshTransforms;
+	std::unordered_map<uint32_t, glm::mat4> meshTransforms;
 	TraverseNodesWithMesh(pScene, pScene->mRootNode, identity, meshTransforms);
 
-	for (uint32 i = 0; i < meshTransforms.size(); ++i) {
-		m_Meshes.push_back(LoadMesh(pScene->mMeshes[meshTransforms[i].first], renderer));
+	for (uint32 i = 0; i < pScene->mNumMeshes; ++i) {
+		m_Meshes.push_back(LoadMesh(pScene->mMeshes[i], renderer));
 	}
 
 	m_GPUMesh = LoadGPUMesh(pScene, (uint32_t)pScene->mNumMeshes, renderer);

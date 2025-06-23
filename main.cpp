@@ -110,48 +110,56 @@ private:
 };
 
 Sample::~Sample() {
-	NRI.WaitForIdle(*m_GraphicsQueue);
-	NRI.WaitForIdle(*m_ComputeQueue);
+	if (NRI.HasHelper()) {
+		NRI.WaitForIdle(*m_GraphicsQueue);
+		NRI.WaitForIdle(*m_ComputeQueue);
+	}
+	if (NRI.HasCore()) {
+		for (Frame &frame : m_Frames) {
+			NRI.DestroyCommandBuffer(*frame.commandBuffer);
+			NRI.DestroyCommandAllocator(*frame.commandAllocator);
+			NRI.DestroyCommandBuffer(*frame.commandBufferCompute);
+			NRI.DestroyCommandAllocator(*frame.commandAllocatorCompute);
+			NRI.DestroyDescriptor(*frame.constantBufferView);
+		}
 
-	for (Frame &frame : m_Frames) {
-		NRI.DestroyCommandBuffer(*frame.commandBuffer);
-		NRI.DestroyCommandAllocator(*frame.commandAllocator);
-		NRI.DestroyCommandBuffer(*frame.commandBufferCompute);
-		NRI.DestroyCommandAllocator(*frame.commandAllocatorCompute);
-		NRI.DestroyDescriptor(*frame.constantBufferView);
+		for (SwapChainTexture &swapChainTexture : m_SwapChainTextures) {
+			NRI.DestroyDescriptor(*swapChainTexture.colorAttachment);
+		}
+
+		NRI.DestroyPipeline(*m_Pipeline);
+		NRI.DestroyPipeline(*m_SkyPipeline);
+		NRI.DestroyPipeline(*m_GridPipeline);
+		NRI.DestroyPipeline(*m_ComputePipeline);
+		NRI.DestroyPipeline(*m_PipelineMultiview);
+		NRI.DestroyPipelineLayout(*m_PipelineLayout);
+		NRI.DestroyPipelineLayout(*m_SkyPipelineLayout);
+		NRI.DestroyPipelineLayout(*m_GridPipelineLayout);
+		NRI.DestroyPipelineLayout(*m_ComputePipelineLayout);
+		NRI.DestroyDescriptor(*m_TextureShaderResource);
+		NRI.DestroyDescriptor(*m_DepthAttachment);
+		NRI.DestroyDescriptor(*m_ColorAttachment);
+		NRI.DestroyDescriptor(*m_Sampler);
+		NRI.DestroyDescriptor(*m_CubeSampler);
+		NRI.DestroyBuffer(*m_ConstantBuffer);
+		NRI.DestroyBuffer(*m_GeometryBuffer);
+		NRI.DestroyTexture(*m_Texture);
+		NRI.DestroyTexture(*m_DepthTexture);
+		NRI.DestroyTexture(*m_ColorTexture);
+		NRI.DestroyDescriptorPool(*m_DescriptorPool);
+		NRI.DestroyFence(*m_FrameFence[0]);
+		NRI.DestroyFence(*m_FrameFence[1]);
+		
+		for (nri::Memory *memory : m_MemoryAllocations) {
+			NRI.FreeMemory(*memory);
+		}
+	}
+	if (NRI.HasSwapChain()) {
+		NRI.DestroySwapChain(*m_SwapChain);
 	}
 
-	for (SwapChainTexture &swapChainTexture : m_SwapChainTextures) {
-		NRI.DestroyDescriptor(*swapChainTexture.colorAttachment);
-	}
-
-	NRI.DestroyPipeline(*m_Pipeline);
-	NRI.DestroyPipeline(*m_SkyPipeline);
-	NRI.DestroyPipeline(*m_GridPipeline);
-	NRI.DestroyPipeline(*m_ComputePipeline);
-	NRI.DestroyPipeline(*m_PipelineMultiview);
-	NRI.DestroyPipelineLayout(*m_PipelineLayout);
-	NRI.DestroyPipelineLayout(*m_SkyPipelineLayout);
-	NRI.DestroyPipelineLayout(*m_GridPipelineLayout);
-	NRI.DestroyPipelineLayout(*m_ComputePipelineLayout);
-	NRI.DestroyDescriptor(*m_TextureShaderResource);
-	NRI.DestroyDescriptor(*m_DepthAttachment);
-	NRI.DestroyDescriptor(*m_ColorAttachment);
-	NRI.DestroyDescriptor(*m_Sampler);
-	NRI.DestroyDescriptor(*m_CubeSampler);
-	NRI.DestroyBuffer(*m_ConstantBuffer);
-	NRI.DestroyBuffer(*m_GeometryBuffer);
-	NRI.DestroyTexture(*m_Texture);
-	NRI.DestroyTexture(*m_DepthTexture);
-	NRI.DestroyTexture(*m_ColorTexture);
-	NRI.DestroyDescriptorPool(*m_DescriptorPool);
-	NRI.DestroyFence(*m_FrameFence[0]);
-	NRI.DestroyFence(*m_FrameFence[1]);
-	NRI.DestroySwapChain(*m_SwapChain);
-	NRI.DestroyStreamer(*m_Streamer);
-
-	for (nri::Memory *memory : m_MemoryAllocations) {
-		NRI.FreeMemory(*memory);
+	if (NRI.HasStreamer()) {
+		NRI.DestroyStreamer(*m_Streamer);
 	}
 
 	DestroyImgui();
@@ -760,6 +768,8 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 
 		NRI.QueueSubmit(*m_GraphicsQueue, queueSubmitDesc);
 	}
+
+	NRI.EndStreamerFrame(*m_Streamer);
 
 	// Present
 	NRI.QueuePresent(*m_SwapChain, *swapChainTexture.releaseSemaphore);
