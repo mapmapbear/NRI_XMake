@@ -3,7 +3,6 @@
 #include "NRIDescs.h"
 #include "assimp/scene.h"
 #include "assimp/vector3.h"
-#include "meshoptimizer.h"
 #include <format>
 
 InstanceMeshPass::InstanceMeshPass(Renderer *renderer) :
@@ -91,14 +90,15 @@ void InstanceMeshPass::AllocGPUMemory() {
 	std::vector<unsigned int> meshlet_vertices(max_meshlets * m_positions.size());
 	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
 
-	m_meshlet_count = meshopt_buildMeshlets(m_meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), m_indices.data(),
+	m_meshlet_count = (uint32_t)meshopt_buildMeshlets(m_meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), m_indices.data(),
 			m_IndexCount, (float *)m_positions.data(), (uint32_t)m_positions.size(), (uint32_t)sizeof(utils::Vertex), max_vertices, max_triangles, cone_weight);
 
 	SPDLOG_INFO("Meshlet count: {}", m_meshlet_count);
 
-	m_clusters.resize(m_meshlets.size());
+	m_clusters.resize(m_meshlet_count);
+	m_bounds.resize(m_meshlet_count);
 
-	for (size_t i = 0; i < m_meshlets.size(); ++i) {
+	for (size_t i = 0; i < m_meshlet_count; ++i) {
 		const meshopt_Meshlet &meshlet = m_meshlets[i];
 
 		meshopt_optimizeMeshlet(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
@@ -108,6 +108,9 @@ void InstanceMeshPass::AllocGPUMemory() {
 		for (size_t j = 0; j < meshlet.triangle_count * 3; ++j) {
 			m_clusters[i][j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
 		}
+
+		m_bounds[i] = meshopt_computeMeshletBounds(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset],
+				meshlet.triangle_count, (float *)m_positions.data(), (uint32_t)m_positions.size(), sizeof(utils::Vertex));
 	}
 
 	for (auto &x : m_clusters) {
@@ -353,7 +356,7 @@ void InstanceMeshPass::BindMemory() {
 		uint32_t offset = 0;
 		for (size_t i = 0; i < m_clusters.size(); i++) {
 			memcpy(&indicesBufferData[offset], m_clusters[i].data(), m_clusters[i].size() * sizeof(uint32_t));
-			offset += m_clusters[i].size();
+			offset += (uint32_t)m_clusters[i].size();
 		}
 
 		nri::BufferUploadDesc bufferData = {};
@@ -726,7 +729,7 @@ void InstanceMeshPass::Render(RenderInfo &info, Camera &camera) {
 		uint32_t offset = 0;
 		for (uint32_t i = 0; i < m_clusters.size(); ++i) {
 			NRI.CmdDrawIndexed(info.cmdBuffer, { (uint32_t)m_clusters[i].size(), 1, offset, 0, i });
-			offset += m_clusters[i].size();
+			offset += (uint32_t)m_clusters[i].size();
 		}
 	}
 }

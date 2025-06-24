@@ -1,7 +1,6 @@
 #include "NRICompatibility.hlsli"
 
-struct InputPS
-{
+struct InputPS {
     float4 position : SV_Position;
     float2 uv : TEXCOORD0;
     float3 posWS : TEXCOORD1;
@@ -16,17 +15,13 @@ struct InputPS
 // NRI_RESOURCE(Texture2D, g_EmissiveTexture, t, 4, 1);
 // NRI_RESOURCE(SamplerState, g_Sampler, s, 0, 1 );
 
-
-struct PushConstants
-{
+struct PushConstants {
     float4 camPos;
     uint texIndex;
 };
-NRI_ROOT_CONSTANTS( PushConstants, g_PushConstants, 1, 0 );
+NRI_ROOT_CONSTANTS(PushConstants, g_PushConstants, 1, 0);
 
-
-float4 main(InputPS input) : SV_Target
-{
+float4 main(InputPS input) : SV_Target {
     Texture2D g_AlbedoTexture = ResourceDescriptorHeap[1];
     Texture2D g_NormalTexture = ResourceDescriptorHeap[2];
     Texture2D g_MRTexture = ResourceDescriptorHeap[3];
@@ -37,13 +32,13 @@ float4 main(InputPS input) : SV_Target
 
     float2 newUV = input.uv;
     newUV.y = 1.0 - newUV.y;
-    float4 color = g_AlbedoTexture.Sample( g_Sampler, newUV);
+    float4 color = g_AlbedoTexture.Sample(g_Sampler, newUV);
     // color += (0.001 * g_NormalTexture.Sample( g_Sampler, newUV));
     // color += (0.001 * g_MRTexture.Sample( g_Sampler, newUV));
     // color += (0.001 * g_AOTexture.Sample( g_Sampler, newUV));
     // color += (0.001 * g_EmissiveTexture.Sample( g_Sampler, newUV)); 
-    
+
     float3 n = normalize(input.normal);
-	float3 v = normalize(g_PushConstants.camPos.xyz - input.posWS);
+    float3 v = normalize(g_PushConstants.camPos.xyz - input.posWS);
     return float4(input.color, 1.0);
 }

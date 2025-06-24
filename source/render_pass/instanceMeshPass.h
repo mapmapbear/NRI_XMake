@@ -78,5 +78,6 @@ private:
 	
 	std::vector<std::vector<uint32_t>> m_clusters;
 	uint32_t cluster_total_size = 0;
+	std::vector<meshopt_Bounds> m_bounds;
 
 };

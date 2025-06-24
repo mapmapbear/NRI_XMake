@@ -1,15 +1,13 @@
 // © 2021 NVIDIA Corporation
 
 #include "NRICompatibility.hlsli"
-NRI_RESOURCE( cbuffer, CommonConstants, b, 0, 0 )
-{
+NRI_RESOURCE(cbuffer, CommonConstants, b, 0, 0) {
     float4x4 modelMat;
-	float4x4 viewMat;
-	float4x4 projectMat;
+    float4x4 viewMat;
+    float4x4 projectMat;
 };
 
-struct inputVS
-{
+struct inputVS {
     float3 in_position : POSITION0;
     float2 in_texcoord : TEXCOORD0;
     float3 in_normal : NORMAL;
@@ -17,8 +15,7 @@ struct inputVS
     uint startInstance : SV_StartInstanceLocation;
 };
 
-struct outputVS 
-{
+struct outputVS {
     float4 position : SV_Position;
     float2 texCoord : TEXCOORD0;
     float3 positionWS : TEXCOORD1;
@@ -65,8 +62,22 @@ float4x4 inverse(float4x4 m) {
     return ret;
 }
 
-outputVS main(inputVS input)
-{
+float hash(uint seed) {
+    seed = (seed ^ 61u) ^ (seed >> 16u);
+    seed *= 9u;
+    seed = seed ^ (seed >> 4u);
+    seed *= 0x27d4eb2du;
+    seed = seed ^ (seed >> 15u);
+    return float(seed) * (1.0 / 4294967295.0);
+}
+
+float3 hsv2rgb(float3 c) {
+    float4 K = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    float3 p = abs(frac(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * lerp(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+outputVS main(inputVS input) {
     outputVS output;
     // float4x4 testMat = {
     //     float4(1.0, 0.0, 0.0, gInstanceData[input.instanceID].modelMat[3].x), 
@@ -76,20 +87,16 @@ outputVS main(inputVS input)
     // };
     float4x4 testMat = modelMat;
     float4x4 vpMat = mul(viewMat, testMat);
-	float4x4 mvpMat = mul(projectMat, vpMat);
-	output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));
+    float4x4 mvpMat = mul(projectMat, vpMat);
+    output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));
     output.texCoord = input.in_texcoord;
     float4x4 normalMatrix = transpose(inverse(modelMat));
     output.normal  = mul(normalMatrix, float4(input.in_normal, 1.0)).xyz;
     output.positionWS = mul(testMat, float4(input.in_position, 1.0)).xyz; 
 
-// 根据 startInstance 的顺序，输出三种不同的颜色
-	if (input.startInstance % 3 == 0)
-		output.color = float3(1.0, 0.0, 0.0); // 红色
-	else if (input.startInstance % 3 == 1)
-		output.color = float3(0.0, 1.0, 0.0); // 绿色
-	else
-		output.color = float3(0.0, 0.0, 1.0); // 蓝色
-
+    float h = hash(input.startInstance);
+    float s = 0.8;
+    float v = 0.95;
+    output.color = hsv2rgb(float3(h, s, v));
     return output;
 }

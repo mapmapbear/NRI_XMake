@@ -32,7 +32,12 @@ public:
 	glm::mat4 globalTransform;
 	std::pair<glm::vec3, glm::vec3> aabb = { glm::vec3(0.0f), glm::vec3(0.0f) };
 	std::pair<glm::vec3, glm::vec3> aabb2 = { glm::vec3(0.0f), glm::vec3(0.0f) };
+	
 	std::vector<meshopt_Meshlet> m_meshlets;
+	std::vector<meshopt_Bounds> m_bounds;
+	std::vector<std::vector<uint32_t>> m_clusters;
+	uint32_t m_cluster_total_size = 0;
+	
 };
 
 class Material {

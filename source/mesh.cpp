@@ -223,6 +223,24 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer, bool 
 				indexCount, (float *)meshdata->m_vertexesData.data(), vertexCount, sizeof(utils::Vertex), max_vertices, max_triangles, cone_weight);
 
 		SPDLOG_INFO("Meshlet count: {}", meshlet_count);
+
+		pSubMesh->m_clusters.resize(meshlet_count);
+		pSubMesh->m_bounds.resize(meshlet_count);
+
+		for (size_t i = 0; i < meshlet_count; ++i) {
+			const meshopt_Meshlet &meshlet = pSubMesh->m_meshlets[i];
+
+			meshopt_optimizeMeshlet(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
+
+			pSubMesh->m_clusters[i].resize(meshlet.triangle_count * 3);
+			pSubMesh->m_cluster_total_size += (uint32_t)pSubMesh->m_clusters[i].size();
+			for (size_t j = 0; j < meshlet.triangle_count * 3; ++j) {
+				pSubMesh->m_clusters[i][j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
+			}
+
+			pSubMesh->m_bounds[i] = meshopt_computeMeshletBounds(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset],
+					meshlet.triangle_count, (float *)meshdata->m_vertexesData.data(), (uint32_t)meshdata->m_vertexesData.size(), sizeof(utils::Vertex));
+		}
 	}
 	meshdata->indices = remappedIndices;
 	meshdata->shadow_indices = shadow_indices;
