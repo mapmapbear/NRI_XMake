@@ -14,6 +14,7 @@ struct inputVS
     float2 in_texcoord : TEXCOORD0;
     float3 in_normal : NORMAL;
     uint instanceID : SV_InstanceID;
+    uint startInstance : SV_StartInstanceLocation;
 };
 
 struct outputVS 
@@ -21,6 +22,7 @@ struct outputVS
     float4 position : SV_Position;
     float2 texCoord : TEXCOORD0;
     float3 positionWS : TEXCOORD1;
+    float3 color :  TEXCOORD2;
     float3 normal : NORMAL;
 };
 
@@ -80,5 +82,14 @@ outputVS main(inputVS input)
     float4x4 normalMatrix = transpose(inverse(modelMat));
     output.normal  = mul(normalMatrix, float4(input.in_normal, 1.0)).xyz;
     output.positionWS = mul(testMat, float4(input.in_position, 1.0)).xyz; 
+
+// 根据 startInstance 的顺序，输出三种不同的颜色
+	if (input.startInstance % 3 == 0)
+		output.color = float3(1.0, 0.0, 0.0); // 红色
+	else if (input.startInstance % 3 == 1)
+		output.color = float3(0.0, 1.0, 0.0); // 绿色
+	else
+		output.color = float3(0.0, 0.0, 1.0); // 蓝色
+
     return output;
 }

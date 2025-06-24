@@ -8,8 +8,8 @@
 #include "buffer.h"
 #include "glm/gtc/type_ptr.hpp"
 #include "renderer.h"
+#include "spdlog/spdlog.h"
 #include "texture.h"
-#include <meshoptimizer.h>
 #include <stdint.h>
 #include <string.h>
 #include <assimp/Importer.hpp>
@@ -19,7 +19,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include "spdlog/spdlog.h"
 
 void TraverseNodes(const aiScene *scene, const aiNode *node, const glm::mat4 &parentTransform, std::map<uint32_t, glm::mat4> &results) {
 	aiMatrix4x4 nodeTransform = node->mTransformation;
@@ -62,7 +61,7 @@ void TraverseNodesWithMesh(const aiScene *scene, const aiNode *node, const glm::
 	}
 }
 
-void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
+void Mesh::LoadFromUSD(std::string &path, Renderer *renderer, bool meshlet) {
 	struct Vertex {
 		glm::vec3 Position;
 		glm::vec2 TexCoord;
@@ -79,7 +78,7 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 	TraverseNodesWithMesh(pScene, pScene->mRootNode, identity, meshTransforms);
 
 	for (uint32 i = 0; i < pScene->mNumMeshes; ++i) {
-		m_Meshes.push_back(LoadMesh(pScene->mMeshes[i], renderer));
+		m_Meshes.push_back(LoadMesh(pScene->mMeshes[i], renderer, meshlet));
 	}
 
 	m_GPUMesh = LoadGPUMesh(pScene, (uint32_t)pScene->mNumMeshes, renderer);
@@ -164,7 +163,7 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer) {
 	executor.run(taskflow).wait();
 }
 
-std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
+std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer, bool meshlet) {
 	std::shared_ptr<utils::MeshData> meshdata = std::make_shared<utils::MeshData>();
 	meshdata->m_vertexesData.resize(pMesh->mNumVertices);
 	meshdata->vertices.resize(pMesh->mNumVertices);
@@ -208,13 +207,29 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 
 	std::vector<uint32_t> shadow_indices(indexCount);
 	meshopt_generateShadowIndexBuffer(shadow_indices.data(), optimizedIndices.data(), indexCount, remappedVertices.data(), newVertexCount, sizeof(glm::vec3), sizeof(utils::Vertex));
+	std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
 
+	if (meshlet) {
+		const size_t max_vertices = 64;
+		const size_t max_triangles = 124;
+
+		float cone_weight = 0.25; // 0.25 is good for occlusion culling
+		size_t max_meshlets = meshopt_buildMeshletsBound(indexCount, max_vertices, max_triangles);
+		pSubMesh->m_meshlets.resize(max_meshlets);
+		std::vector<unsigned int> meshlet_vertices(max_meshlets * vertexCount);
+		std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+
+		size_t meshlet_count = meshopt_buildMeshlets(pSubMesh->m_meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), meshdata->indices.data(),
+				indexCount, (float *)meshdata->m_vertexesData.data(), vertexCount, sizeof(utils::Vertex), max_vertices, max_triangles, cone_weight);
+
+		SPDLOG_INFO("Meshlet count: {}", meshlet_count);
+	}
 	meshdata->indices = remappedIndices;
 	meshdata->shadow_indices = shadow_indices;
 	meshdata->m_vertexesData = remappedVertices;
 
-	std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
 	{
+		pSubMesh->name = pMesh->mName.C_Str();
 		pSubMesh->aabb = std::make_pair(glm::make_vec3((float *)&aabb.mMin.x), glm::make_vec3((float *)&aabb.mMax));
 		// 计算center+extend格式的包围盒
 		glm::vec3 min = glm::make_vec3((float *)&aabb.mMin.x);
@@ -243,7 +258,6 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer) {
 		renderer->uploadShadowIndexBufferMap.insert({ pSubMesh->m_vertexbuffer, meshdata });
 	}
 	pSubMesh->m_materialID = pMesh->mMaterialIndex;
-
 	return pSubMesh;
 }
 

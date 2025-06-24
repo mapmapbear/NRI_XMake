@@ -5,6 +5,7 @@ struct InputPS
     float4 position : SV_Position;
     float2 uv : TEXCOORD0;
     float3 posWS : TEXCOORD1;
+    float3 color : TEXCOORD2;
     float3 normal : NORMAL;
 };
 
@@ -44,5 +45,5 @@ float4 main(InputPS input) : SV_Target
     
     float3 n = normalize(input.normal);
 	float3 v = normalize(g_PushConstants.camPos.xyz - input.posWS);
-    return color;
+    return float4(input.color, 1.0);
 }

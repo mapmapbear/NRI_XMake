@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <taskflow/taskflow.hpp>
+#include <meshoptimizer.h>
 
 class Buffer;
 class Texture;
@@ -23,7 +24,7 @@ public:
 	int m_materialID = -1;
 	int m_indexCount = 0;
 	int m_vertexCount = 0;
-
+	std::string name;
 	std::shared_ptr<Buffer> m_vertexbuffer;
 	std::shared_ptr<Buffer> m_indexbuffer;
 	uint32_t vertexOffset = 0;
@@ -31,6 +32,7 @@ public:
 	glm::mat4 globalTransform;
 	std::pair<glm::vec3, glm::vec3> aabb = { glm::vec3(0.0f), glm::vec3(0.0f) };
 	std::pair<glm::vec3, glm::vec3> aabb2 = { glm::vec3(0.0f), glm::vec3(0.0f) };
+	std::vector<meshopt_Meshlet> m_meshlets;
 };
 
 class Material {
@@ -43,7 +45,7 @@ public:
 
 class Mesh {
 public:
-	void LoadFromUSD(std::string &path, Renderer *renderer);
+	void LoadFromUSD(std::string &path, Renderer *renderer, bool meshlet = false);
 	int GetMeshCount() const { return (int)m_Meshes.size(); }
 	SubMesh *GetMesh(const int index) const { return m_Meshes[index].get(); }
 	const Material &GetMaterial(int materialId) { return m_Materials[materialId]; }
@@ -74,7 +76,7 @@ public:
 
 	// private:
 public:
-	std::unique_ptr<SubMesh> LoadMesh(aiMesh *pMesh, Renderer *renderer);
+	std::unique_ptr<SubMesh> LoadMesh(aiMesh *pMesh, Renderer *renderer, bool meshlet = false);
 	std::unique_ptr<SubMesh> LoadGPUMesh(const aiScene* scene, uint32_t numMeshes, Renderer* renderer);
 
 	std::vector<std::unique_ptr<SubMesh>> m_Meshes;

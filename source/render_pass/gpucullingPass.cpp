@@ -449,7 +449,7 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 		};
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(PushConstants));
 		NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_CullingDescriptorConstantBufferSet, nullptr);
-		NRI.CmdDispatch(info.cmdBuffer, { (uint32_t)floor(m_renderer->m_OpaqueRenderNodes.size() / 8), 1, 1 });
+		NRI.CmdDispatch(info.cmdBuffer, { (uint32_t)floor(m_renderer->m_OpaqueRenderNodes.size() / 8) + 1, 1, 1 });
 	}
 }
 

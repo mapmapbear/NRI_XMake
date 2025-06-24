@@ -1,5 +1,6 @@
 #pragma once
 #include "commonRenderPass.h"
+#include "meshoptimizer.h"
 
 // struct Vertex {
 // 	vec3 position;
@@ -27,8 +28,8 @@ public:
 private:
 	nri::PipelineLayout *m_PipelineLayout = nullptr;
 	nri::Pipeline *m_Pipeline = nullptr;
-// ------------------------------------
-//             Material Data
+	// ------------------------------------
+	//             Material Data
 	nri::Texture *m_texture_albedo = nullptr;
 	nri::Texture *m_texture_normal = nullptr;
 	nri::Texture *m_texture_mr = nullptr;
@@ -47,10 +48,15 @@ private:
 	nri::Descriptor *m_texture_ao_view = nullptr;
 	nri::Descriptor *m_texture_emissive_view = nullptr;
 
-// --------------------------------------------
+	// --------------------------------------------
 	nri::Texture *m_CubemapTexture = nullptr;
 	nri::Buffer *m_ConstantBuffer = nullptr;
 	nri::Buffer *m_GeometryBuffer = nullptr;
+
+	// Cluster Buffer
+	nri::Buffer *m_IndicesBuffer = nullptr;
+	nri::Buffer *m_VertexBuffer = nullptr;
+
 	nri::Buffer *m_MatrixStorageBuffer = nullptr;
 
 	nri::Descriptor *m_CubemapTextureShaderResource = nullptr;
@@ -66,4 +72,11 @@ private:
 
 	std::vector<utils::Vertex> m_positions;
 	std::vector<uint32_t> m_indices;
+
+	std::vector<meshopt_Meshlet> m_meshlets;
+	uint32_t m_meshlet_count = 0;
+	
+	std::vector<std::vector<uint32_t>> m_clusters;
+	uint32_t cluster_total_size = 0;
+
 };

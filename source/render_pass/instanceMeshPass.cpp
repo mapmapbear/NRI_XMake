@@ -3,6 +3,7 @@
 #include "NRIDescs.h"
 #include "assimp/scene.h"
 #include "assimp/vector3.h"
+#include "meshoptimizer.h"
 #include <format>
 
 InstanceMeshPass::InstanceMeshPass(Renderer *renderer) :
@@ -17,8 +18,8 @@ InstanceMeshPass::InstanceMeshPass(Renderer *renderer) :
 void InstanceMeshPass::AllocGPUMemory() {
 	auto NRI = *m_NRI;
 	const nri::DeviceDesc &deviceDesc = NRI.GetDeviceDesc(*m_renderer->GetRenderDevice());
-
-	const aiScene *scene = aiImportFile("data/DamagedHelmet/glTF/DamagedHelmet.gltf",
+	std::string meshFile = utils::GetFullPath("GLTF_Bunny/bunny.gltf", utils::DataFolder::ROOT);
+	const aiScene *scene = aiImportFile(meshFile.c_str(),
 			aiProcess_Triangulate | aiProcess_MakeLeftHanded);
 	if (!scene || !scene->HasMeshes()) {
 		printf("Unable to load data/rubber_duck/scene.gltf\n");
@@ -61,7 +62,10 @@ void InstanceMeshPass::AllocGPUMemory() {
 
 	for (unsigned int i = 0; i != mesh->mNumVertices; i++) {
 		const aiVector3D v = mesh->mVertices[i];
-		const aiVector3D uv0 = mesh->mTextureCoords[0][i];
+		glm::vec2 uv0 = { 0.0, 0.0 };
+		if (mesh->HasTextureCoords(0)) {
+			uv0 = *reinterpret_cast<glm::vec2 *>(&mesh->mTextureCoords[0][i]);
+		}
 		const aiVector3D n = mesh->mNormals[i];
 		// const aiVector3D t = mesh->mTangents[i];
 		// const aiVector3D bt = mesh->mBitangents[i];
@@ -77,6 +81,38 @@ void InstanceMeshPass::AllocGPUMemory() {
 	const uint64_t indexDataSize = helper::GetByteSizeOf(m_indices);
 	const uint64_t indexDataAlignedSize = helper::Align(indexDataSize, 32);
 	const uint64_t vertexDataSize = helper::GetByteSizeOf(m_positions);
+
+	const uint32_t max_vertices = 64;
+	const uint32_t max_triangles = 124;
+
+	float cone_weight = 0.25; // 0.25 is good for occlusion culling
+	size_t max_meshlets = meshopt_buildMeshletsBound(m_IndexCount, max_vertices, max_triangles);
+	m_meshlets.resize(max_meshlets);
+	std::vector<unsigned int> meshlet_vertices(max_meshlets * m_positions.size());
+	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+
+	m_meshlet_count = meshopt_buildMeshlets(m_meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), m_indices.data(),
+			m_IndexCount, (float *)m_positions.data(), (uint32_t)m_positions.size(), (uint32_t)sizeof(utils::Vertex), max_vertices, max_triangles, cone_weight);
+
+	SPDLOG_INFO("Meshlet count: {}", m_meshlet_count);
+
+	m_clusters.resize(m_meshlets.size());
+
+	for (size_t i = 0; i < m_meshlets.size(); ++i) {
+		const meshopt_Meshlet &meshlet = m_meshlets[i];
+
+		meshopt_optimizeMeshlet(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
+
+		// note: for now we discard meshlet-local indices; they are valuable for shader code so in the future we should bring them back
+		m_clusters[i].resize(meshlet.triangle_count * 3);
+		for (size_t j = 0; j < meshlet.triangle_count * 3; ++j) {
+			m_clusters[i][j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
+		}
+	}
+
+	for (auto &x : m_clusters) {
+		cluster_total_size += (uint32_t)x.size();
+	}
 
 	{
 		nri::TextureDesc textureDesc = {};
@@ -165,6 +201,24 @@ void InstanceMeshPass::AllocGPUMemory() {
 				NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_GeometryBuffer));
 		m_GeometryOffset = indexDataAlignedSize;
 	}
+
+	{
+		nri::BufferDesc bufferDesc = {};
+		bufferDesc.size = cluster_total_size * sizeof(uint32_t);
+		bufferDesc.usage = nri::BufferUsageBits::VERTEX_BUFFER |
+				nri::BufferUsageBits::INDEX_BUFFER;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_IndicesBuffer));
+	}
+
+	{
+		nri::BufferDesc bufferDesc = {};
+		bufferDesc.size = helper::GetByteSizeOf(m_positions);
+		bufferDesc.usage = nri::BufferUsageBits::VERTEX_BUFFER |
+				nri::BufferUsageBits::INDEX_BUFFER;
+		NRI_ABORT_ON_FAILURE(
+				NRI.CreateBuffer(*m_renderer->GetRenderDevice(), bufferDesc, m_VertexBuffer));
+	}
 }
 
 void InstanceMeshPass::BindMemory() {
@@ -188,7 +242,7 @@ void InstanceMeshPass::BindMemory() {
 			m_MemoryAllocations.data()));
 
 	std::vector<nri::Buffer *> bufferArray = {
-		m_GeometryBuffer
+		m_GeometryBuffer, m_IndicesBuffer, m_VertexBuffer
 	};
 	std::vector<nri::Texture *> textureArray = { m_texture_albedo, m_texture_normal, m_texture_mr, m_texture_ao, m_texture_emissive }; //, m_CubemapTexture };
 	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
@@ -201,6 +255,10 @@ void InstanceMeshPass::BindMemory() {
 			1 + NRI.CalculateAllocationNumber(*m_renderer->GetRenderDevice(), resourceGroupDesc), nullptr);
 	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(
 			*m_renderer->GetRenderDevice(), resourceGroupDesc, m_MemoryAllocations.data() + 1));
+
+	NRI.SetDebugName(m_GeometryBuffer, "Geometry1 Buffer");
+	NRI.SetDebugName(m_IndicesBuffer, "Indices1 Buffer");
+	NRI.SetDebugName(m_VertexBuffer, "Vertex1 Buffer");
 
 	// Descriptors
 	{ // Read-only texture
@@ -288,13 +346,35 @@ void InstanceMeshPass::BindMemory() {
 		memcpy(&geometryBufferData[indexDataAlignedSize], m_positions.data(),
 				vertexDataSize);
 
+		std::vector<uint8_t> vertexBufferData(vertexDataSize);
+		memcpy(&vertexBufferData[0], m_positions.data(), vertexDataSize);
+
+		std::vector<uint32_t> indicesBufferData(cluster_total_size);
+		uint32_t offset = 0;
+		for (size_t i = 0; i < m_clusters.size(); i++) {
+			memcpy(&indicesBufferData[offset], m_clusters[i].data(), m_clusters[i].size() * sizeof(uint32_t));
+			offset += m_clusters[i].size();
+		}
+
 		nri::BufferUploadDesc bufferData = {};
 		bufferData.buffer = m_GeometryBuffer;
 		bufferData.data = &geometryBufferData[0];
-		// bufferData.dataSize = geometryBufferData.size();
 		bufferData.after = { nri::AccessBits::INDEX_BUFFER |
 			nri::AccessBits::VERTEX_BUFFER };
-		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData };
+
+		nri::BufferUploadDesc bufferData1 = {};
+		bufferData1.buffer = m_VertexBuffer;
+		bufferData1.data = &vertexBufferData[0];
+		bufferData1.after = { nri::AccessBits::INDEX_BUFFER |
+			nri::AccessBits::VERTEX_BUFFER };
+
+		nri::BufferUploadDesc bufferData2 = {};
+		bufferData2.buffer = m_IndicesBuffer;
+		bufferData2.data = &indicesBufferData[0];
+		bufferData2.after = { nri::AccessBits::INDEX_BUFFER |
+			nri::AccessBits::VERTEX_BUFFER };
+
+		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData, bufferData1, bufferData2 };
 
 		std::vector<nri::TextureUploadDesc> texUploadDescArray = {};
 		// std::array<nri::TextureSubresourceUploadDesc, 16> subresources;
@@ -506,7 +586,11 @@ void InstanceMeshPass::BuildPipeline() {
 
 		nri::DepthAttachmentDesc depthAttachmentDesc = {};
 		depthAttachmentDesc.write = true;
+#ifdef RZ
 		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
+#else
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::LESS_EQUAL;
+#endif
 		depthAttachmentDesc.boundsTest = false;
 
 		nri::OutputMergerDesc outputMergerDesc = {};
@@ -578,7 +662,7 @@ void InstanceMeshPass::Render(RenderInfo &info, Camera &camera) {
 			glm::vec3(1.0f, 0.f, 0.f));
 	const glm::mat4 m2 = glm::rotate(glm::mat4(1.0f), (float)glfwGetTime(),
 			glm::vec3(0.0f, 1.f, 0.f));
-	glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 0.0f)) * m2 * m1;
+	glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 0.0f)) * m2; // * m1;
 	const glm::mat4 p = camera.state.mViewToClip;
 	const glm::vec3 cameraPos = camera.state.globalPosition;
 	glm::vec3 target = cameraPos + glm::vec3(camera.state.mWorldToView[0][2], camera.state.mWorldToView[1][2], camera.state.mWorldToView[2][2]);
@@ -596,25 +680,7 @@ void InstanceMeshPass::Render(RenderInfo &info, Camera &camera) {
 
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);
-		struct {
-			vec4 camPos;
-			uint32_t index;
-		} matBlock;
-		matBlock.camPos = vec4(cameraPos, 1.0);
-		matBlock.index = m_renderer->testIndex;
-		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &matBlock, sizeof(glm::vec4) + sizeof(uint32_t));
-		NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer, 0,
-				nri::IndexType::UINT32);
 
-		nri::VertexBufferDesc vertexBufferDesc = {};
-		vertexBufferDesc.buffer = m_GeometryBuffer;
-		vertexBufferDesc.offset = m_GeometryOffset;
-		vertexBufferDesc.stride = sizeof(utils::Vertex);
-		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
-		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
-				*m_ConstantBufferDescriptorSet, nullptr);
-		NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_TextureDescriptorSet,
-				nullptr);
 		{
 			const nri::Viewport viewport = { 0.0f, 0.0f, (float)m_renderer->m_OutputResolution.first,
 				(float)m_renderer->m_OutputResolution.second, 0.0f, 1.0f };
@@ -623,7 +689,44 @@ void InstanceMeshPass::Render(RenderInfo &info, Camera &camera) {
 			nri::Rect scissor = { 0, 0, (uint16_t)m_renderer->m_OutputResolution.first, (uint16_t)m_renderer->m_OutputResolution.second };
 			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
 		}
-		uint32_t instanceCount = 1;
-		NRI.CmdDrawIndexed(info.cmdBuffer, { m_IndexCount, instanceCount, 0, 0, 0 });
+
+		struct {
+			vec4 camPos;
+			uint32_t index;
+		} matBlock;
+		matBlock.camPos = vec4(cameraPos, 1.0);
+		matBlock.index = m_renderer->testIndex;
+		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &matBlock, sizeof(glm::vec4) + sizeof(uint32_t));
+
+		// NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_GeometryBuffer, 0,
+		// 		nri::IndexType::UINT32);
+		// nri::VertexBufferDesc vertexBufferDesc = {};
+		// vertexBufferDesc.buffer = m_GeometryBuffer;
+		// vertexBufferDesc.offset = m_GeometryOffset;
+		// vertexBufferDesc.stride = sizeof(utils::Vertex);
+		// NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+		// NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
+		// 		*m_ConstantBufferDescriptorSet, nullptr);
+		// NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_TextureDescriptorSet,
+		// 		nullptr);
+		// uint32_t instanceCount = 1;
+		// for (uint32_t i = 0; i < m_meshlet_count; i++) {
+		// 	NRI.CmdDrawIndexed(info.cmdBuffer, { m_meshlets[i].vertex_count, instanceCount, m_meshlets[i].vertex_offset, static_cast<int32_t>(m_meshlets[i].triangle_offset), 0 });
+		// }
+		// NRI.CmdDrawIndexed(info.cmdBuffer, { m_IndexCount, instanceCount, 0, 0, 0 });
+
+		NRI.CmdSetIndexBuffer(info.cmdBuffer, *m_IndicesBuffer, 0, nri::IndexType::UINT32);
+		nri::VertexBufferDesc vertexBufferDesc = {};
+		vertexBufferDesc.buffer = m_VertexBuffer;
+		vertexBufferDesc.offset = 0;
+		vertexBufferDesc.stride = sizeof(utils::Vertex);
+		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0, *m_ConstantBufferDescriptorSet, nullptr);
+		NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_TextureDescriptorSet, nullptr);
+		uint32_t offset = 0;
+		for (uint32_t i = 0; i < m_clusters.size(); ++i) {
+			NRI.CmdDrawIndexed(info.cmdBuffer, { (uint32_t)m_clusters[i].size(), 1, offset, 0, i });
+			offset += m_clusters[i].size();
+		}
 	}
 }

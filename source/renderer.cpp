@@ -332,9 +332,9 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	std::string meshFile = {};
 	// meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
-	// meshFile = utils::GetFullPath("cubes.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("cubes.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
-	meshFile = utils::GetFullPath("GLTF_OW/OW/ow.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_OW/ow.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S1.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this);
 	debugdrawPass = std::make_shared<DebugDrawPass>(this);
@@ -360,12 +360,9 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 #endif
 		node.material = &mesh->GetMaterial(node.mesh->GetMaterialID());
-		try
-		{
+		try {
 			node.globalTransform = mesh->results.at(i);
-		}
-		catch(const std::out_of_range& ex)
-		{
+		} catch (const std::exception &e) {
 			node.globalTransform = glm::mat4(1.0f);
 		}
 
@@ -379,22 +376,21 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		if (node.material->IsTransparent) {
 			m_TransparentRenderNodes.push_back(node);
 		} else {
+			if (node.mesh->name == "Submesh_2.E0C8326857CE1E67.003") {
+				SPDLOG_ERROR("Mesh ID: {}", m_OpaqueRenderNodes.size());
+			}
 			m_OpaqueRenderNodes.push_back(node);
 		}
 	}
 	for (int i = 0; i < m_OpaqueRenderNodes.size(); ++i) {
 		RenderNode &node = m_OpaqueRenderNodes[i];
 		glm::mat4 transMat = node.globalTransform;
-		// glm::vec4 center = glm::vec4(node.mesh->aabb2.first, 1.0);
-		// center = transMat * center;
-		// glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
-		// extent = transMat * extent;
 
 		glm::vec3 min = glm::vec4(node.mesh->aabb.first, 1.0);
 		glm::vec3 max = glm::vec4(node.mesh->aabb.second, 1.0);
 		min = transMat * glm::vec4(min, 1.0);
 		max = transMat * glm::vec4(max, 1.0);
-	
+
 		glm::vec3 center = (min + max) * 0.5f;
 		glm::vec3 extent = (max - min) * 0.5f;
 
@@ -413,9 +409,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	debugdrawPass->DrawFrustum(glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
 
 	m_SceneAABB = std::make_pair(sceneMin, sceneMax);
-
-	RandomLights();
 	UploadSceneData();
+	RandomLights();
 	skyPass = std::make_shared<SkyRenderPass>(this);
 	gridPass = std::make_shared<GridRenderPass>(this);
 	meshPass = std::make_shared<InstanceMeshPass>(this);
@@ -424,6 +419,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	debugdrawPass->GenerateBoxBuffer();
 	boxCullingPass = std::make_shared<BoxCullingPass>(this);
 	gpuCullingPass = std::make_shared<GPUCullingPass>(this);
+
 }
 
 glm::mat4 Renderer::computeLightSpaceMatrix(float yaw, float pitch, float roll) {
@@ -575,7 +571,7 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 		gridPass->Render(info, camera);
 		meshPass->Render(info, camera);
 		simplePass->SetTestIndex(testIndex);
-		simplePass->Render(info, camera);
+		// simplePass->Render(info, camera);
 		if (m_config.DebugBoxState) {
 			debugdrawPass->Render(info, camera);
 		}

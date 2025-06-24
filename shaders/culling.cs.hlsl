@@ -127,7 +127,7 @@ bool HizCull(uint objectIndex) {
     VPMat = g_PushConstants.viewMat;
     float2 minNDC = float2(2.0, 2.0);
     float2 maxNDC = float2(-2.0, -2.0);
-    float minDepth = 0.0;
+    float minDepth = 1.0;
     for (int i = 0; i < 8; ++i) {
         float4 clipPos = mul(VPMat, float4(corners[i], 1.0));
 
@@ -141,10 +141,10 @@ bool HizCull(uint objectIndex) {
 
         minNDC = min(minNDC, uv);
         maxNDC = max(maxNDC, uv);
-        minDepth = max(minDepth, ndc.z);
+        minDepth = min(minDepth, ndc.z);
     }
 
-    if (maxNDC.x < 0.0 || maxNDC.y < 0.0 || minNDC.x > 1.0 || minNDC.y > 1.0) {
+    if (minNDC.x < 0.0 || maxNDC.x < 0.0 || minNDC.y > 1.0 || maxNDC.y > 1.0) {
         return false;
     }
 
