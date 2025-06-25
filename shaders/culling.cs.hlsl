@@ -171,12 +171,20 @@ bool HizCull(uint objectIndex) {
     return minDepth < HizDepth;
 }
 
+groupshared uint s_DrawCount;
+
 [numthreads(8, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID) {
     uint objectIndex = DTid.x;
     if (objectIndex >= g_PushConstants.totalObjectCount) {
         return;
     }
+
+    if (DTid.x == 0) {
+        s_DrawCount = 0;
+    }
+
+    GroupMemoryBarrierWithGroupSync();
 
     StructuredBuffer<DrawData> allObjects = ResourceDescriptorHeap[1016];
     RWStructuredBuffer<DrawData> visibleObjects = ResourceDescriptorHeap[1017];
@@ -189,10 +197,15 @@ void main(uint3 DTid : SV_DispatchThreadID) {
     bool visible = HizCull(objectIndex);
     if (visible) {
         uint writeIndex = 0;
-        InterlockedAdd(visibleObjectCounter[0], 1, writeIndex);
+        InterlockedAdd(s_DrawCount, 1, writeIndex);
         if (writeIndex < g_PushConstants.totalObjectCount) {
             // 暂时规定最大数量为最坏剔除结果
             visibleObjects[writeIndex] = allObjects[objectIndex];
         }
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+    if (DTid.x == 0) {
+        visibleObjectCounter[0] = s_DrawCount;
     }
 }

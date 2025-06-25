@@ -84,8 +84,15 @@ float4x4 inverse(float4x4 m) {
 
 outputVS main(inputVS input) {
     outputVS output;
+    float4x4 testMat = 1.0;
     StructuredBuffer<float4x4> worldMatBuffer = ResourceDescriptorHeap[1006];
-    float4x4 testMat = worldMatBuffer[input.startInstance];
+    if(g_PushConstants.testVec.y > 0.02)
+    {
+        testMat = g_PushConstants.modelMat;
+    }
+    else {
+        testMat = worldMatBuffer[input.startInstance];
+    }
     float4x4 vpMat = mul(viewMat, testMat);
     float4x4 mvpMat = mul(projectMat, vpMat);
 #ifdef DEPTH_ONLY

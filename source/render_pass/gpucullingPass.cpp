@@ -205,13 +205,14 @@ void GPUCullingPass::AllocGPUMemory() {
 
 		std::vector<std::vector<float>> data(textureDesc.mipNum);
 		std::vector<nri::TextureSubresourceUploadDesc> subresources;
+		
 		for (uint32_t i = 0; i < textureDesc.mipNum; i++) {
 			nri::TextureSubresourceUploadDesc subresource = {};
 			uint32_t width = textureDesc.width >> i;
 			uint32_t height = textureDesc.height >> i;
 			subresource.rowPitch = width * sizeof(float);
 			subresource.slicePitch = subresource.rowPitch * height;
-			data[i].resize(width * height);
+			data[i].resize(width * height, 1.0f);
 			subresource.slices = data[i].data();
 			subresource.sliceNum = 1;
 			subresources.push_back(subresource);

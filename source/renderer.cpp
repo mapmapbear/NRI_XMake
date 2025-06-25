@@ -419,7 +419,6 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	debugdrawPass->GenerateBoxBuffer();
 	boxCullingPass = std::make_shared<BoxCullingPass>(this);
 	gpuCullingPass = std::make_shared<GPUCullingPass>(this);
-
 }
 
 glm::mat4 Renderer::computeLightSpaceMatrix(float yaw, float pitch, float roll) {
@@ -546,15 +545,14 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 		GetNRI().CmdBarrier(info.cmdBuffer, barrierGroupDesc);
 	}
 
+	gpuCullingPass->Render(info, camera);
+
 	GetNRI().CmdBeginRendering(info.cmdBuffer, depthAttachmentsDesc);
 	{
 		RenderInfo depthInfo = { .desc = depthAttachmentsDesc, .cmdBuffer = info.cmdBuffer };
 		simplePass->RenderDepth(depthInfo, camera);
 	}
 	GetNRI().CmdEndRendering(info.cmdBuffer);
-
-	gpuCullingPass->RenderHiZ(info);
-	gpuCullingPass->Render(info, camera);
 
 	nri::AttachmentsDesc shadowAttachmentDesc = {};
 	shadowAttachmentDesc.depthStencil = m_ShadowMap->GetView();
@@ -571,13 +569,15 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 		gridPass->Render(info, camera);
 		meshPass->Render(info, camera);
 		simplePass->SetTestIndex(testIndex);
-		// simplePass->Render(info, camera);
+		simplePass->Render(info, camera);
 		if (m_config.DebugBoxState) {
 			debugdrawPass->Render(info, camera);
 		}
 		// boxCullingPass->Render(info, camera);
 	}
 	GetNRI().CmdEndRendering(info.cmdBuffer);
+
+	gpuCullingPass->RenderHiZ(info);
 
 	{
 		nri::BufferBarrierDesc bufferBarrierDescs = {};
