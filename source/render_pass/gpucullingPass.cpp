@@ -439,7 +439,7 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 		glm::vec4 frustumB = normalizePlane(projMat[3] - projMat[1]);
 
 		PushConstants block = {
-			.viewMat = p * camera.statePrev.mWorldToView, // * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f)),
+			.viewMat = p * camera.state.mWorldToView, // * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f)),
 			.cameraArgs = glm::vec4(camera.m_desc.nearZ, camera.m_desc.farZ, camera.m_desc.farZ + 20, 0.0f),
 			.frustum = { glm::vec4(frustumL.x, frustumL.y, frustumL.z, frustumL.w),
 					glm::vec4(frustumR.x, frustumR.y, frustumR.z, frustumR.w),

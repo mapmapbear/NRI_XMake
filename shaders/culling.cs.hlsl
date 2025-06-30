@@ -109,21 +109,18 @@ float Min4(float a, float b, float c, float d) {
     return min(min(a, b), min(c, d));
 }
 
-uint ComputeHZBMip(int4 rectPixels, int texelCoverage)
-{
-	int2 rectSize = rectPixels.zw - rectPixels.xy;
-	int mipOffset = (int)log2((float)texelCoverage) - 1;
-	int2 mipLevelXY = firstbithigh(rectSize);
-	int mip = max(max(mipLevelXY.x, mipLevelXY.y) - mipOffset, 0);
-	if(any((rectPixels.zw >> mip) - (rectPixels.xy >> mip) >= texelCoverage))
-	{
-		++mip;
-	}
-	return mip;
+uint ComputeHZBMip(int4 rectPixels, int texelCoverage) {
+    int2 rectSize = rectPixels.zw - rectPixels.xy;
+    int mipOffset = (int)log2((float)texelCoverage) - 1;
+    int2 mipLevelXY = firstbithigh(rectSize);
+    int mip = max(max(mipLevelXY.x, mipLevelXY.y) - mipOffset, 0);
+    if(any((rectPixels.zw >> mip) - (rectPixels.xy >> mip) >= texelCoverage)) {
+        ++mip;
+    }
+    return mip;
 }
 
-bool HZBCull(uint objectIndex)
-{
+bool HZBCull(uint objectIndex) {
     StructuredBuffer<CullData> sphereCullData = ResourceDescriptorHeap[1015];
     Texture2D<float> HizBuffer = ResourceDescriptorHeap[1021];
     SamplerState HizSampler = ResourceDescriptorHeap[5];
@@ -145,7 +142,7 @@ bool HZBCull(uint objectIndex)
     VPMat = g_PushConstants.viewMat;
     float3 minNDC = float3(2.0, 2.0, 2.0);
     float3 maxNDC = float3(-2.0, -2.0, -2.0);
-    
+
     for (int i = 0; i < 8; ++i) {
         float4 clipPos = mul(VPMat, float4(corners[i], 1.0));
         float3 ndc = clipPos.xyz / clipPos.w;
@@ -163,9 +160,8 @@ bool HZBCull(uint objectIndex)
     float2 texelSize = 1.0f / screenSize * (1u << mip);
     float maxDepth = minNDC.z;
     float depth = 0;
-    
-    if(hzbTexelCoverage == 4)
-    {
+
+    if(hzbTexelCoverage == 4) {
         float4 xCoords = (min(rectPixels.x + float4(0, 1, 2, 3), rectPixels.z) + 0.5f) * texelSize.x;
         float4 yCoords = (min(rectPixels.y + float4(0, 1, 2, 3), rectPixels.w) + 0.5f) * texelSize.y;
 
@@ -190,12 +186,11 @@ bool HZBCull(uint objectIndex)
         float depth33 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.w, yCoords.w), mip);
 
         depth =
-            Min4(
-                Min4(depth00, depth10, depth20, depth30),
-                Min4(depth01, depth11, depth21, depth31),
-                Min4(depth02, depth12, depth22, depth32),
-                Min4(depth03, depth13, depth23, depth33)
-            );
+        Min4(
+            Min4(depth00, depth10, depth20, depth30),
+            Min4(depth01, depth11, depth21, depth31),
+            Min4(depth02, depth12, depth22, depth32),
+            Min4(depth03, depth13, depth23, depth33));
     }
     bool isOccluded = depth < maxDepth;
     return !isOccluded;
@@ -267,7 +262,6 @@ bool HizCull(uint objectIndex) {
     return minDepth <= HizDepth;
 }
 
-
 bool HZBCull2(uint objectIndex) {
     StructuredBuffer<CullData> sphereCullData = ResourceDescriptorHeap[1015];
     Texture2D<float> HizBuffer = ResourceDescriptorHeap[1021];
@@ -291,7 +285,7 @@ bool HZBCull2(uint objectIndex) {
     float3 minXY = float3(2.0, 2.0, 2.0);
     float3 maxXY = float3(-2.0, -2.0, -2.0);
     float minDepth = 1.0;
-    
+
     for (int i = 0; i < 8; ++i) {
         float4 clipPos = mul(VPMat, float4(corners[i], 1.0));
         float3 ndc = clipPos.xyz / clipPos.w;
@@ -313,9 +307,9 @@ bool HZBCull2(uint objectIndex) {
     float2 a = floor(boxUVs.xy*scale);
     float2 b = ceil(boxUVs.zw*scale);
     float2 dims = b - a;
-    
+
     if (dims.x <= 2 && dims.y <= 2)
-            mip = level_lower;
+    mip = level_lower;
 
     float4 depth;
     depth.x = HizBuffer.SampleLevel(HizSampler, boxUVs.xy, mip).r;
@@ -328,8 +322,7 @@ bool HZBCull2(uint objectIndex) {
     return minDepth <= HiZDepth;
 }
 
-
-#if 1
+#if 0
 groupshared uint s_DrawCount[32];
 
 [numthreads(32, 1, 1)]
@@ -373,88 +366,57 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
     }
 
     // GroupMemoryBarrierWithGroupSync();
-    
+
     // if (GTid.x == 0) {
     //     visibleObjectCounter[0] += s_DrawCount[Gid.x];
     // }
-    
 }
 
 #else 
-groupshared uint s_WaveResults[32]; // 假设最多32个wave per group
+groupshared uint s_DrawCount;
 groupshared uint s_GroupBaseIndex;
+
 [numthreads(32, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint GI : SV_GroupIndex) {
     RWStructuredBuffer<DrawData> visibleObjects = ResourceDescriptorHeap[1017];
     RWStructuredBuffer<uint> visibleObjectCounter = ResourceDescriptorHeap[1018];
     StructuredBuffer<DrawData> allObjects = ResourceDescriptorHeap[1016];
-    
+
     uint objectIndex = DTid.x;
-    uint waveIndex = GI / WaveGetLaneCount();
-    
+
     // 初始化
     if (GI == 0) {
-        s_GroupBaseIndex = 0;
+        s_DrawCount = 0;
         if (Gid.x == 0) {
             visibleObjectCounter[0] = 0;
         }
     }
-    
-    if (WaveIsFirstLane()) {
-        s_WaveResults[waveIndex] = 0;
-    }
-    
+
     GroupMemoryBarrierWithGroupSync();
-    
+
     if (objectIndex >= g_PushConstants.totalObjectCount) {
         return;
     }
 
-    // 阶段1：Wave级别的culling和计数
+    // 第一阶段：组内计数
     bool visible = HZBCull2(objectIndex);
-    uint visibleMask = WaveActiveBallot(visible).x;
-    uint waveVisibleCount = countbits(visibleMask);
-    uint localIndexInWave = WavePrefixCountBits(visible);
-    
-    // 每个wave的第一个线程记录本wave的可见对象数量
-    if (WaveIsFirstLane()) {
-        s_WaveResults[waveIndex] = waveVisibleCount;
-    }
-    
-    GroupMemoryBarrierWithGroupSync();
-    
-    // 阶段2：计算wave前缀和（只在第一个wave中执行）
-    uint waveBaseIndexInGroup = 0;
-    if (waveIndex == 0 && GI < 32) { // 处理wave前缀和
-        uint waveId = GI;
-        uint prefixSum = 0;
-        for (uint i = 0; i < waveId; i++) {
-            prefixSum += s_WaveResults[i];
-        }
-        s_WaveResults[waveId] = prefixSum; // 现在存储的是前缀和
-    }
-    
-    GroupMemoryBarrierWithGroupSync();
-    
-    // 阶段3：第一个线程获取组的全局基础索引
-    if (GI == 0) {
-        uint totalGroupVisible = 0;
-        uint numWaves = (32 + WaveGetLaneCount() - 1) / WaveGetLaneCount();
-        for (uint i = 0; i < numWaves; i++) {
-            totalGroupVisible += s_WaveResults[i];
-        }
-        // 恢复s_WaveResults为前缀和，并获取全局索引
-        if (totalGroupVisible > 0) {
-            InterlockedAdd(visibleObjectCounter[0], totalGroupVisible, s_GroupBaseIndex);
-        }
-    }
-    
-    GroupMemoryBarrierWithGroupSync();
-    
-    // 阶段4：写入最终结果
+    uint localIndex = 0;
     if (visible) {
-        waveBaseIndexInGroup = s_WaveResults[waveIndex];
-        uint finalIndex = s_GroupBaseIndex + waveBaseIndexInGroup + localIndexInWave;
+        InterlockedAdd(s_DrawCount, 1, localIndex);
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // 第二阶段：获取全局基础索引
+    if (GI == 0 && s_DrawCount > 0) {
+        InterlockedAdd(visibleObjectCounter[0], s_DrawCount, s_GroupBaseIndex);
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // 第三阶段：写入最终结果
+    if (visible) {
+        uint finalIndex = s_GroupBaseIndex + localIndex;
         if (finalIndex < g_PushConstants.totalObjectCount) {
             visibleObjects[finalIndex] = allObjects[objectIndex];
         }
