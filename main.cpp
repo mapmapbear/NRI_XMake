@@ -233,7 +233,11 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		nri::SwapChainDesc swapChainDesc = {};
 		swapChainDesc.window = GetWindow();
 		swapChainDesc.queue = m_GraphicsQueue;
+#ifdef HDR_ENABLE
+		swapChainDesc.format = nri::SwapChainFormat::BT709_G22_10BIT;
+#else
 		swapChainDesc.format = nri::SwapChainFormat::BT709_G22_8BIT;
+#endif
 		swapChainDesc.flags = (m_Vsync ? nri::SwapChainBits::VSYNC : nri::SwapChainBits::NONE) | nri::SwapChainBits::ALLOW_TEARING;
 		swapChainDesc.width = (uint16_t)GetWindowResolution().first;
 		swapChainDesc.height = (uint16_t)GetWindowResolution().second;
@@ -665,6 +669,7 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		}
 
 		testRenderPtr->OnRenderDepth(info, m_Camera);
+		
 		// Transform Color RT -> Back Buffer
 		{
 			nri::TextureBarrierDesc textureBarrierDescs = {};

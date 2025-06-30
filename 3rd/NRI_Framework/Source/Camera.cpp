@@ -187,7 +187,9 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 	statePrev.rotation.z = state.rotation.z;
 
 	statePrev.globalPosition = state.globalPosition;
-	statePrev.mViewToClip = state.mViewToClip;
+	if(frameIndex == 0) {
+		statePrev.mViewToClip = state.mViewToClip;
+	}
 	state.rotation.x = 0;
 	state.rotation.y = 0;
 	state.rotation.z = 0;

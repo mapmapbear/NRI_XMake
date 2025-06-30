@@ -812,6 +812,12 @@ static void MessageCallback(Message messageType, const char* file, uint32_t line
 
     const char* messageTypeName = g_messageTypes[(size_t)messageType];
 
+void nri::CheckAndSetDefaultCallbacks(CallbackInterface& callbackInterface) {
+    if (!callbackInterface.MessageCallback)
+        callbackInterface.MessageCallback = MessageCallback;
+
+    if (!callbackInterface.AbortExecution)
+        callbackInterface.AbortExecution = AbortExecution;
     char buf[MAX_MESSAGE_LENGTH];
     snprintf(buf, sizeof(buf), "%s (%s:%u) - %s\n", messageTypeName, file, line, message);
 
@@ -831,12 +837,6 @@ static void AbortExecution(void* userArg) {
 #endif
 }
 
-void nri::CheckAndSetDefaultCallbacks(CallbackInterface& callbackInterface) {
-    if (!callbackInterface.MessageCallback)
-        callbackInterface.MessageCallback = MessageCallback;
-
-    if (!callbackInterface.AbortExecution)
-        callbackInterface.AbortExecution = AbortExecution;
 }
 
 void DeviceBase::ReportMessage(Message messageType, const char* file, uint32_t line, const char* format, ...) const {

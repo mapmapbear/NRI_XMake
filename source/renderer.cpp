@@ -577,8 +577,6 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	}
 	GetNRI().CmdEndRendering(info.cmdBuffer);
 
-	gpuCullingPass->RenderHiZ(info);
-
 	{
 		nri::BufferBarrierDesc bufferBarrierDescs = {};
 		bufferBarrierDescs.buffer = gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
@@ -592,6 +590,8 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 }
 
 void Renderer::OnRenderDepth(RenderInfo &info, Camera &camera) {
+	// In this Pass, DepthTex is SRV state
+	gpuCullingPass->RenderHiZ(info);
 	ssaoCompPass->Render(info, camera);
 	{
 		nri::TextureBarrierDesc textureBarrierDescs = {};

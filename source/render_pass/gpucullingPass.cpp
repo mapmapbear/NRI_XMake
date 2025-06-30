@@ -99,7 +99,6 @@ void GPUCullingPass::AllocGPUMemory() {
 		nri::BufferViewDesc viewDesc = {};
 		viewDesc.viewType = nri::BufferViewType::SHADER_RESOURCE_STORAGE;
 		viewDesc.size = bufferDesc.size;
-		// viewDesc.format = nri::Format::R32_UINT;
 		viewDesc.structureStride = sizeof(nri::DrawIndexedDesc);
 
 		m_CullGPUSceneObjectsBuffer->Create(m_renderer, bufferDesc, viewDesc);
@@ -118,6 +117,7 @@ void GPUCullingPass::AllocGPUMemory() {
 		viewDesc.viewType = nri::BufferViewType::SHADER_RESOURCE_STORAGE;
 		viewDesc.size = bufferDesc.size;
 		viewDesc.structureStride = bufferDesc.structureStride;
+		viewDesc.format = nri::Format::R32_UINT;
 
 		m_VisibleObjectCounterBuffer->Create(m_renderer, bufferDesc, viewDesc);
 		NRI.SetDebugName(m_VisibleObjectCounterBuffer->GetBuffer(), "m_VisibleObjectCounterBuffer");
@@ -450,7 +450,7 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 		};
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(PushConstants));
 		NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_CullingDescriptorConstantBufferSet, nullptr);
-		NRI.CmdDispatch(info.cmdBuffer, { (uint32_t)floor(m_renderer->m_OpaqueRenderNodes.size() / 8) + 1, 1, 1 });
+		NRI.CmdDispatch(info.cmdBuffer, { (uint32_t)floor(m_renderer->m_OpaqueRenderNodes.size() / 32) + 1, 1, 1 });
 	}
 }
 
@@ -464,6 +464,17 @@ void GPUCullingPass::RenderHiZ(struct RenderInfo &info) {
 		uint32_t srcHeight = m_renderer->m_OutputResolution.second / 2;
 
 		for (uint32_t i = 0; i < m_HiZTexture->GetMipNum(); i++) {
+			{
+				nri::TextureBarrierDesc textureBarrierDescs = {};
+				textureBarrierDescs.texture = m_HiZTexture->GetTexture();
+				textureBarrierDescs.after = { nri::AccessBits::SHADER_RESOURCE_STORAGE,
+					nri::Layout::SHADER_RESOURCE_STORAGE };
+				nri::BarrierGroupDesc barrierGroupDesc = {};
+				barrierGroupDesc.textureNum = 1;
+				barrierGroupDesc.textures = &textureBarrierDescs;
+				NRI.CmdBarrier(info.cmdBuffer, barrierGroupDesc);
+			}
+
 			uint32_t destWidth = std::max(1u, (uint32_t)(srcWidth >> i));
 			uint32_t destHeight = std::max(1u, (uint32_t)(srcHeight >> i));
 			HiZPushConstants block = {
@@ -474,6 +485,19 @@ void GPUCullingPass::RenderHiZ(struct RenderInfo &info) {
 			};
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(HiZPushConstants));
 			NRI.CmdDispatch(info.cmdBuffer, { destWidth / 8 + 1, destHeight / 8 + 1, 1 });
+
+			{
+				nri::TextureBarrierDesc textureBarrierDescs = {};
+				textureBarrierDescs.texture = m_HiZTexture->GetTexture();
+				textureBarrierDescs.before = { nri::AccessBits::SHADER_RESOURCE_STORAGE,
+					nri::Layout::SHADER_RESOURCE_STORAGE };
+				textureBarrierDescs.after = { nri::AccessBits::SHADER_RESOURCE,
+					nri::Layout::SHADER_RESOURCE };
+				nri::BarrierGroupDesc barrierGroupDesc = {};
+				barrierGroupDesc.textureNum = 1;
+				barrierGroupDesc.textures = &textureBarrierDescs;
+				NRI.CmdBarrier(info.cmdBuffer, barrierGroupDesc);
+			}
 		}
 	}
 }
