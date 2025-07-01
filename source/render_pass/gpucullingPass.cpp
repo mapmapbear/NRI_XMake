@@ -124,6 +124,23 @@ void GPUCullingPass::AllocGPUMemory() {
 	}
 
 	{
+		m_VisibleFlagsBuffer = std::make_shared<Buffer>();
+		nri::BufferDesc bufferDesc = {};
+		bufferDesc.size = sizeof(uint32_t) * m_renderer->m_OpaqueRenderNodes.size();
+		bufferDesc.usage = nri::BufferUsageBits::SHADER_RESOURCE_STORAGE;
+		bufferDesc.structureStride = sizeof(uint32_t);
+
+		nri::BufferViewDesc viewDesc = {};
+		viewDesc.viewType = nri::BufferViewType::SHADER_RESOURCE_STORAGE;
+		viewDesc.size = bufferDesc.size;
+		viewDesc.structureStride = bufferDesc.structureStride;
+		viewDesc.format = nri::Format::R32_UINT;
+
+		m_VisibleFlagsBuffer->Create(m_renderer, bufferDesc, viewDesc);
+		NRI.SetDebugName(m_VisibleFlagsBuffer->GetBuffer(), "m_VisibleFlagsBuffer");
+	}
+
+	{
 		std::vector<nri::DrawIndexedDesc> indirectBufferData;
 		std::vector<nri::DrawIndexedDesc> cullIndirectBufferData;
 		std::vector<CullData> cullDatas;
@@ -177,6 +194,12 @@ void GPUCullingPass::AllocGPUMemory() {
 		bufferData4.data = &visibleObjectCounter;
 		// bufferData4.dataSize = sizeof(uint32_t);
 		bufferData4.after = { .access = nri::AccessBits::SHADER_RESOURCE_STORAGE, .stages = nri::StageBits::COMPUTE_SHADER };
+
+		std::vector<uint32_t> visibleFlags(m_renderer->m_OpaqueRenderNodes.size(), 0);
+		nri::BufferUploadDesc bufferData5 = {};
+		bufferData5.buffer = m_VisibleFlagsBuffer->GetBuffer();
+		bufferData5.data = visibleFlags.data();
+		bufferData5.after = { .access = nri::AccessBits::SHADER_RESOURCE_STORAGE, .stages = nri::StageBits::COMPUTE_SHADER };
 
 		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData, bufferData2, bufferData3, bufferData4 };
 
@@ -264,7 +287,7 @@ void GPUCullingPass::BuildPipeline() {
 		nri::DescriptorRangeDesc descriptorRangeTexture[2] = {};
 		descriptorRangeTexture[0] = { 0, 2, nri::DescriptorType::STRUCTURED_BUFFER,
 			nri::StageBits::COMPUTE_SHADER };
-		descriptorRangeTexture[1] = { 1, 2, nri::DescriptorType::STORAGE_STRUCTURED_BUFFER,
+		descriptorRangeTexture[1] = { 1, 3, nri::DescriptorType::STORAGE_STRUCTURED_BUFFER,
 			nri::StageBits::COMPUTE_SHADER };
 
 		nri::DescriptorRangeDesc descriptorRangeConstantBuffer = { 0, 1, nri::DescriptorType::CONSTANT_BUFFER };
@@ -350,7 +373,7 @@ void GPUCullingPass::BuildPipeline() {
 		descriptorRangeUpdateDescs[0].descriptorNum = (uint32_t)descriptors.size();
 		descriptorRangeUpdateDescs[0].descriptors = descriptors.data();
 
-		std::vector<nri::Descriptor *> descriptors2 = { m_CullGPUSceneObjectsBuffer->GetView(), m_VisibleObjectCounterBuffer->GetView() };
+		std::vector<nri::Descriptor *> descriptors2 = { m_CullGPUSceneObjectsBuffer->GetView(), m_VisibleObjectCounterBuffer->GetView(), m_VisibleFlagsBuffer->GetView() };
 		descriptorRangeUpdateDescs[1].descriptorNum = (uint32_t)descriptors2.size();
 		descriptorRangeUpdateDescs[1].descriptors = descriptors2.data();
 
@@ -479,8 +502,8 @@ void GPUCullingPass::RenderHiZ(struct RenderInfo &info) {
 			uint32_t destHeight = std::max(1u, (uint32_t)(srcHeight >> i));
 			HiZPushConstants block = {
 				.DimensionsInv = 1.0f / glm::vec2(destWidth, destHeight),
-				.texDepth = 1020,
-				.texHiZ = 1022 + i,
+				.texDepth = 1021,
+				.texHiZ = 1023 + i,
 				.sampleIndex = 5,
 			};
 			NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(HiZPushConstants));

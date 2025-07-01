@@ -588,7 +588,7 @@ void InstanceMeshPass::BuildPipeline() {
 			nri::BlendFunc::ADD };
 
 		nri::DepthAttachmentDesc depthAttachmentDesc = {};
-		depthAttachmentDesc.write = true;
+		depthAttachmentDesc.write = false;
 #ifdef RZ
 		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
 #else

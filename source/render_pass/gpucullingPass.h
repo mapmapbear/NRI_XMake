@@ -54,6 +54,7 @@ private:
 
 	std::shared_ptr<Buffer> m_CullDataBuffer = nullptr;
 	std::shared_ptr<Buffer> m_GPUSceneObjectsBuffer = nullptr;
+	std::shared_ptr<Buffer> m_VisibleFlagsBuffer = nullptr;
 
 	nri::Buffer *m_ConstantBuffer = nullptr;
 	nri::Descriptor *m_ConstantBufferView = nullptr;
