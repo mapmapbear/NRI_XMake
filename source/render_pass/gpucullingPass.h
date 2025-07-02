@@ -9,6 +9,7 @@ class GPUCullingPass : public CommonRenderPass {
 public:
 	GPUCullingPass(Renderer *renderer);
 	void Render(struct RenderInfo &info, Camera &camera) override;
+	void RenderPost(struct RenderInfo &info, Camera &camera);
 	void RenderHiZ(struct RenderInfo &info);
 	void BuildPipeline() override;
 	void AllocGPUMemory() override;
@@ -41,6 +42,7 @@ public:
 private:
 	nri::PipelineLayout *m_CullingPipelineLayout = nullptr;
 	nri::Pipeline *m_CullingPipeline = nullptr;
+	nri::Pipeline *m_CullingPipeline2 = nullptr;
 	nri::DescriptorSet *m_CullingDescriptorSet = nullptr;
 	nri::DescriptorSet *m_CullingDescriptorConstantBufferSet = nullptr;
 

@@ -331,7 +331,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
     RWStructuredBuffer<uint> visibleObjectCounter = ResourceDescriptorHeap[1018];
     RWStructuredBuffer<uint> visibleObjectFlags = ResourceDescriptorHeap[1019];
 
-#ifndef HIZ_CULL_PRE_PASS
+#ifdef HIZ_CULL_PRE_PASS
     uint objectIndex = DTid.x;
     if (objectIndex >= g_PushConstants.totalObjectCount) {
         return;
@@ -343,7 +343,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
     }
 
     visibleObjects[objectIndex] = (DrawData)0;
-    visibleObjectFlags[objectIndex] = 0;
+    // visibleObjectFlags[objectIndex] = 0;
 
     AllMemoryBarrierWithGroupSync();
 
@@ -357,6 +357,9 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
     bool visible = HZBCull2(objectIndex);
     if (visible) {
         visibleObjectFlags[objectIndex] = 1;
+    }
+    else {
+        visibleObjectFlags[objectIndex] = 0;
     }
 
     DeviceMemoryBarrierWithGroupSync();

@@ -314,8 +314,10 @@ void GPUCullingPass::BuildPipeline() {
 		utils::ShaderCodeStorage shaderCodeStorage;
 		nri::ComputePipelineDesc computePipelineDesc = {};
 		computePipelineDesc.pipelineLayout = m_CullingPipelineLayout;
-		computePipelineDesc.shader = utils::LoadShader(nri::GraphicsAPI::D3D12, "culling.cs", shaderCodeStorage);
+		computePipelineDesc.shader = utils::LoadShader(nri::GraphicsAPI::D3D12, "culling.cs_8AB7D080", shaderCodeStorage);
 		NRI_ABORT_ON_FAILURE(NRI.CreateComputePipeline(*m_renderer->GetRenderDevice(), computePipelineDesc, m_CullingPipeline));
+		computePipelineDesc.shader = utils::LoadShader(nri::GraphicsAPI::D3D12, "culling.cs_1952B1E7", shaderCodeStorage);
+		NRI_ABORT_ON_FAILURE(NRI.CreateComputePipeline(*m_renderer->GetRenderDevice(), computePipelineDesc, m_CullingPipeline2));
 	}
 
 	// HiZ Pipeline
@@ -451,9 +453,50 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 	}
 
 	{
-		helper::Annotation annotation(NRI, info.cmdBuffer, "Frustum Culling Pass");
+		helper::Annotation annotation(NRI, info.cmdBuffer, "Frustum Culling Pre Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_CullingPipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_CullingPipeline);
+		glm::mat4 projMat = camera.state.mViewToClip;
+
+		glm::vec4 frustumL = normalizePlane(projMat[3] + projMat[0]);
+		glm::vec4 frustumR = normalizePlane(projMat[3] - projMat[0]);
+		glm::vec4 frustumT = normalizePlane(projMat[3] + projMat[1]);
+		glm::vec4 frustumB = normalizePlane(projMat[3] - projMat[1]);
+
+		PushConstants block = {
+			.viewMat = p * camera.state.mWorldToView, // * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f)),
+			.cameraArgs = glm::vec4(camera.m_desc.nearZ, camera.m_desc.farZ, camera.m_desc.farZ + 20, 0.0f),
+			.frustum = { glm::vec4(frustumL.x, frustumL.y, frustumL.z, frustumL.w),
+					glm::vec4(frustumR.x, frustumR.y, frustumR.z, frustumR.w),
+					glm::vec4(frustumT.x, frustumT.y, frustumT.z, frustumT.w),
+					glm::vec4(frustumB.x, frustumB.y, frustumB.z, frustumB.w) },
+			.totalObjectCount = (uint32_t)m_renderer->m_OpaqueRenderNodes.size(),
+
+		};
+		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(PushConstants));
+		NRI.CmdSetDescriptorSet(info.cmdBuffer, 1, *m_CullingDescriptorConstantBufferSet, nullptr);
+		NRI.CmdDispatch(info.cmdBuffer, { (uint32_t)floor(m_renderer->m_OpaqueRenderNodes.size() / 32) + 1, 1, 1 });
+	}
+}
+
+void GPUCullingPass::RenderPost(struct RenderInfo &info, Camera &camera) {
+	auto NRI = *m_NRI;
+
+	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
+			*m_ConstantBuffer, 0,
+			sizeof(ConstantBufferLayout));
+	const glm::mat4 p = camera.state.mViewToClip;
+	if (commonConstants) {
+		commonConstants->modelMat = glm::mat4(1.0);
+		commonConstants->viewMat = camera.state.mWorldToView;
+		commonConstants->projectMat = p;
+		NRI.UnmapBuffer(*m_ConstantBuffer);
+	}
+
+	{
+		helper::Annotation annotation(NRI, info.cmdBuffer, "Frustum Culling Post Pass");
+		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_CullingPipelineLayout);
+		NRI.CmdSetPipeline(info.cmdBuffer, *m_CullingPipeline2);
 		glm::mat4 projMat = camera.state.mViewToClip;
 
 		glm::vec4 frustumL = normalizePlane(projMat[3] + projMat[0]);

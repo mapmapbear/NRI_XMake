@@ -332,11 +332,12 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	std::string meshFile = {};
 	// meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
-	meshFile = utils::GetFullPath("cubes.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("cubes.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_OW/ow.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S1.gltf", utils::DataFolder::ROOT);
-	mesh->LoadFromUSD(meshFile, this);
+	meshFile = utils::GetFullPath("GLTF_Bunny/bunny.gltf", utils::DataFolder::ROOT);
+	mesh->LoadFromUSD(meshFile, this, true);
 	debugdrawPass = std::make_shared<DebugDrawPass>(this);
 
 	glm::vec3 sceneMin = glm::vec3(std::numeric_limits<float>::max());
@@ -554,6 +555,8 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	}
 	GetNRI().CmdEndRendering(info.cmdBuffer);
 
+	gpuCullingPass->RenderHiZ(info);
+	gpuCullingPass->RenderPost(info, camera);
 	nri::AttachmentsDesc shadowAttachmentDesc = {};
 	shadowAttachmentDesc.depthStencil = m_ShadowMap->GetView();
 	GetNRI().CmdBeginRendering(info.cmdBuffer, shadowAttachmentDesc);
@@ -591,7 +594,6 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 
 void Renderer::OnRenderDepth(RenderInfo &info, Camera &camera) {
 	// In this Pass, DepthTex is SRV state
-	gpuCullingPass->RenderHiZ(info);
 	ssaoCompPass->Render(info, camera);
 	{
 		nri::TextureBarrierDesc textureBarrierDescs = {};

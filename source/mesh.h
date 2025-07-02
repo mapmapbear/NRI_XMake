@@ -1,11 +1,11 @@
 #pragma once
 #include "glm/mat4x4.hpp"
+#include <meshoptimizer.h>
 #include <map>
 #include <memory>
 #include <string>
-#include <vector>
 #include <taskflow/taskflow.hpp>
-#include <meshoptimizer.h>
+#include <vector>
 
 class Buffer;
 class Texture;
@@ -32,12 +32,14 @@ public:
 	glm::mat4 globalTransform;
 	std::pair<glm::vec3, glm::vec3> aabb = { glm::vec3(0.0f), glm::vec3(0.0f) };
 	std::pair<glm::vec3, glm::vec3> aabb2 = { glm::vec3(0.0f), glm::vec3(0.0f) };
-	
-	std::vector<meshopt_Meshlet> m_meshlets;
-	std::vector<meshopt_Bounds> m_bounds;
-	std::vector<std::vector<uint32_t>> m_clusters;
-	uint32_t m_cluster_total_size = 0;
-	
+
+	struct MeshLet {
+		std::vector<meshopt_Meshlet> m_meshlets;
+		std::vector<meshopt_Bounds> m_bounds;
+		std::vector<std::vector<uint32_t>> m_clusters;
+		uint32_t m_cluster_total_size = 0;
+	};
+	MeshLet m_meshlet;
 };
 
 class Material {
@@ -78,17 +80,16 @@ public:
 		DrawArgsBase base;
 	};
 
-
 	// private:
 public:
 	std::unique_ptr<SubMesh> LoadMesh(aiMesh *pMesh, Renderer *renderer, bool meshlet = false);
-	std::unique_ptr<SubMesh> LoadGPUMesh(const aiScene* scene, uint32_t numMeshes, Renderer* renderer);
+	std::unique_ptr<SubMesh> LoadGPUMesh(const aiScene *scene, uint32_t numMeshes, Renderer *renderer, bool meshlet);
 
 	std::vector<std::unique_ptr<SubMesh>> m_Meshes;
 	std::unique_ptr<SubMesh> m_GPUMesh;
 	std::vector<Material> m_Materials;
 	std::vector<DrawArgs> m_drawArgs;
-
+	std::vector<meshopt_Meshlet> m_meshlets;
 
 	tf::Executor executor;
 	tf::Taskflow taskflow;
