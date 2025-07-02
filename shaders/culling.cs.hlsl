@@ -354,7 +354,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
     // bool visible = Hiz_Culling(objectIndex);
     // bool visible = SphereCullFrustum(objectIndex);
     // bool visible = HizCull(objectIndex);
-    bool visible = HZBCull2(objectIndex);
+    bool visible = true;//HZBCull2(objectIndex);
     if (visible) {
         visibleObjectFlags[objectIndex] = 1;
     }

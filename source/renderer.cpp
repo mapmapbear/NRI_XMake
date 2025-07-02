@@ -336,51 +336,41 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_OW/ow.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S1.gltf", utils::DataFolder::ROOT);
-	meshFile = utils::GetFullPath("GLTF_Bunny/bunny.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("GLTF_Bunny/bunny1.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this, true);
 	debugdrawPass = std::make_shared<DebugDrawPass>(this);
 
 	glm::vec3 sceneMin = glm::vec3(std::numeric_limits<float>::max());
 	glm::vec3 sceneMax = glm::vec3(std::numeric_limits<float>::lowest());
-	for (int i = 0; i < mesh->GetMeshCount(); ++i) {
-		RenderNode node;
-		node.mesh = mesh->GetMesh(i);
-		node.meshGPU = mesh->m_GPUMesh.get();
-#if 0
-		node.drawArgs = {};
-		node.drawArgs.indexNum = mesh->m_drawArgs[i].offset.indexNum;
-		node.drawArgs.baseIndex = mesh->m_drawArgs[i].offset.indexOffset;
-		node.drawArgs.baseVertex = mesh->m_drawArgs[i].offset.vertexOffset;
-		node.drawArgs.baseInstance = 0;
-#else
-		node.drawArgs = {};
-		node.drawArgs.indexNum = mesh->m_drawArgs[i].base.indexNum;
+	for (int i = 0; i < mesh->GetMeshCount(); ++i) { 
+		for (int j = 0; j < mesh->m_GPUMesh->m_meshlet.m_drawArgs.size(); ++j) {
+			RenderNode node;
+			node.mesh = mesh->GetMesh(i);
+			node.meshGPU = mesh->m_GPUMesh.get();
+			node.drawArgs.indexNum = mesh->m_GPUMesh->m_meshlet.m_drawArgs[j].base.indexNum;
+			node.drawArgs.instanceNum = 1;
+			node.drawArgs.baseIndex = mesh->m_GPUMesh->m_meshlet.m_drawArgs[j].base.baseIndex;
+			node.drawArgs.baseVertex = mesh->m_GPUMesh->m_meshlet.m_drawArgs[j].base.baseVertex;
 
-		node.drawArgs.baseIndex = mesh->m_drawArgs[i].base.baseIndex;
-		node.drawArgs.baseVertex = mesh->m_drawArgs[i].base.baseVertex;
-
-#endif
-		node.material = &mesh->GetMaterial(node.mesh->GetMaterialID());
-		try {
-			node.globalTransform = mesh->results.at(i);
-		} catch (const std::exception &e) {
-			node.globalTransform = glm::mat4(1.0f);
-		}
-
-		auto submeshAABB = node.mesh->aabb;
-		glm::vec3 transformedMin = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.first, 1.0f));
-		glm::vec3 transformedMax = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.second, 1.0f));
-
-		sceneMin = glm::min(sceneMin, transformedMin);
-		sceneMax = glm::max(sceneMax, transformedMax);
-
-		if (node.material->IsTransparent) {
-			m_TransparentRenderNodes.push_back(node);
-		} else {
-			if (node.mesh->name == "Submesh_2.E0C8326857CE1E67.003") {
-				SPDLOG_ERROR("Mesh ID: {}", m_OpaqueRenderNodes.size());
+			node.material = &mesh->GetMaterial(node.mesh->GetMaterialID());
+			try {
+				node.globalTransform = mesh->results.at(i);
+			} catch (const std::exception &e) {
+				node.globalTransform = glm::mat4(1.0f);
 			}
-			m_OpaqueRenderNodes.push_back(node);
+
+			auto submeshAABB = node.mesh->aabb;
+			glm::vec3 transformedMin = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.first, 1.0f));
+			glm::vec3 transformedMax = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.second, 1.0f));
+
+			sceneMin = glm::min(sceneMin, transformedMin);
+			sceneMax = glm::max(sceneMax, transformedMax);
+
+			if (node.material->IsTransparent) {
+				m_TransparentRenderNodes.push_back(node);
+			} else {
+				m_OpaqueRenderNodes.push_back(node);
+			}
 		}
 	}
 	for (int i = 0; i < m_OpaqueRenderNodes.size(); ++i) {

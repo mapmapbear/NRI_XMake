@@ -10,6 +10,7 @@ struct InputPS {
     float4 positionLS1 : TEXCOORD3;
     float3 normalWS   : NORMAL;
     float3 tangentWS  : TANGENT;
+    float3 color      : COLOR;
 };
 
 struct PushConstants {
@@ -33,7 +34,8 @@ float4 main(InputPS input) : SV_Target {
     Texture2D g_MetallicTexture = ResourceDescriptorHeap[g_PushConstants.indexGroup.z];
     SamplerState g_Sampler = SamplerDescriptorHeap[0];
     float4 baseColor = g_AlbedoTexture.Sample(g_Sampler, newUV);
-    return float4(newUV, 0.0, 1.0);
+    // return float4(newUV, 0.0, 1.0);
+    return float4(input.color, 1.0);
     //baseColor *= g_PushConstants.baseColor;
     float4 normalTS = g_NormalTexture.Sample(g_Sampler, newUV);
     normalTS = normalTS * 2.0 - 1.0;

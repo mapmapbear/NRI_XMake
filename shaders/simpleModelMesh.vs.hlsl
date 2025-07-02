@@ -40,6 +40,7 @@ struct outputVS {
     float4 positionLS1 : TEXCOORD3;
     float3 normalWS   : NORMAL;
     float3 tangentWS  : TANGENT;
+    float3 color      : COLOR;
 #endif
 };
 
@@ -82,6 +83,21 @@ float4x4 inverse(float4x4 m) {
     return ret;
 }
 
+float hash(uint seed) {
+    seed = (seed ^ 61u) ^ (seed >> 16u);
+    seed *= 9u;
+    seed = seed ^ (seed >> 4u);
+    seed *= 0x27d4eb2du;
+    seed = seed ^ (seed >> 15u);
+    return float(seed) * (1.0 / 4294967295.0);
+}
+
+float3 hsv2rgb(float3 c) {
+    float4 K = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    float3 p = abs(frac(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * lerp(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
 outputVS main(inputVS input) {
     outputVS output;
     float4x4 testMat = 1.0;
@@ -106,6 +122,10 @@ outputVS main(inputVS input) {
     output.positionLS = mul(lightVP, float4(output.positionWS, 1.0));
     output.positionLS1 = saturate(output.position.z / output.position.w);
     output.tangentWS = normalize(mul(normalMatrix, float4(input.in_tangent, 1.0))).xyz;
+    float h = hash(input.startInstance);
+    float s = 0.8;
+    float v = 0.95;
+    output.color = hsv2rgb(float3(h, s, v));
 #endif
     return output;
 }

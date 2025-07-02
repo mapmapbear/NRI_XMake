@@ -459,6 +459,7 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 
 		// return pGPUMesh;
 		m_drawArgs = drawArgsArray;
+		pGPUMesh->m_meshlet.m_drawArgs = drawArgsArray;
 
 	} else {
 		m_drawArgs.resize(numMeshes);
@@ -554,12 +555,12 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 
 	std::vector<uint8_t> geometryData(indicesDataTotalAlignedSize);
 	for (uint32_t i = 0; i < meshDatas.size(); ++i) {
-		memcpy(&geometryData[m_drawArgs[i].base.baseIndex], meshDatas[i]->indices.data(), helper::GetByteSizeOf(meshDatas[i]->indices));
+		memcpy(&geometryData[pGPUMesh->m_meshlet.m_drawArgs[i].base.baseIndex], meshDatas[i]->indices.data(), helper::GetByteSizeOf(meshDatas[i]->indices));
 	}
 
 	std::vector<uint8_t> vertexData(vertexDataTotalSize);
 	for (uint32_t i = 0; i < meshDatas.size(); ++i) {
-		memcpy(&vertexData[m_drawArgs[i].base.baseVertex], meshDatas[i]->m_vertexesData.data(), helper::GetByteSizeOf(meshDatas[i]->m_vertexesData));
+		memcpy(&vertexData[pGPUMesh->m_meshlet.m_drawArgs[i].base.baseVertex], meshDatas[i]->m_vertexesData.data(), helper::GetByteSizeOf(meshDatas[i]->m_vertexesData));
 	}
 
 	nri::BufferUploadDesc indexBufferUploadDesc = {};

@@ -99,11 +99,13 @@ public:
 		const SubMesh *meshGPU;
 		// std::pair<uint64_t, uint64_t> meshOffsets;
 		nri::DrawIndexedDesc drawArgs;
+		std::vector<nri::DrawIndexedDesc> clusterDrawArgs;
 		const Material *material;
 		glm::mat4 globalTransform;
 	};
 
 	std::vector<RenderNode> m_OpaqueRenderNodes;
+	std::vector<RenderNode> m_ClusterRenderNodes;
 	std::vector<RenderNode> m_TransparentRenderNodes;
 
 public:

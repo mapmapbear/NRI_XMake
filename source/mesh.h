@@ -12,6 +12,26 @@ class Texture;
 class Renderer;
 struct aiMesh;
 struct aiScene;
+
+struct DrawArgsOffset {
+	uint32_t indexNum;
+	uint32_t vertexNum;
+	uint32_t indexOffset;
+	uint32_t vertexOffset;
+};
+
+struct DrawArgsBase {
+	uint32_t indexNum;
+	uint32_t vertexNum;
+	uint32_t baseIndex;
+	uint32_t baseVertex;
+};
+
+struct DrawArgs {
+	DrawArgsOffset offset;
+	DrawArgsBase base;
+};
+
 class SubMesh {
 	friend class Mesh;
 
@@ -37,6 +57,7 @@ public:
 		std::vector<meshopt_Meshlet> m_meshlets;
 		std::vector<meshopt_Bounds> m_bounds;
 		std::vector<std::vector<uint32_t>> m_clusters;
+		std::vector<DrawArgs> m_drawArgs;
 		uint32_t m_cluster_total_size = 0;
 	};
 	MeshLet m_meshlet;
@@ -60,25 +81,6 @@ public:
 	Mesh(Mesh &&) = default;
 	Mesh(const Mesh &) = default;
 	std::map<uint32_t, glm::mat4> results = {};
-
-	struct DrawArgsOffset {
-		uint32_t indexNum;
-		uint32_t vertexNum;
-		uint32_t indexOffset;
-		uint32_t vertexOffset;
-	};
-
-	struct DrawArgsBase {
-		uint32_t indexNum;
-		uint32_t vertexNum;
-		uint32_t baseIndex;
-		uint32_t baseVertex;
-	};
-
-	struct DrawArgs {
-		DrawArgsOffset offset;
-		DrawArgsBase base;
-	};
 
 	// private:
 public:
