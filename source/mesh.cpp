@@ -326,7 +326,7 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 			std::shared_ptr<utils::MeshData> meshdata = std::make_shared<utils::MeshData>();
 			meshdata->m_vertexesData.resize(pMesh->mNumVertices);
 			meshdata->vertices.resize(pMesh->mNumVertices);
-			meshdata->indices.resize(pMesh->mNumFaces * 3);
+			// meshdata->indices.resize(pMesh->mNumFaces * 3);
 
 			// Vertices Data
 			{
@@ -347,7 +347,7 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 
 			for (unsigned int i = 0; i != pMesh->mNumFaces; i++) {
 				for (int j = 0; j != 3; j++) {
-					meshdata->indices[i] = (pMesh->mFaces[i].mIndices[j]);
+					meshdata->indices.push_back(pMesh->mFaces[i].mIndices[j]);
 				}
 			}
 
@@ -366,7 +366,7 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 			std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
 
 			size_t meshlet_count = (uint32_t)meshopt_buildMeshlets(pGPUMesh->m_meshlet.m_meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), meshdata->indices.data(),
-					indexCount, (float *)meshdata->vertices.data(), (uint32_t)meshdata->vertices.size(), (uint32_t)sizeof(glm::vec3), max_vertices, max_triangles, cone_weight);
+					indexCount, (float *)meshdata->vertices.data(), (uint32_t)vertexCount, (uint32_t)sizeof(glm::vec3), max_vertices, max_triangles, cone_weight);
 
 			pGPUMesh->m_meshlet.m_clusters.resize(meshlet_count);
 			pGPUMesh->m_meshlet.m_bounds.resize(meshlet_count);
