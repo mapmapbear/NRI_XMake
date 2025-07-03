@@ -330,25 +330,21 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
     RWStructuredBuffer<DrawData> visibleObjects = ResourceDescriptorHeap[1017];
     RWStructuredBuffer<uint> visibleObjectCounter = ResourceDescriptorHeap[1018];
     RWStructuredBuffer<uint> visibleObjectFlags = ResourceDescriptorHeap[1019];
+    StructuredBuffer<DrawData> allObjects = ResourceDescriptorHeap[1016];
 
 #ifdef HIZ_CULL_PRE_PASS
     uint objectIndex = DTid.x;
     if (objectIndex >= g_PushConstants.totalObjectCount) {
         return;
     }
-
     if (DTid.x == 0) {
         // s_DrawCount[Gid.x] = 0;
         visibleObjectCounter[0] = 0;
     }
 
     visibleObjects[objectIndex] = (DrawData)0;
-    // visibleObjectFlags[objectIndex] = 0;
 
-    AllMemoryBarrierWithGroupSync();
-
-    StructuredBuffer<DrawData> allObjects = ResourceDescriptorHeap[1016];
-
+    GroupMemoryBarrierWithGroupSync();
     // bool visible = FrustumVisible(objectIndex);
     // visible = visible && Hiz_Culling(objectIndex);
     // bool visible = Hiz_Culling(objectIndex);
@@ -374,31 +370,31 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
 #endif
 
 #ifdef HIZ_CULL_POST_PASS
-    uint objectIndex = DTid.x;
-    if (objectIndex >= g_PushConstants.totalObjectCount) {
-        return;
-    }
+    // uint objectIndex = DTid.x;
+    // if (objectIndex >= g_PushConstants.totalObjectCount) {
+    //     return;
+    // }
 
-    bool wasVisibleInPrePass = (visibleObjectFlags[objectIndex] == 1);
-    bool newlyVisible = false;
+    // bool wasVisibleInPrePass = (visibleObjectFlags[objectIndex] == 1);
+    // bool newlyVisible = false;
 
-    if (!wasVisibleInPrePass) {
-        newlyVisible = HZBCull2(objectIndex);
-        if (newlyVisible) {
-            visibleObjectFlags[objectIndex] = 1;
-        }
-    }
+    // if (!wasVisibleInPrePass) {
+    //     newlyVisible = true;//HZBCull2(objectIndex);
+    //     if (newlyVisible) {
+    //         visibleObjectFlags[objectIndex] = 1;
+    //     }
+    // }
 
-    DeviceMemoryBarrierWithGroupSync();
+    // DeviceMemoryBarrierWithGroupSync();
 
-    if (newlyVisible) {
-        uint writeIndex = 0;
-        InterlockedAdd(visibleObjectCounter[0], 1, writeIndex);
-        if (writeIndex < g_PushConstants.totalObjectCount) {
-            StructuredBuffer<DrawData> allObjects = ResourceDescriptorHeap[1016];
-            visibleObjects[writeIndex] = allObjects[objectIndex];
-        }
-    }
+    // if (newlyVisible) {
+    //     uint writeIndex = 0;
+    //     InterlockedAdd(visibleObjectCounter[0], 1, writeIndex);
+    //     if (writeIndex < g_PushConstants.totalObjectCount) {
+    //         StructuredBuffer<DrawData> allObjects = ResourceDescriptorHeap[1016];
+    //         visibleObjects[writeIndex] = allObjects[objectIndex];
+    //     }
+    // }
 #endif
 }
 

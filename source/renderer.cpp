@@ -336,21 +336,21 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_OW/ow.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S1.gltf", utils::DataFolder::ROOT);
-	meshFile = utils::GetFullPath("GLTF_Bunny/bunny1.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("GLTF_Bunny/bunny.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this, true);
 	debugdrawPass = std::make_shared<DebugDrawPass>(this);
 
 	glm::vec3 sceneMin = glm::vec3(std::numeric_limits<float>::max());
 	glm::vec3 sceneMax = glm::vec3(std::numeric_limits<float>::lowest());
 	for (int i = 0; i < mesh->GetMeshCount(); ++i) { 
-		for (int j = 0; j < mesh->m_GPUMesh->m_meshlet.m_drawArgs.size(); ++j) {
+		for (int j = 0; j < mesh->m_GPUMesh->m_meshlet[i].m_drawArgs.size(); ++j) {
 			RenderNode node;
 			node.mesh = mesh->GetMesh(i);
 			node.meshGPU = mesh->m_GPUMesh.get();
-			node.drawArgs.indexNum = mesh->m_GPUMesh->m_meshlet.m_drawArgs[j].base.indexNum;
+			node.drawArgs.indexNum = mesh->m_GPUMesh->m_meshlet[i].m_drawArgs[j].base.indexNum;
 			node.drawArgs.instanceNum = 1;
-			node.drawArgs.baseIndex = mesh->m_GPUMesh->m_meshlet.m_drawArgs[j].base.baseIndex;
-			node.drawArgs.baseVertex = mesh->m_GPUMesh->m_meshlet.m_drawArgs[j].base.baseVertex;
+			node.drawArgs.baseIndex = mesh->m_GPUMesh->m_meshlet[i].m_drawArgs[j].base.baseIndex;
+			node.drawArgs.baseVertex = mesh->m_GPUMesh->m_meshlet[i].m_drawArgs[j].base.baseVertex;
 
 			node.material = &mesh->GetMaterial(node.mesh->GetMaterialID());
 			try {

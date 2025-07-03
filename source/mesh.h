@@ -60,7 +60,7 @@ public:
 		std::vector<DrawArgs> m_drawArgs;
 		uint32_t m_cluster_total_size = 0;
 	};
-	MeshLet m_meshlet;
+	std::vector<MeshLet> m_meshlet;
 };
 
 class Material {
