@@ -470,7 +470,7 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 					glm::vec4(frustumR.x, frustumR.y, frustumR.z, frustumR.w),
 					glm::vec4(frustumT.x, frustumT.y, frustumT.z, frustumT.w),
 					glm::vec4(frustumB.x, frustumB.y, frustumB.z, frustumB.w) },
-			.totalObjectCount = (uint32_t)m_renderer->m_OpaqueRenderNodes.size(),
+			.totalObjectCount = { (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), 1, 0, 0 },
 
 		};
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(PushConstants));
@@ -511,7 +511,7 @@ void GPUCullingPass::RenderPost(struct RenderInfo &info, Camera &camera) {
 					glm::vec4(frustumR.x, frustumR.y, frustumR.z, frustumR.w),
 					glm::vec4(frustumT.x, frustumT.y, frustumT.z, frustumT.w),
 					glm::vec4(frustumB.x, frustumB.y, frustumB.z, frustumB.w) },
-			.totalObjectCount = (uint32_t)m_renderer->m_OpaqueRenderNodes.size(),
+			.totalObjectCount = { (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), 0, 0, 0 },
 
 		};
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(PushConstants));

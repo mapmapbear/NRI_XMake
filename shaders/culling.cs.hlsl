@@ -4,7 +4,7 @@ struct PushConstants {
     float4x4 viewMat;
     float4 cameraArgs; // znear, zfar, distCull, cullingEnabled
     float4 frustum[4]; // left, right, top, bottom
-    uint totalObjectCount;
+    uint4 totalObjectCount;
 };
 NRI_ROOT_CONSTANTS(PushConstants, g_PushConstants, 1, 0);
 
@@ -334,9 +334,16 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
 
 #ifdef HIZ_CULL_PRE_PASS
     uint objectIndex = DTid.x;
-    if (objectIndex >= g_PushConstants.totalObjectCount) {
+    if (objectIndex >= g_PushConstants.totalObjectCount.x) {
         return;
     }
+
+    if(g_PushConstants.totalObjectCount.y > 0) {
+        visibleObjectCounter[0] = g_PushConstants.totalObjectCount.x;
+        visibleObjects[objectIndex] = allObjects[objectIndex];
+        return;
+    }
+
     if (DTid.x == 0) {
         // s_DrawCount[Gid.x] = 0;
         visibleObjectCounter[0] = 0;
@@ -363,7 +370,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
     if (visibleObjectFlags[objectIndex] == 1) {
         uint writeIndex = 0;
         InterlockedAdd(visibleObjectCounter[0], 1, writeIndex);
-        if (writeIndex < g_PushConstants.totalObjectCount) {
+        if (writeIndex < g_PushConstants.totalObjectCount.x) {
             visibleObjects[writeIndex] = allObjects[objectIndex];
         }
     }

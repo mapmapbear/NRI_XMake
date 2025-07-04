@@ -24,7 +24,7 @@ public:
 		glm::mat4 viewMat;
 		glm::vec4 cameraArgs;
 		std::array<glm::vec4, 4> frustum;
-		uint32_t totalObjectCount;
+		std::array<uint32_t, 4> totalObjectCount;
 	};
 
 	struct HiZPushConstants {
