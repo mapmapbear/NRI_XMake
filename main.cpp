@@ -470,8 +470,11 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 			ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
 			ImGui::Text("Frame: %u", frameIndex);
 			ImGui::Checkbox("Show Indirect", &testRenderPtr->m_config.IndirectDrawState);
-			ImGui::Checkbox("Show BoundingBox", &testRenderPtr->m_config.DebugBoxState);
+			ImGui::Checkbox("Show DebugDraw", &testRenderPtr->m_config.DebugDrawState);
+			ImGui::Checkbox("Show Sphere", &testRenderPtr->m_config.DebugSphereDraw);
+			ImGui::Checkbox("Show Box", &testRenderPtr->m_config.DebugBoxDraw);
 			ImGui::Checkbox("Show SSAO", &testRenderPtr->m_config.DebugSSAOState);
+			ImGui::Checkbox("Enable HiZ Culling", &testRenderPtr->m_config.OcclusionCullingState);
 			// ImGui::SliderFloat("Transparency", &m_Transparency, 0.0f, 1.0f);
 			// ImGui::SliderFloat("Scale", &m_Scale, 0.75f, 1.25f);
 			// ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f, "%.0f");
@@ -669,7 +672,7 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		}
 
 		testRenderPtr->OnRenderDepth(info, m_Camera);
-		
+
 		// Transform Color RT -> Back Buffer
 		{
 			nri::TextureBarrierDesc textureBarrierDescs = {};

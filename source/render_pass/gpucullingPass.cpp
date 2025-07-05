@@ -160,6 +160,10 @@ void GPUCullingPass::AllocGPUMemory() {
 			glm::mat4 transMat = node.globalTransform;
 			glm::vec3 min = glm::vec4(node.mesh->aabb.first, 1.0);
 			glm::vec3 max = glm::vec4(node.mesh->aabb.second, 1.0);
+
+			min = node.cluster_aabb.first - node.cluster_aabb.second;
+			max = node.cluster_aabb.first + node.cluster_aabb.second;
+
 			min = transMat * glm::vec4(min, 1.0);
 			max = transMat * glm::vec4(max, 1.0);
 
@@ -228,7 +232,7 @@ void GPUCullingPass::AllocGPUMemory() {
 
 		std::vector<std::vector<float>> data(textureDesc.mipNum);
 		std::vector<nri::TextureSubresourceUploadDesc> subresources;
-		
+
 		for (uint32_t i = 0; i < textureDesc.mipNum; i++) {
 			nri::TextureSubresourceUploadDesc subresource = {};
 			uint32_t width = textureDesc.width >> i;
@@ -470,7 +474,7 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 					glm::vec4(frustumR.x, frustumR.y, frustumR.z, frustumR.w),
 					glm::vec4(frustumT.x, frustumT.y, frustumT.z, frustumT.w),
 					glm::vec4(frustumB.x, frustumB.y, frustumB.z, frustumB.w) },
-			.totalObjectCount = { (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), 1, 0, 0 },
+			.totalObjectCount = { (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), m_renderer->m_config.OcclusionCullingState ? 0u : 1u, 0, 0 },
 
 		};
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(PushConstants));

@@ -16,8 +16,11 @@ struct RenderInfo {
 
 struct RenderSetting {
 	bool IndirectDrawState = true;
-	bool DebugBoxState = false;
 	bool DebugSSAOState = false;
+	bool DebugBoxDraw = false;
+	bool DebugSphereDraw = false;
+	bool DebugDrawState = false;
+	bool OcclusionCullingState = false;
 };
 
 class SkyRenderPass;
@@ -100,6 +103,7 @@ public:
 		// std::pair<uint64_t, uint64_t> meshOffsets;
 		nri::DrawIndexedDesc drawArgs;
 		std::vector<nri::DrawIndexedDesc> clusterDrawArgs;
+		std::pair<glm::vec3, glm::vec3> cluster_aabb;
 		const Material *material;
 		glm::mat4 globalTransform;
 	};

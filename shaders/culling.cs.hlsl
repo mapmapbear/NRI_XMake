@@ -355,9 +355,9 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
     // bool visible = FrustumVisible(objectIndex);
     // visible = visible && Hiz_Culling(objectIndex);
     // bool visible = Hiz_Culling(objectIndex);
-    // bool visible = SphereCullFrustum(objectIndex);
+    bool visible = SphereCullFrustum(objectIndex);
     // bool visible = HizCull(objectIndex);
-    bool visible = true;//HZBCull2(objectIndex);
+    visible = visible && HZBCull2(objectIndex);
     if (visible) {
         visibleObjectFlags[objectIndex] = 1;
     }
@@ -377,31 +377,31 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
 #endif
 
 #ifdef HIZ_CULL_POST_PASS
-    // uint objectIndex = DTid.x;
-    // if (objectIndex >= g_PushConstants.totalObjectCount) {
-    //     return;
-    // }
+    uint objectIndex = DTid.x;
+    if (objectIndex >= g_PushConstants.totalObjectCount.x) {
+        return;
+    }
 
-    // bool wasVisibleInPrePass = (visibleObjectFlags[objectIndex] == 1);
-    // bool newlyVisible = false;
+    bool wasVisibleInPrePass = (visibleObjectFlags[objectIndex] == 1);
+    bool newlyVisible = false;
 
-    // if (!wasVisibleInPrePass) {
-    //     newlyVisible = true;//HZBCull2(objectIndex);
-    //     if (newlyVisible) {
-    //         visibleObjectFlags[objectIndex] = 1;
-    //     }
-    // }
+    if (!wasVisibleInPrePass) {
+        newlyVisible = HZBCull2(objectIndex);
+        if (newlyVisible) {
+            visibleObjectFlags[objectIndex] = 1;
+        }
+    }
 
-    // DeviceMemoryBarrierWithGroupSync();
+    DeviceMemoryBarrierWithGroupSync();
 
-    // if (newlyVisible) {
-    //     uint writeIndex = 0;
-    //     InterlockedAdd(visibleObjectCounter[0], 1, writeIndex);
-    //     if (writeIndex < g_PushConstants.totalObjectCount) {
-    //         StructuredBuffer<DrawData> allObjects = ResourceDescriptorHeap[1016];
-    //         visibleObjects[writeIndex] = allObjects[objectIndex];
-    //     }
-    // }
+    if (newlyVisible) {
+        uint writeIndex = 0;
+        InterlockedAdd(visibleObjectCounter[0], 1, writeIndex);
+        if (writeIndex < g_PushConstants.totalObjectCount.x) {
+            StructuredBuffer<DrawData> allObjects = ResourceDescriptorHeap[1016];
+            visibleObjects[writeIndex] = allObjects[objectIndex];
+        }
+    }
 #endif
 }
 

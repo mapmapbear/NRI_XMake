@@ -342,7 +342,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 	glm::vec3 sceneMin = glm::vec3(std::numeric_limits<float>::max());
 	glm::vec3 sceneMax = glm::vec3(std::numeric_limits<float>::lowest());
-	for (int i = 0; i < mesh->GetMeshCount(); ++i) { 
+	for (int i = 0; i < mesh->GetMeshCount(); ++i) {
 		for (int j = 0; j < mesh->m_GPUMesh->m_meshlet[i].m_drawArgs.size(); ++j) {
 			RenderNode node;
 			node.mesh = mesh->GetMesh(i);
@@ -356,15 +356,11 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 			try {
 				node.globalTransform = mesh->results.at(i);
 			} catch (const std::exception &e) {
+				std::cout << "Error: " << e.what() << std::endl;
 				node.globalTransform = glm::mat4(1.0f);
 			}
 
-			auto submeshAABB = node.mesh->aabb;
-			glm::vec3 transformedMin = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.first, 1.0f));
-			glm::vec3 transformedMax = glm::vec3(node.globalTransform * glm::vec4(submeshAABB.second, 1.0f));
-
-			sceneMin = glm::min(sceneMin, transformedMin);
-			sceneMax = glm::max(sceneMax, transformedMax);
+			node.cluster_aabb = std::make_pair(*reinterpret_cast<glm::vec3 *>((mesh->m_GPUMesh->m_meshlet[i].m_bounds[j].center)), glm::vec3(mesh->m_GPUMesh->m_meshlet[i].m_bounds[j].radius));
 
 			if (node.material->IsTransparent) {
 				m_TransparentRenderNodes.push_back(node);
@@ -379,6 +375,10 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 		glm::vec3 min = glm::vec4(node.mesh->aabb.first, 1.0);
 		glm::vec3 max = glm::vec4(node.mesh->aabb.second, 1.0);
+
+		min = node.cluster_aabb.first - node.cluster_aabb.second;
+		max = node.cluster_aabb.first + node.cluster_aabb.second;
+
 		min = transMat * glm::vec4(min, 1.0);
 		max = transMat * glm::vec4(max, 1.0);
 
@@ -395,7 +395,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		center = transMat * center;
 		glm::vec4 extent = glm::vec4(node.mesh->aabb2.second, 1.0);
 		extent = transMat * extent;
-		debugdrawPass->DrawSphere(center, std::min(extent.x, std::min(extent.y, extent.z)), glm::vec4(1.0));
+		debugdrawPass->DrawSphere(center, std::max(extent.x, std::min(extent.y, extent.z)), glm::vec4(1.0));
 	}
 	debugdrawPass->DrawFrustum(glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
 
@@ -563,7 +563,7 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 		meshPass->Render(info, camera);
 		simplePass->SetTestIndex(testIndex);
 		simplePass->Render(info, camera);
-		if (m_config.DebugBoxState) {
+		if (m_config.DebugDrawState) {
 			debugdrawPass->Render(info, camera);
 		}
 		// boxCullingPass->Render(info, camera);

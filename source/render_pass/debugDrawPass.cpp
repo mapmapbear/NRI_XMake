@@ -528,8 +528,9 @@ void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
 		vertexBufferDesc.offset = m_indicesOffset;
 		vertexBufferDesc.stride = sizeof(VertexA);
 		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
-		NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(m_indices.size()), m_box_count, 0, 0, 0 });
-
+		if (m_renderer->m_config.DebugBoxDraw) {
+			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(m_indices.size()), m_box_count, 0, 0, 0 });
+		}
 		// Sphere Draw
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline_sphere);
@@ -543,8 +544,9 @@ void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
 		vertexBufferDesc_sphere.offset = m_indicesOffset_sphere;
 		vertexBufferDesc_sphere.stride = sizeof(VertexA);
 		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc_sphere, 1);
-
-		// NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(m_indices_sphere.size()), m_sphere_count, 0, 0, 0 });
+		if (m_renderer->m_config.DebugSphereDraw) {
+			NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(m_indices_sphere.size()), m_sphere_count, 0, 0, 0 });
+		}
 
 		// Frustum Draw
 		block.modelMat = glm::inverse(camera.statePrev.mWorldToView) * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f));
