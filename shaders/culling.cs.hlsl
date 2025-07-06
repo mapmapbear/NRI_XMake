@@ -82,9 +82,9 @@ float4 SphereToScreenRect(float3 Center, float Radius, float4x4 ViewToClip) {
 bool SphereCullFrustum(uint objectIndex) {
     StructuredBuffer<CullData> sphereCullData = ResourceDescriptorHeap[1015];
     float3 center = sphereCullData[objectIndex].center;
-    float radius = min(sphereCullData[objectIndex].extents.x, min(sphereCullData[objectIndex].extents.y, sphereCullData[objectIndex].extents.z));
+    float radius = max(sphereCullData[objectIndex].extents.x, max(sphereCullData[objectIndex].extents.y, sphereCullData[objectIndex].extents.z));
 
-    float4 centerVS = mul(g_PushConstants.viewMat, float4(center, 1.0));
+    float4 centerVS = mul(viewMat, float4(center, 1.0));
     float SphereMinZ = centerVS.z - radius;
     float SphereMaxZ = centerVS.z + radius;
 
@@ -120,148 +120,6 @@ uint ComputeHZBMip(int4 rectPixels, int texelCoverage) {
     return mip;
 }
 
-bool HZBCull(uint objectIndex) {
-    StructuredBuffer<CullData> sphereCullData = ResourceDescriptorHeap[1015];
-    Texture2D<float> HizBuffer = ResourceDescriptorHeap[1021];
-    SamplerState HizSampler = ResourceDescriptorHeap[5];
-    static const uint hzbTexelCoverage = 4;
-    float3 center = sphereCullData[objectIndex].center;
-    float3 extents = sphereCullData[objectIndex].extents;
-
-    float3 corners[8];
-    corners[0] = center + float3(-extents.x, -extents.y, -extents.z);
-    corners[1] = center + float3(extents.x, -extents.y, -extents.z);
-    corners[2] = center + float3(extents.x,  extents.y, -extents.z);
-    corners[3] = center + float3(-extents.x,  extents.y, -extents.z);
-    corners[4] = center + float3(-extents.x, -extents.y,  extents.z);
-    corners[5] = center + float3(extents.x, -extents.y,  extents.z);
-    corners[6] = center + float3(extents.x,  extents.y,  extents.z);
-    corners[7] = center + float3(-extents.x,  extents.y,  extents.z);
-
-    float4x4 VPMat = mul(projectMat, viewMat);
-    VPMat = g_PushConstants.viewMat;
-    float3 minNDC = float3(2.0, 2.0, 2.0);
-    float3 maxNDC = float3(-2.0, -2.0, -2.0);
-
-    for (int i = 0; i < 8; ++i) {
-        float4 clipPos = mul(VPMat, float4(corners[i], 1.0));
-        float3 ndc = clipPos.xyz / clipPos.w;
-        ndc = clamp(ndc, -1.0, 1.0);
-        minNDC = saturate(min(minNDC, ndc));
-        maxNDC = saturate(max(maxNDC, ndc));
-    }
-
-    float4 rect = saturate(float4(minNDC.xy, maxNDC.xy) * float2(0.5f, -0.5f).xyxy + 0.5f).xwzy;
-    float2 screenSize = float2(1920.0 / 2, 1080.0 / 2);
-    int4 rectPixels = int4(rect * screenSize.xyxy + float4(0.5f, 0.5f, -0.5f, -0.5f));
-    rectPixels = int4(rectPixels.xy, max(rectPixels.xy, rectPixels.zw));
-    int mip = ComputeHZBMip(rectPixels, hzbTexelCoverage);
-    rectPixels >>= mip;
-    float2 texelSize = 1.0f / screenSize * (1u << mip);
-    float maxDepth = minNDC.z;
-    float depth = 0;
-
-    if(hzbTexelCoverage == 4) {
-        float4 xCoords = (min(rectPixels.x + float4(0, 1, 2, 3), rectPixels.z) + 0.5f) * texelSize.x;
-        float4 yCoords = (min(rectPixels.y + float4(0, 1, 2, 3), rectPixels.w) + 0.5f) * texelSize.y;
-
-        float depth00 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.x, yCoords.x), mip);
-        float depth10 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.y, yCoords.x), mip);
-        float depth20 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.z, yCoords.x), mip);
-        float depth30 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.w, yCoords.x), mip);
-
-        float depth01 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.x, yCoords.y), mip);
-        float depth11 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.y, yCoords.y), mip);
-        float depth21 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.z, yCoords.y), mip);
-        float depth31 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.w, yCoords.y), mip);
-
-        float depth02 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.x, yCoords.z), mip);
-        float depth12 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.y, yCoords.z), mip);
-        float depth22 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.z, yCoords.z), mip);
-        float depth32 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.w, yCoords.z), mip);
-
-        float depth03 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.x, yCoords.w), mip);
-        float depth13 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.y, yCoords.w), mip);
-        float depth23 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.z, yCoords.w), mip);
-        float depth33 = HizBuffer.SampleLevel(HizSampler, float2(xCoords.w, yCoords.w), mip);
-
-        depth =
-        Min4(
-            Min4(depth00, depth10, depth20, depth30),
-            Min4(depth01, depth11, depth21, depth31),
-            Min4(depth02, depth12, depth22, depth32),
-            Min4(depth03, depth13, depth23, depth33));
-    }
-    bool isOccluded = depth < maxDepth;
-    return !isOccluded;
-}
-
-bool HizCull(uint objectIndex) {
-    StructuredBuffer<CullData> sphereCullData = ResourceDescriptorHeap[1015];
-    Texture2D<float> HizBuffer = ResourceDescriptorHeap[1021];
-    SamplerState HizSampler = ResourceDescriptorHeap[5];
-
-    float3 center = sphereCullData[objectIndex].center;
-    float3 extents = sphereCullData[objectIndex].extents;
-
-    float3 corners[8];
-    corners[0] = center + float3(-extents.x, -extents.y, -extents.z);
-    corners[1] = center + float3(extents.x, -extents.y, -extents.z);
-    corners[2] = center + float3(extents.x,  extents.y, -extents.z);
-    corners[3] = center + float3(-extents.x,  extents.y, -extents.z);
-    corners[4] = center + float3(-extents.x, -extents.y,  extents.z);
-    corners[5] = center + float3(extents.x, -extents.y,  extents.z);
-    corners[6] = center + float3(extents.x,  extents.y,  extents.z);
-    corners[7] = center + float3(-extents.x,  extents.y,  extents.z);
-
-    float4x4 VPMat = mul(projectMat, viewMat);
-    VPMat = g_PushConstants.viewMat;
-    float2 minNDC = float2(2.0, 2.0);
-    float2 maxNDC = float2(-2.0, -2.0);
-    float minDepth = 1.0;
-    for (int i = 0; i < 8; ++i) {
-        float4 clipPos = mul(VPMat, float4(corners[i], 1.0));
-
-        // 如果所有顶点都在裁剪空间w <= 0后面，则剔除
-        // if (clipPos.w > 0) {
-        //     return false;
-        // }
-        float3 ndc = clipPos.xyz / clipPos.w;
-        // 转换为UV坐标 (0 to 1)
-        float2 uv = ndc.xy * 0.5 + 0.5;
-
-        minNDC = min(minNDC, ndc.xy);
-        maxNDC = max(maxNDC, ndc.xy);
-        minDepth = max(minDepth, ndc.z);
-    }
-
-    if (minNDC.x < -1.0 || maxNDC.x < -1.0 || minNDC.y > 1.0 || maxNDC.y > 1.0) {
-        return false;
-    }
-
-    float2 minUV = minNDC * 0.5 + 0.5;
-    float2 maxUV = maxNDC * 0.5 + 0.5;
-
-    float2 screenSize = float2(1920.0 / 2, 1080.0 / 2);
-    float2 boxScreenSize = (maxUV - minUV) * screenSize;
-    float mipLevel = ceil(log2(max(boxScreenSize.x, boxScreenSize.y)));
-    mipLevel = clamp(mipLevel, 0, 9);
-
-    float2 p0 = float2(minUV.x, minUV.y);
-    float2 p1 = float2(maxUV.x, minUV.y);
-    float2 p2 = float2(minUV.x, maxUV.y);
-    float2 p3 = float2(maxUV.x, maxUV.y);
-
-    float p0Depth = HizBuffer.SampleLevel(HizSampler, p0, mipLevel).r;
-    float p1Depth = HizBuffer.SampleLevel(HizSampler, p1, mipLevel).r;
-    float p2Depth = HizBuffer.SampleLevel(HizSampler, p2, mipLevel).r;
-    float p3Depth = HizBuffer.SampleLevel(HizSampler, p3, mipLevel).r;
-    float HizDepth = min(min(p0Depth, p1Depth), min(p2Depth, p3Depth));
-
-    // 然后用 occluderDepth 进行比较
-    return minDepth <= HizDepth;
-}
-
 bool HZBCull2(uint objectIndex) {
     StructuredBuffer<CullData> sphereCullData = ResourceDescriptorHeap[1015];
     Texture2D<float> HizBuffer = ResourceDescriptorHeap[1022];
@@ -281,7 +139,7 @@ bool HZBCull2(uint objectIndex) {
     corners[7] = center + float3(-extents.x,  extents.y,  extents.z);
 
     float4x4 VPMat = mul(projectMat, viewMat);
-    VPMat = g_PushConstants.viewMat;
+    // VPMat = g_PushConstants.viewMat;
     float3 minXY = float3(2.0, 2.0, 2.0);
     float3 maxXY = float3(-2.0, -2.0, -2.0);
     float minDepth = 1.0;
@@ -351,13 +209,10 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
 
     visibleObjects[objectIndex] = (DrawData)0;
 
-    GroupMemoryBarrierWithGroupSync();
-    // bool visible = FrustumVisible(objectIndex);
-    // visible = visible && Hiz_Culling(objectIndex);
-    // bool visible = Hiz_Culling(objectIndex);
+    DeviceMemoryBarrierWithGroupSync();
+
     bool visible = SphereCullFrustum(objectIndex);
-    // bool visible = HizCull(objectIndex);
-    visible = visible && HZBCull2(objectIndex);
+    // visible = visible && HZBCull2(objectIndex);
     if (visible) {
         visibleObjectFlags[objectIndex] = 1;
     }
@@ -380,6 +235,9 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
     uint objectIndex = DTid.x;
     if (objectIndex >= g_PushConstants.totalObjectCount.x) {
         return;
+    }
+    if(visibleObjectCounter[0] == 0) {
+        return ;
     }
 
     bool wasVisibleInPrePass = (visibleObjectFlags[objectIndex] == 1);
