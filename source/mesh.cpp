@@ -82,8 +82,8 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer, bool meshlet) {
 	}
 
 	m_GPUMesh = LoadGPUMesh(pScene, (uint32_t)pScene->mNumMeshes, renderer, meshlet);
-
-	auto loadTexture = [renderer](std::string &basepath, aiMaterial *mat, aiTextureType type) {
+	uint32_t texViewIndex = 14;
+	auto loadTexture = [renderer, &texViewIndex](std::string &basepath, aiMaterial *mat, aiTextureType type) {
 		std::shared_ptr<Texture> tex = std::make_shared<Texture>();
 
 		aiString aiStr;
@@ -107,16 +107,20 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer, bool meshlet) {
 			texViewDesc.viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D;
 			texViewDesc.format = textureData->GetFormat();
 			tex->Create(renderer, textureDesc, texViewDesc);
+			tex->CreateView(renderer, texViewDesc);
+			tex->SetViewIndex(texViewIndex++);
 			renderer->uploadTextureMap.insert({ tex, textureData });
 		} else {
 			switch (type) {
 				case aiTextureType_NORMAL_CAMERA:
 					tex = renderer->GetDefaultNormalTexPtr();
+					tex->m_isDefault = true;
 					break;
 				case aiTextureType_METALNESS:
 				case aiTextureType_DIFFUSE_ROUGHNESS:
 				default:
 					tex = renderer->GetDefaultBlackTexPtr();
+					tex->m_isDefault = true;
 					break;
 			}
 		}
@@ -415,6 +419,7 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 			}
 			meshDatas[i] = meshdata;
 			preBaseVertex += (uint32_t)meshdata->m_vertexesData.size();
+			pGPUMesh->m_meshlet[i].m_materialIndex = pMesh->mMaterialIndex;
 		}
 	} else {
 		m_drawArgs.resize(numMeshes);

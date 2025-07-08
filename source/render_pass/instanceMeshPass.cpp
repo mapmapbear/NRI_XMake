@@ -271,7 +271,6 @@ void InstanceMeshPass::BindMemory() {
 		};
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(texture2DViewDesc, m_texture_albedo_view));
-		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
 	{ // Read-only texture
@@ -281,7 +280,6 @@ void InstanceMeshPass::BindMemory() {
 		};
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(texture2DViewDesc, m_texture_normal_view));
-		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
 	{ // Read-only texture
@@ -291,7 +289,6 @@ void InstanceMeshPass::BindMemory() {
 		};
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(texture2DViewDesc, m_texture_mr_view));
-		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
 	{ // Read-only texture
@@ -301,7 +298,6 @@ void InstanceMeshPass::BindMemory() {
 		};
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(texture2DViewDesc, m_texture_ao_view));
-		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
 	{ // Read-only texture
@@ -311,7 +307,6 @@ void InstanceMeshPass::BindMemory() {
 		};
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(texture2DViewDesc, m_texture_emissive_view));
-		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
 	{ // Sampler
@@ -651,6 +646,8 @@ void InstanceMeshPass::BuildPipeline() {
 		};
 		NRI.UpdateDescriptorRanges(*m_ConstantBufferDescriptorSet, 0, 1,
 				&descriptorRangeUpdateDesc);
+
+		m_renderer->texViewOffset = 7;
 	}
 }
 

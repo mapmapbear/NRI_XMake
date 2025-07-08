@@ -67,7 +67,6 @@ void SkyRenderPass::BindMemory() {
 		nri::Texture2DViewDesc textureViewDesc = { .texture = m_HDRTexture, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = m_texture.GetFormat() };
 		NRI_ABORT_ON_FAILURE(
 				NRI.CreateTexture2DView(textureViewDesc, m_HDRTextureShaderResource));
-		SPDLOG_INFO("texOffset= {}\n", m_renderer->texViewOffset++);
 	}
 
 	// Upload data

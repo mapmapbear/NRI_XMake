@@ -228,6 +228,7 @@ void GPUCullingPass::AllocGPUMemory() {
 
 		m_HiZTexture = std::make_shared<Texture>();
 		m_HiZTexture->Create(m_renderer, textureDesc, texture2DViewDesc);
+		m_HiZTexture->CreateAllView(m_renderer, texture2DViewDesc);
 		NRI.SetDebugName(m_HiZTexture->GetTexture(), "m_HiZTexture");
 
 		std::vector<std::vector<float>> data(textureDesc.mipNum);

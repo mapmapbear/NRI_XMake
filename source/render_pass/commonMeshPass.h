@@ -69,9 +69,9 @@ private:
 	std::vector<nri::Descriptor *> m_textureViews;
 
 	struct MaterialIndexBlock {
-		uint32_t textureIndex = 0;
-		uint32_t textureIndex1 = 0;
-		uint32_t textureIndex2 = 0;
+		uint32_t textureBase = 0;
+		uint32_t textureNormal = 0;
+		uint32_t textureMetallic = 0;
 		uint32_t textureIndex3 = 0;
 	};
 

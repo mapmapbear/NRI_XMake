@@ -29,9 +29,11 @@ void SSAOCompPass::AllocGPUMemory() {
 		nri::Texture2DViewDesc texture2DViewDesc = {};
 		texture2DViewDesc.format = textureDesc.format;
 		texture2DViewDesc.viewType = nri::Texture2DViewType::SHADER_RESOURCE_STORAGE_2D;
+		
 
 		m_SSAOTexture = std::make_shared<Texture>();
 		m_SSAOTexture->Create(m_renderer, textureDesc, texture2DViewDesc);
+		m_SSAOTexture->CreateAllView(m_renderer, texture2DViewDesc);
 		NRI.SetDebugName(m_SSAOTexture->GetTexture(), "m_SSAOTexture");
 	}
 
@@ -55,6 +57,7 @@ void SSAOCompPass::AllocGPUMemory() {
 
 		m_RotationTexture = std::make_shared<Texture>();
 		m_RotationTexture->Create(m_renderer, textureDesc, texViewDesc);
+		m_RotationTexture->CreateView(m_renderer, texViewDesc);
 		NRI.SetDebugName(m_RotationTexture->GetTexture(), "m_RotationTexture");
 	}
 	// DpethBuffer SRV

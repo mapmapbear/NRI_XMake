@@ -113,8 +113,19 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		textureDesc.mipNum = diffuseIrradianceTex.GetMipNum();
 		textureDesc.layerNum = diffuseIrradianceTex.GetArraySize();
 
-		NRI_ABORT_ON_FAILURE(
-				NRI.CreateTexture(*m_Device, textureDesc, m_DiffuseIrradianceTex));
+		// NRI_ABORT_ON_FAILURE(NRI.CreateTexture(*m_Device, textureDesc, m_DiffuseIrradianceTex));
+
+		nri::Texture2DViewDesc texViewDesc = {};
+		texViewDesc.viewType = nri::Texture2DViewType::SHADER_RESOURCE_CUBE;
+		texViewDesc.format = diffuseIrradianceTex.GetFormat();
+		texViewDesc.mipNum = 1; //diffuseIrradianceTex.GetMipNum();
+		texViewDesc.mipOffset = 0;
+		texViewDesc.layerNum = 6;
+
+		m_DefaultIrradianceTex = std::make_shared<Texture>();
+		m_DefaultIrradianceTex->Create(this, textureDesc, texViewDesc);
+		m_DefaultIrradianceTex->CreateView(this, texViewDesc);
+		m_DefaultIrradianceTex->SetViewIndex(7);
 	}
 
 	{
@@ -127,8 +138,14 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		textureDesc.mipNum = specularIrradianceTex.GetMipNum();
 		textureDesc.layerNum = specularIrradianceTex.GetArraySize();
 
-		NRI_ABORT_ON_FAILURE(
-				NRI.CreateTexture(*m_Device, textureDesc, m_SpecularIrradianceTex));
+		// NRI_ABORT_ON_FAILURE(NRI.CreateTexture(*m_Device, textureDesc, m_SpecularIrradianceTex));
+
+		nri::Texture2DViewDesc texture2DViewDesc = { .viewType = nri::Texture2DViewType::SHADER_RESOURCE_CUBE, .format = specularIrradianceTex.GetFormat(), .mipOffset = 0, .mipNum = specularIrradianceTex.GetMipNum(), .layerOffset = 0, .layerNum = 6 };
+
+		m_DefaultSpecularIrradianceTex = std::make_shared<Texture>();
+		m_DefaultSpecularIrradianceTex->Create(this, textureDesc, texture2DViewDesc);
+		m_DefaultSpecularIrradianceTex->CreateView(this, texture2DViewDesc);
+		m_DefaultSpecularIrradianceTex->SetViewIndex(8);
 	}
 
 	{
@@ -140,8 +157,14 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		textureDesc.height = BRDFTex.GetHeight();
 		textureDesc.mipNum = 1;
 
-		NRI_ABORT_ON_FAILURE(
-				NRI.CreateTexture(*m_Device, textureDesc, m_BRDFTex));
+		// NRI_ABORT_ON_FAILURE(NRI.CreateTexture(*m_Device, textureDesc, m_BRDFTex));
+
+		nri::Texture2DViewDesc texture2DViewDesc = { .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = BRDFTex.GetFormat() };
+
+		m_DefaultBRDFTex = std::make_shared<Texture>();
+		m_DefaultBRDFTex->Create(this, textureDesc, texture2DViewDesc);
+		m_DefaultBRDFTex->CreateView(this, texture2DViewDesc);
+		m_DefaultBRDFTex->SetViewIndex(9);
 	}
 
 	{
@@ -159,6 +182,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 		m_DefaultBlackTex = std::make_shared<Texture>();
 		m_DefaultBlackTex->Create(this, textureDesc, texViewDesc);
+		m_DefaultBlackTex->CreateView(this, texViewDesc);
+		m_DefaultBlackTex->SetViewIndex(10);
 	}
 
 	{
@@ -176,6 +201,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 		m_DefaultWhiteTex = std::make_shared<Texture>();
 		m_DefaultWhiteTex->Create(this, textureDesc, texViewDesc);
+		m_DefaultWhiteTex->CreateView(this, texViewDesc);
+		m_DefaultWhiteTex->SetViewIndex(11);
 	}
 
 	{
@@ -193,6 +220,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 		m_DefaultNormalTex = std::make_shared<Texture>();
 		m_DefaultNormalTex->Create(this, textureDesc, texViewDesc);
+		m_DefaultNormalTex->CreateView(this, texViewDesc);
+		m_DefaultNormalTex->SetViewIndex(12);
 	}
 
 	{
@@ -208,26 +237,29 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		nri::Texture2DViewDesc texViewDesc = {};
 		texViewDesc.viewType = nri::Texture2DViewType::DEPTH_STENCIL_ATTACHMENT;
 		texViewDesc.format = nri::Format::D32_SFLOAT;
+		texViewDesc.mipNum = 1;
 
 		m_ShadowMap = std::make_shared<Texture>();
 		m_ShadowMap->Create(this, textureDesc, texViewDesc);
+		m_ShadowMap->CreateView(this, texViewDesc);
+		m_ShadowMap->SetViewIndex(13);
 		NRI.SetDebugName(m_ShadowMap->GetTexture(), "m_ShadowMap");
 	}
 
-	std::vector<nri::Texture *> textureArray = { m_DiffuseIrradianceTex, m_SpecularIrradianceTex, m_BRDFTex };
-	nri::ResourceGroupDesc resourceGroupDesc = {};
-	resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
-	resourceGroupDesc.textureNum = (uint32_t)textureArray.size();
-	resourceGroupDesc.textures = textureArray.data();
+	// std::vector<nri::Texture *> textureArray = { m_DiffuseIrradianceTex, m_SpecularIrradianceTex, m_BRDFTex };
+	// nri::ResourceGroupDesc resourceGroupDesc = {};
+	// resourceGroupDesc.memoryLocation = nri::MemoryLocation::DEVICE;
+	// resourceGroupDesc.textureNum = (uint32_t)textureArray.size();
+	// resourceGroupDesc.textures = textureArray.data();
 
-	m_MemoryAllocations.resize(
-			NRI.CalculateAllocationNumber(*m_Device, resourceGroupDesc), nullptr);
-	NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(
-			*m_Device, resourceGroupDesc, m_MemoryAllocations.data()));
+	// m_MemoryAllocations.resize(
+	// 		NRI.CalculateAllocationNumber(*m_Device, resourceGroupDesc), nullptr);
+	// NRI_ABORT_ON_FAILURE(NRI.AllocateAndBindMemory(
+	// 		*m_Device, resourceGroupDesc, m_MemoryAllocations.data()));
 
-	NRI.SetDebugName(m_DiffuseIrradianceTex, "m_DiffuseIrradianceTex");
-	NRI.SetDebugName(m_SpecularIrradianceTex, "m_SpecularIrradianceTex");
-	NRI.SetDebugName(m_BRDFTex, "m_BRDFTex");
+	NRI.SetDebugName(m_DefaultIrradianceTex->GetTexture(), "m_DiffuseIrradianceTex");
+	NRI.SetDebugName(m_DefaultSpecularIrradianceTex->GetTexture(), "m_SpecularIrradianceTex");
+	NRI.SetDebugName(m_DefaultBRDFTex->GetTexture(), "m_BRDFTex");
 
 	// Diffuse Irrandiance Texture
 
@@ -247,7 +279,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 	nri::TextureUploadDesc textureData;
 	textureData.subresources = subResArray.data();
-	textureData.texture = m_DiffuseIrradianceTex;
+	textureData.texture = m_DefaultIrradianceTex->GetTexture();
 	textureData.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
 	textureData.planes = nri::PlaneBits::ALL;
 
@@ -269,7 +301,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 	nri::TextureUploadDesc textureData1;
 	textureData1.subresources = subResArray1.data();
-	textureData1.texture = m_SpecularIrradianceTex;
+	textureData1.texture = m_DefaultSpecularIrradianceTex->GetTexture();
 	textureData1.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
 	textureData1.planes = nri::PlaneBits::ALL;
 
@@ -283,7 +315,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 	nri::TextureUploadDesc textureData2;
 	textureData2.subresources = &subResArray3;
-	textureData2.texture = m_BRDFTex;
+	textureData2.texture = m_DefaultBRDFTex->GetTexture();
 	textureData2.after = { nri::AccessBits::SHADER_RESOURCE, nri::Layout::SHADER_RESOURCE };
 	textureData2.planes = nri::PlaneBits::ALL;
 
@@ -330,11 +362,11 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = {};
-	// meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("cubes.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
-	meshFile = utils::GetFullPath("GLTF_OW/ow.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_OW/ow.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S1.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bunny/bunny1.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this, true);

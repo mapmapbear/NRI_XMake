@@ -20,7 +20,7 @@ struct RenderSetting {
 	bool DebugBoxDraw = false;
 	bool DebugSphereDraw = false;
 	bool DebugDrawState = false;
-	bool OcclusionCullingState = false;
+	bool OcclusionCullingState = true;
 };
 
 class SkyRenderPass;
@@ -120,12 +120,16 @@ public:
 	utils::Texture specularIrradianceTex;
 	utils::Texture BRDFTex;
 
-	nri::Texture *m_DiffuseIrradianceTex = nullptr;
-	nri::Texture *m_SpecularIrradianceTex = nullptr;
-	nri::Texture *m_BRDFTex = nullptr;
+	// nri::Texture *m_DiffuseIrradianceTex = nullptr;
+	// nri::Texture *m_SpecularIrradianceTex = nullptr;
+	// nri::Texture *m_BRDFTex = nullptr;
 
 	nri::Texture *m_ColorTex = nullptr;
 	nri::Texture *m_DepthTex = nullptr;
+
+	std::shared_ptr<Texture> m_DefaultIrradianceTex = nullptr;
+	std::shared_ptr<Texture> m_DefaultSpecularIrradianceTex = nullptr;
+	std::shared_ptr<Texture> m_DefaultBRDFTex = nullptr;
 
 	std::shared_ptr<Texture> m_DefaultBlackTex = nullptr;
 	std::shared_ptr<Texture> m_DefaultWhiteTex = nullptr;

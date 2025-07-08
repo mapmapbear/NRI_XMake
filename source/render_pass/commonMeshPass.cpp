@@ -170,31 +170,42 @@ void CommonMeshPass::BindMemory() {
 	for (size_t i = 0; i < m_rootMesh->GetMeshCount(); ++i) {
 		const SubMesh *subMesh = m_rootMesh->GetMesh(static_cast<uint32_t>(i));
 		const Material &mat = m_rootMesh->GetMaterial(subMesh->GetMaterialID());
-		m_matTexSet.insert(mat.m_BaseTexture);
-		m_matTexSet.insert(mat.m_NormalTexture);
-		m_matTexSet.insert(mat.m_MetallicTexture);
+		if (!mat.m_BaseTexture->m_isDefault) {
+			m_matTexSet.insert(mat.m_BaseTexture);
+		}
+		if (!mat.m_NormalTexture->m_isDefault) {
+			m_matTexSet.insert(mat.m_NormalTexture);
+		}
+		if (!mat.m_MetallicTexture->m_isDefault) {
+			m_matTexSet.insert(mat.m_MetallicTexture);
+		}
 	}
 
-	m_textureViews.resize(4);
+	for (size_t i = 0; i < m_rootMesh->m_GPUMesh->m_meshlet.size(); ++i) {
+		const SubMesh::MeshLet &meshlet = m_rootMesh->m_GPUMesh->m_meshlet[i];
+		if (meshlet.m_materialIndex != -1) {
+			const Material &mat = m_rootMesh->GetMaterial(meshlet.m_materialIndex);
+			m_materialIndexBlocks.push_back({ mat.m_BaseTexture->GetViewIndex(),
+					mat.m_NormalTexture->GetViewIndex(),
+					mat.m_MetallicTexture->GetViewIndex(),
+					0 });
+		}
+	}
+
+	m_textureViews.resize(7);
 
 	m_brdfTexIndex = m_renderer->texViewOffset;
-	nri::Texture2DViewDesc texture2DViewDesc1 = { .texture = m_renderer->m_DiffuseIrradianceTex, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_CUBE, .format = m_renderer->diffuseIrradianceTex.GetFormat(), .mipOffset = 0, .mipNum = m_renderer->diffuseIrradianceTex.GetMipNum(), .layerOffset = 0, .layerNum = 6 };
 
-	NRI_ABORT_ON_FAILURE(
-			NRI.CreateTexture2DView(texture2DViewDesc1, m_textureViews[0]));
-
-	nri::Texture2DViewDesc texture2DViewDesc2 = { .texture = m_renderer->m_SpecularIrradianceTex, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_CUBE, .format = m_renderer->specularIrradianceTex.GetFormat(), .mipOffset = 0, .mipNum = m_renderer->specularIrradianceTex.GetMipNum(), .layerOffset = 0, .layerNum = 6 };
-
-	NRI_ABORT_ON_FAILURE(
-			NRI.CreateTexture2DView(texture2DViewDesc2, m_textureViews[1]));
-
-	nri::Texture2DViewDesc texture2DViewDes3 = { .texture = m_renderer->m_BRDFTex, .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = m_renderer->BRDFTex.GetFormat() };
-	NRI_ABORT_ON_FAILURE(
-			NRI.CreateTexture2DView(texture2DViewDes3, m_textureViews[2]));
+	m_textureViews[0] = m_renderer->m_DefaultIrradianceTex->GetView();
+	m_textureViews[1] = m_renderer->m_DefaultSpecularIrradianceTex->GetView();
+	m_textureViews[2] = m_renderer->m_DefaultBRDFTex->GetView();
+	m_textureViews[3] = m_renderer->m_DefaultBlackTex->GetView();
+	m_textureViews[4] = m_renderer->m_DefaultWhiteTex->GetView();
+	m_textureViews[5] = m_renderer->m_DefaultNormalTex->GetView();
 
 	nri::Texture2DViewDesc texture2DViewDes4 = { .texture = m_renderer->m_ShadowMap->GetTexture(), .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = nri::Format::D32_SFLOAT };
 	NRI_ABORT_ON_FAILURE(
-			NRI.CreateTexture2DView(texture2DViewDes4, m_textureViews[3]));
+			NRI.CreateTexture2DView(texture2DViewDes4, m_textureViews[6]));
 
 	{ // Sampler
 		nri::SamplerDesc samplerDesc = {};
@@ -250,7 +261,6 @@ void CommonMeshPass::BuildPipeline() {
 			nri::StageBits::ALL };
 
 		nri::DescriptorRangeDesc descriptorRangeTexture[3];
-		// descriptorRangeTexture[0] = { 0, (uint32_t)m_textureViews.size(), nri::DescriptorType::TEXTURE,
 		descriptorRangeTexture[0] = { 0, 999, nri::DescriptorType::TEXTURE,
 			nri::StageBits::FRAGMENT_SHADER };
 		descriptorRangeTexture[1] = { 0, 2, nri::DescriptorType::SAMPLER,
@@ -567,11 +577,11 @@ void CommonMeshPass::BuildPipeline() {
 	}
 
 	// add temp descriptors
-	uint32_t newMatTexIndex = m_brdfTexIndex + 4;
+	// uint32_t newMatTexIndex = m_brdfTexIndex + 4;
 	{
 		for (auto &tex : m_matTexSet) {
 			nri::Descriptor *view = tex->GetView();
-			tex->SetViewIndex(newMatTexIndex++);
+			// tex->SetViewIndex(newMatTexIndex++);
 			m_textureViews.push_back(view);
 		}
 	}
@@ -696,8 +706,7 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 		nri::Buffer *indexGeoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_indexbuffer->GetBuffer();
 		NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, 0,
 				nri::IndexType::UINT32);
-		if (m_renderer->m_firstFrame)
-		{
+		if (m_renderer->m_firstFrame) {
 			m_renderer->m_firstFrame = false;
 			for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 				Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
@@ -714,15 +723,10 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 				NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
 			}
 
-		}
-		else
-		{
+		} else {
 			nri::Buffer *indirectBuffer = m_renderer->gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
 			nri::Buffer *counterBuffer = m_renderer->gpuCullingPass->m_VisibleObjectCounterBuffer->GetBuffer();
-			// if (m_renderer->m_firstFrame) {
-			// 	NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *indirectBuffer, 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
 
-			// } else 
 			{
 				NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *indirectBuffer, 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), counterBuffer, 0);
 			}

@@ -58,6 +58,7 @@ public:
 		std::vector<meshopt_Bounds> m_bounds;
 		std::vector<std::vector<uint32_t>> m_clusters;
 		std::vector<DrawArgs> m_drawArgs;
+		int m_materialIndex = -1;
 		uint32_t m_cluster_total_size = 0;
 	};
 	std::vector<MeshLet> m_meshlet;

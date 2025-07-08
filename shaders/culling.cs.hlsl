@@ -212,7 +212,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Gid : SV_GroupID, uint3 GTid :
     DeviceMemoryBarrierWithGroupSync();
 
     bool visible = SphereCullFrustum(objectIndex);
-    // visible = visible && HZBCull2(objectIndex);
+    visible = visible && HZBCull2(objectIndex);
     if (visible) {
         visibleObjectFlags[objectIndex] = 1;
     }
