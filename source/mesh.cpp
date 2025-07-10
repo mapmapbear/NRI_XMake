@@ -144,7 +144,7 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer, bool meshlet) {
 		// 	m.m_MetallicTexture = loadTexture(dirPath, mat, aiTextureType_METALNESS);
 		// });
 		m.m_BaseTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_BASE_COLOR);
-		m.m_NormalTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_NORMAL_CAMERA);
+		m.m_NormalTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_NORMALS);
 		m.m_MetallicTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_METALNESS);
 		aiString alphaMode;
 		if (pScene->mMaterials[i]->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
@@ -329,7 +329,7 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 		pGPUMesh->m_meshlet.resize(numMeshes);
 		for (uint32_t i = 0; i < numMeshes; ++i) {
 			aiMesh *pMesh = pScene->mMeshes[i];
-			// if(!strcmp(pMesh->mName.C_Str(), "Mesh.318"))
+			if(!strcmp(pMesh->mName.C_Str(), "Submesh_0.340AE8711C31E9F3.003"))
 			{
 				SPDLOG_ERROR("MeshID: {}, MaterialID = {}", i, pMesh->mMaterialIndex);
 			}
@@ -375,7 +375,7 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 			std::vector<unsigned int> meshlet_vertices(max_meshlets * meshdata->vertices.size());
 			std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
 
-			size_t meshlet_count = (uint32_t)meshopt_buildMeshlets(pGPUMesh->m_meshlet[i].m_meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), meshdata->indices.data(),
+			uint32_t meshlet_count = (uint32_t)meshopt_buildMeshlets(pGPUMesh->m_meshlet[i].m_meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), meshdata->indices.data(),
 					indexCount, (float *)meshdata->m_vertexesData.data(), (uint32_t)vertexCount, (uint32_t)sizeof(utils::Vertex), max_vertices, max_triangles, cone_weight);
 
 			pGPUMesh->m_meshlet[i].m_clusters.resize(meshlet_count);
@@ -403,6 +403,10 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 				offset += (uint32_t)pGPUMesh->m_meshlet[i].m_clusters[j].size();
 			}
 			totalClusterCount += meshlet_count;
+			if(totalClusterCount > 2526)
+			{
+				SPDLOG_ERROR("BUG Mat ID: {}", pMesh->mMaterialIndex);
+			}
 			SPDLOG_INFO("Meshlet count: {}", totalClusterCount);
 
 			uint32_t indicesSize = static_cast<uint32_t>(helper::GetByteSizeOf(meshdata->indices));

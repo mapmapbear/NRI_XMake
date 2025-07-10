@@ -46,16 +46,25 @@ void CommonMeshPass::AllocGPUMemory() {
 	uint32_t matTexCount = 3;
 	m_texureDatas.resize(texSize * matTexCount);
 	m_textures.resize(texSize * matTexCount);
-	m_materialIndexBlocks.resize(m_rootMesh->m_GPUMesh->m_meshlet.size());
-	for (size_t i = 0; i < m_rootMesh->m_GPUMesh->m_meshlet.size(); ++i) {
-		const SubMesh::MeshLet &meshlet = m_rootMesh->m_GPUMesh->m_meshlet[i];
-		if (meshlet.m_materialIndex != -1) {
-			const Material &mat = m_rootMesh->GetMaterial(meshlet.m_materialIndex);
-			m_materialIndexBlocks[i] = { mat.m_BaseTexture->GetViewIndex(),
-				mat.m_NormalTexture->GetViewIndex(),
-				mat.m_MetallicTexture->GetViewIndex(),
-				0 };
-		}
+	// m_materialIndexBlocks.resize(m_rootMesh->m_GPUMesh->m_meshlet.size());
+	// for (size_t i = 0; i < m_rootMesh->m_GPUMesh->m_meshlet.size(); ++i) {
+	// 	const SubMesh::MeshLet &meshlet = m_rootMesh->m_GPUMesh->m_meshlet[i];
+	// 	if (meshlet.m_materialIndex != -1) {
+	// 		const Material &mat = m_rootMesh->GetMaterial(meshlet.m_materialIndex);
+	// 		m_materialIndexBlocks[i] = { mat.m_BaseTexture->GetViewIndex(),
+	// 			mat.m_NormalTexture->GetViewIndex(),
+	// 			mat.m_MetallicTexture->GetViewIndex(),
+	// 			0 };
+	// 	}
+	// }
+
+	m_materialIndexBlocks.resize(m_rootMesh->GetMaterialCount());
+	for (uint32_t i = 0; i < m_rootMesh->GetMaterialCount(); ++i) {
+		const Material &mat = m_rootMesh->GetMaterial(i);
+		m_materialIndexBlocks[i] = { mat.m_BaseTexture->GetViewIndex(),
+			mat.m_NormalTexture->GetViewIndex(),
+			mat.m_MetallicTexture->GetViewIndex(),
+			0 };
 	}
 
 	// // GPU Resource
@@ -120,7 +129,7 @@ void CommonMeshPass::AllocGPUMemory() {
 	{
 		m_materialBuffer = std::make_shared<Buffer>();
 		nri::BufferDesc bufferDesc = {};
-		uint32_t dataSize = sizeof(MaterialIndexBlock) * m_materialIndexBlocks.size();
+		uint32_t dataSize = sizeof(MaterialIndexBlock) * (uint32_t)m_materialIndexBlocks.size();
 		bufferDesc.size = dataSize;
 		bufferDesc.usage = nri::BufferUsageBits::SHADER_RESOURCE;
 		bufferDesc.structureStride = sizeof(MaterialIndexBlock);
@@ -136,7 +145,7 @@ void CommonMeshPass::AllocGPUMemory() {
 	{
 		m_objectBuffer = std::make_shared<Buffer>();
 		nri::BufferDesc bufferDesc = {};
-		uint32_t dataSize = sizeof(ObjectIndexBlock) * m_renderer->m_OpaqueRenderNodes.size();
+		uint32_t dataSize = sizeof(ObjectIndexBlock) * (uint32_t)m_renderer->m_OpaqueRenderNodes.size();
 		bufferDesc.size = dataSize;
 		bufferDesc.usage = nri::BufferUsageBits::SHADER_RESOURCE;
 		bufferDesc.structureStride = sizeof(ObjectIndexBlock);

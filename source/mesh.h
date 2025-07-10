@@ -78,6 +78,7 @@ public:
 	int GetMeshCount() const { return (int)m_Meshes.size(); }
 	SubMesh *GetMesh(const int index) const { return m_Meshes[index].get(); }
 	const Material &GetMaterial(int materialId) { return m_Materials[materialId]; }
+	const uint32_t GetMaterialCount() { return static_cast<uint32_t>(m_Materials.size()); }
 	Mesh() = default;
 	Mesh(Mesh &&) = default;
 	Mesh(const Mesh &) = default;

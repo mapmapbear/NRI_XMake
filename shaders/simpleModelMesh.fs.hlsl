@@ -24,8 +24,7 @@ struct PushConstants {
 };
 NRI_ROOT_CONSTANTS(PushConstants, g_PushConstants, 1, 0);
 
-struct MaterialBlock
-{
+struct MaterialBlock {
     uint textureBase;
     uint textureNormal;
     uint textureMetallic;
@@ -53,9 +52,9 @@ float4 main(InputPS input) : SV_Target {
     SamplerState g_Sampler = SamplerDescriptorHeap[0];
     float4 baseColor = g_AlbedoTexture.Sample(g_Sampler, newUV);
     // return float4(newUV, 0.0, 1.0);
-    return float4(baseColor.xyz, 1.0);
     //baseColor *= g_PushConstants.baseColor;
     float4 normalTS = g_NormalTexture.Sample(g_Sampler, newUV);
+
     normalTS = normalTS * 2.0 - 1.0;
     normalTS = normalize(normalTS);
     float3 tangent = input.tangentWS;
@@ -65,17 +64,19 @@ float4 main(InputPS input) : SV_Target {
     float3 ligDir = float3(0.2, 100.0, 0.2);
     ligDir = normalize(ligDir);
     float NdotL = dot(normal, ligDir);
-    float metallic = g_PushConstants.pbrParams.x;
-    float roughness = g_PushConstants.pbrParams.y;
+    return float4(baseColor.xyz, 1.0);
+
+    float metallic = 0.2;//g_PushConstants.pbrParams.x;
+    float roughness = 0.7;//g_PushConstants.pbrParams.y;
     uint width = 0;
     uint height = 0;
     uint mip = 0;
     g_MetallicTexture.GetDimensions(0, width, height, mip);
-    if(width > 2) {
-        float4 materialData = g_MetallicTexture.Sample(g_Sampler, newUV);
-        roughness = materialData.g;
-        metallic = materialData.b;
-    }
+    // if(width > 2) {
+    //     float4 materialData = g_MetallicTexture.Sample(g_Sampler, newUV);
+    //     roughness = materialData.g;
+    //     metallic = materialData.b;
+    // }
 
     float3 projCoords = input.positionLS.xyz / input.positionLS.w;
     projCoords.x = projCoords.x * 0.5 + 0.5;

@@ -362,16 +362,16 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = {};
-	meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("cubes.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
-	// meshFile = utils::GetFullPath("GLTF_OW/ow.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("GLTF_OW/ow.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S1.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bunny/bunny1.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this, true);
 	debugdrawPass = std::make_shared<DebugDrawPass>(this);
-
+	uint32_t totalClusterCount = 0;
 	glm::vec3 sceneMin = glm::vec3(std::numeric_limits<float>::max());
 	glm::vec3 sceneMax = glm::vec3(std::numeric_limits<float>::lowest());
 	for (int i = 0; i < mesh->m_GPUMesh->m_meshlet.size(); ++i) {
@@ -401,6 +401,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 			{
 				m_OpaqueRenderNodes.push_back(node);
 			}
+			totalClusterCount++;
 		}
 	}
 	for (int i = 0; i < m_OpaqueRenderNodes.size(); ++i) {
