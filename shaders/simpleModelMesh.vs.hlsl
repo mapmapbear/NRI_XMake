@@ -38,6 +38,7 @@ struct outputVS {
     float3 positionWS : TEXCOORD1;
     float4 positionLS : TEXCOORD2;
     float4 positionLS1 : TEXCOORD3;
+    uint4  matrialData : TEXCOORD4;
     float3 normalWS   : NORMAL;
     float3 tangentWS  : TANGENT;
     float3 color      : COLOR;
@@ -122,6 +123,7 @@ outputVS main(inputVS input) {
     output.positionLS = mul(lightVP, float4(output.positionWS, 1.0));
     output.positionLS1 = saturate(output.position.z / output.position.w);
     output.tangentWS = normalize(mul(normalMatrix, float4(input.in_tangent, 1.0))).xyz;
+    output.matrialData = uint4(input.startInstance, 0, 0, 0);
     float h = hash(input.startInstance);
     float s = 0.8;
     float v = 0.95;

@@ -1,6 +1,7 @@
 #pragma once
 #include "NRIDescs.h"
 #include "commonRenderPass.h"
+#include <future>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -75,7 +76,12 @@ private:
 		uint32_t textureIndex3 = 0;
 	};
 
+	struct ObjectIndexBlock {
+		uint32_t materialIndex = UINT32_MAX;
+	};
+
 	std::vector<MaterialIndexBlock> m_materialIndexBlocks;
+	std::vector<ObjectIndexBlock> m_objectIndexBlocks;
 
 	nri::Descriptor *m_texture_albedo_view = nullptr;
 	nri::Descriptor *m_texture_normal_view = nullptr;
@@ -117,6 +123,8 @@ private:
 	std::shared_ptr<Buffer> m_indirectBuffer = nullptr;
 	std::shared_ptr<Buffer> m_worldMatBuffer = nullptr;
 	std::shared_ptr<Buffer> m_sphereCullBuffer = nullptr;
+	std::shared_ptr<Buffer> m_materialBuffer = nullptr;
+	std::shared_ptr<Buffer> m_objectBuffer = nullptr;
 
 	glm::mat4 m_lightVP = glm::mat4(1.0);
 	uint32_t m_brdfTexIndex = 0;

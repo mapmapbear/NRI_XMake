@@ -105,6 +105,7 @@ public:
 		std::vector<nri::DrawIndexedDesc> clusterDrawArgs;
 		std::pair<glm::vec3, glm::vec3> cluster_aabb;
 		const Material *material;
+		uint32_t materialIndex;
 		glm::mat4 globalTransform;
 	};
 

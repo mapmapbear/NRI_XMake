@@ -46,6 +46,17 @@ void CommonMeshPass::AllocGPUMemory() {
 	uint32_t matTexCount = 3;
 	m_texureDatas.resize(texSize * matTexCount);
 	m_textures.resize(texSize * matTexCount);
+	m_materialIndexBlocks.resize(m_rootMesh->m_GPUMesh->m_meshlet.size());
+	for (size_t i = 0; i < m_rootMesh->m_GPUMesh->m_meshlet.size(); ++i) {
+		const SubMesh::MeshLet &meshlet = m_rootMesh->m_GPUMesh->m_meshlet[i];
+		if (meshlet.m_materialIndex != -1) {
+			const Material &mat = m_rootMesh->GetMaterial(meshlet.m_materialIndex);
+			m_materialIndexBlocks[i] = { mat.m_BaseTexture->GetViewIndex(),
+				mat.m_NormalTexture->GetViewIndex(),
+				mat.m_MetallicTexture->GetViewIndex(),
+				0 };
+		}
+	}
 
 	// // GPU Resource
 	const uint32_t constantBufferSize = helper::Align((uint32_t)sizeof(ConstantBufferLayout),
@@ -107,6 +118,38 @@ void CommonMeshPass::AllocGPUMemory() {
 	}
 
 	{
+		m_materialBuffer = std::make_shared<Buffer>();
+		nri::BufferDesc bufferDesc = {};
+		uint32_t dataSize = sizeof(MaterialIndexBlock) * m_materialIndexBlocks.size();
+		bufferDesc.size = dataSize;
+		bufferDesc.usage = nri::BufferUsageBits::SHADER_RESOURCE;
+		bufferDesc.structureStride = sizeof(MaterialIndexBlock);
+
+		nri::BufferViewDesc viewDesc = {};
+		viewDesc.viewType = nri::BufferViewType::SHADER_RESOURCE;
+		viewDesc.size = bufferDesc.size;
+
+		m_materialBuffer->Create(m_renderer, bufferDesc, viewDesc);
+		NRI.SetDebugName(m_materialBuffer->GetBuffer(), "materialBuffer_GPUScene");
+	}
+
+	{
+		m_objectBuffer = std::make_shared<Buffer>();
+		nri::BufferDesc bufferDesc = {};
+		uint32_t dataSize = sizeof(ObjectIndexBlock) * m_renderer->m_OpaqueRenderNodes.size();
+		bufferDesc.size = dataSize;
+		bufferDesc.usage = nri::BufferUsageBits::SHADER_RESOURCE;
+		bufferDesc.structureStride = sizeof(ObjectIndexBlock);
+
+		nri::BufferViewDesc viewDesc = {};
+		viewDesc.viewType = nri::BufferViewType::SHADER_RESOURCE;
+		viewDesc.size = bufferDesc.size;
+
+		m_objectBuffer->Create(m_renderer, bufferDesc, viewDesc);
+		NRI.SetDebugName(m_objectBuffer->GetBuffer(), "objectBuffer_GPUScene");
+	}
+
+	{
 		std::vector<nri::DrawIndexedDesc> indirectBufferData;
 		indirectBufferData.resize(m_renderer->m_OpaqueRenderNodes.size());
 
@@ -125,6 +168,7 @@ void CommonMeshPass::AllocGPUMemory() {
 			worldMatData[i] = node.globalTransform;
 			cullDatas[i].center = node.mesh->aabb2.first;
 			cullDatas[i].radians = std::max(node.mesh->aabb2.second.x, std::max(node.mesh->aabb2.second.y, node.mesh->aabb2.second.z));
+			m_objectIndexBlocks.push_back({ node.materialIndex });
 		}
 
 		nri::BufferUploadDesc bufferData = {};
@@ -145,7 +189,17 @@ void CommonMeshPass::AllocGPUMemory() {
 		// bufferData3.dataSize = sizeof(CullData) * cullDatas.size();
 		bufferData3.after = { .access = nri::AccessBits::SHADER_RESOURCE, .stages = nri::StageBits::VERTEX_SHADER };
 
-		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData, bufferData2, bufferData3 };
+		nri::BufferUploadDesc bufferData4 = {};
+		bufferData4.buffer = m_materialBuffer->GetBuffer();
+		bufferData4.data = m_materialIndexBlocks.data();
+		bufferData4.after = { .access = nri::AccessBits::SHADER_RESOURCE, .stages = nri::StageBits::FRAGMENT_SHADER };
+
+		nri::BufferUploadDesc bufferData5 = {};
+		bufferData5.buffer = m_objectBuffer->GetBuffer();
+		bufferData5.data = m_objectIndexBlocks.data();
+		bufferData5.after = { .access = nri::AccessBits::SHADER_RESOURCE, .stages = nri::StageBits::FRAGMENT_SHADER };
+
+		std::vector<nri::BufferUploadDesc> uploadDescArray = { bufferData, bufferData2, bufferData3, bufferData4, bufferData5 };
 
 		NRI_ABORT_ON_FAILURE(NRI.UploadData(m_renderer->GetRenderQueue(), nullptr, 0,
 				uploadDescArray.data(),
@@ -181,18 +235,7 @@ void CommonMeshPass::BindMemory() {
 		}
 	}
 
-	for (size_t i = 0; i < m_rootMesh->m_GPUMesh->m_meshlet.size(); ++i) {
-		const SubMesh::MeshLet &meshlet = m_rootMesh->m_GPUMesh->m_meshlet[i];
-		if (meshlet.m_materialIndex != -1) {
-			const Material &mat = m_rootMesh->GetMaterial(meshlet.m_materialIndex);
-			m_materialIndexBlocks.push_back({ mat.m_BaseTexture->GetViewIndex(),
-					mat.m_NormalTexture->GetViewIndex(),
-					mat.m_MetallicTexture->GetViewIndex(),
-					0 });
-		}
-	}
-
-	m_textureViews.resize(7);
+	m_textureViews.resize(9);
 
 	m_brdfTexIndex = m_renderer->texViewOffset;
 
@@ -206,6 +249,12 @@ void CommonMeshPass::BindMemory() {
 	nri::Texture2DViewDesc texture2DViewDes4 = { .texture = m_renderer->m_ShadowMap->GetTexture(), .viewType = nri::Texture2DViewType::SHADER_RESOURCE_2D, .format = nri::Format::D32_SFLOAT };
 	NRI_ABORT_ON_FAILURE(
 			NRI.CreateTexture2DView(texture2DViewDes4, m_textureViews[6]));
+
+	m_materialBuffer->SetViewIndex(14);
+	m_textureViews[7] = m_materialBuffer->GetView();
+
+	m_objectBuffer->SetViewIndex(15);
+	m_textureViews[8] = m_objectBuffer->GetView();
 
 	{ // Sampler
 		nri::SamplerDesc samplerDesc = {};
@@ -579,12 +628,19 @@ void CommonMeshPass::BuildPipeline() {
 	// add temp descriptors
 	// uint32_t newMatTexIndex = m_brdfTexIndex + 4;
 	{
-		for (auto &tex : m_matTexSet) {
+		// 将m_matTexSet中的元素按ViewIndex从小到大排序
+		std::vector<std::shared_ptr<Texture>> sortedTexVec(m_matTexSet.begin(), m_matTexSet.end());
+		std::sort(sortedTexVec.begin(), sortedTexVec.end(), [](const std::shared_ptr<Texture> &a, const std::shared_ptr<Texture> &b) {
+			return a->GetViewIndex() < b->GetViewIndex();
+		});
+		for (auto &tex : sortedTexVec) {
 			nri::Descriptor *view = tex->GetView();
 			// tex->SetViewIndex(newMatTexIndex++);
 			m_textureViews.push_back(view);
 		}
 	}
+
+	// add to materialIndex Struct Buffer
 
 	// Descriptor sets
 	{
@@ -599,8 +655,8 @@ void CommonMeshPass::BuildPipeline() {
 		std::vector<nri::Descriptor *> samplerArray = { m_Sampler, m_SamplerShadow };
 		descriptorRangeUpdateDescs[1].descriptorNum = 2;
 		descriptorRangeUpdateDescs[1].descriptors = samplerArray.data();
-		descriptorRangeUpdateDescs[2].descriptorNum = 1;
 		nri::Descriptor *worldMatView = m_worldMatBuffer->GetView();
+		descriptorRangeUpdateDescs[2].descriptorNum = 1;
 		descriptorRangeUpdateDescs[2].descriptors = &worldMatView;
 
 		NRI.UpdateDescriptorRanges(*m_TextureDescriptorSet, 0,

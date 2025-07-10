@@ -8,6 +8,7 @@ struct InputPS {
     float3 positionWS : TEXCOORD1;
     float4 positionLS : TEXCOORD2;
     float4 positionLS1 : TEXCOORD3;
+    uint4  matrialData : TEXCOORD4;
     float3 normalWS   : NORMAL;
     float3 tangentWS  : TANGENT;
     float3 color      : COLOR;
@@ -23,19 +24,36 @@ struct PushConstants {
 };
 NRI_ROOT_CONSTANTS(PushConstants, g_PushConstants, 1, 0);
 
+struct MaterialBlock
+{
+    uint textureBase;
+    uint textureNormal;
+    uint textureMetallic;
+    uint textureIndex3;
+};
+
+struct ObjectIndexBlock {
+    uint materialIndex;
+};
+
 [earlydepthstencil]
 float4 main(InputPS input) : SV_Target {
     float2 newUV = input.uv;
     float4 color = 0.0;
     float3 n = input.normalWS;
     float3 v = normalize(g_PushConstants.camPos.xyz - input.positionWS);
-    Texture2D g_AlbedoTexture = ResourceDescriptorHeap[g_PushConstants.indexGroup.x];
-    Texture2D g_NormalTexture = ResourceDescriptorHeap[g_PushConstants.indexGroup.y];
-    Texture2D g_MetallicTexture = ResourceDescriptorHeap[g_PushConstants.indexGroup.z];
+    StructuredBuffer<MaterialBlock> material = ResourceDescriptorHeap[14];
+    StructuredBuffer<ObjectIndexBlock> object = ResourceDescriptorHeap[15];
+    uint materialIndex = object[input.matrialData.x].materialIndex;
+    MaterialBlock materialData = material[materialIndex];
+
+    Texture2D g_AlbedoTexture = ResourceDescriptorHeap[materialData.textureBase];
+    Texture2D g_NormalTexture = ResourceDescriptorHeap[materialData.textureNormal];
+    Texture2D g_MetallicTexture = ResourceDescriptorHeap[materialData.textureMetallic];
     SamplerState g_Sampler = SamplerDescriptorHeap[0];
     float4 baseColor = g_AlbedoTexture.Sample(g_Sampler, newUV);
     // return float4(newUV, 0.0, 1.0);
-    return float4(input.color, 1.0);
+    return float4(baseColor.xyz, 1.0);
     //baseColor *= g_PushConstants.baseColor;
     float4 normalTS = g_NormalTexture.Sample(g_Sampler, newUV);
     normalTS = normalTS * 2.0 - 1.0;

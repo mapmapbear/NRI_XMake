@@ -82,7 +82,7 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer, bool meshlet) {
 	}
 
 	m_GPUMesh = LoadGPUMesh(pScene, (uint32_t)pScene->mNumMeshes, renderer, meshlet);
-	uint32_t texViewIndex = 14;
+	uint32_t texViewIndex = 16;
 	auto loadTexture = [renderer, &texViewIndex](std::string &basepath, aiMaterial *mat, aiTextureType type) {
 		std::shared_ptr<Texture> tex = std::make_shared<Texture>();
 
@@ -109,6 +109,7 @@ void Mesh::LoadFromUSD(std::string &path, Renderer *renderer, bool meshlet) {
 			tex->Create(renderer, textureDesc, texViewDesc);
 			tex->CreateView(renderer, texViewDesc);
 			tex->SetViewIndex(texViewIndex++);
+			SPDLOG_ERROR("texIndex: {}, path:{}", texViewIndex - 1, p);
 			renderer->uploadTextureMap.insert({ tex, textureData });
 		} else {
 			switch (type) {
@@ -323,10 +324,15 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 	uint32_t preIndexOffset = 0;
 	uint32_t preVertexOffset = 0;
 
+	uint32_t totalClusterCount = 0;
 	if (meshlet) {
 		pGPUMesh->m_meshlet.resize(numMeshes);
 		for (uint32_t i = 0; i < numMeshes; ++i) {
 			aiMesh *pMesh = pScene->mMeshes[i];
+			// if(!strcmp(pMesh->mName.C_Str(), "Mesh.318"))
+			{
+				SPDLOG_ERROR("MeshID: {}, MaterialID = {}", i, pMesh->mMaterialIndex);
+			}
 			std::shared_ptr<utils::MeshData> meshdata = std::make_shared<utils::MeshData>();
 			meshdata->m_vertexesData.resize(pMesh->mNumVertices);
 			meshdata->vertices.resize(pMesh->mNumVertices);
@@ -388,6 +394,7 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 				pGPUMesh->m_meshlet[i].m_bounds[j] = meshopt_computeMeshletBounds(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset],
 						meshlet.triangle_count, (float *)meshdata->m_vertexesData.data(), (uint32_t)meshdata->m_vertexesData.size(), sizeof(utils::Vertex));
 			}
+			pGPUMesh->m_meshlet[i].m_materialIndex = pMesh->mMaterialIndex;
 
 			meshdata->indices.resize(pGPUMesh->m_meshlet[i].m_cluster_total_size);
 			uint32_t offset = 0;
@@ -395,8 +402,8 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 				memcpy(&meshdata->indices[offset], pGPUMesh->m_meshlet[i].m_clusters[j].data(), pGPUMesh->m_meshlet[i].m_clusters[j].size() * sizeof(uint32_t));
 				offset += (uint32_t)pGPUMesh->m_meshlet[i].m_clusters[j].size();
 			}
-
-			SPDLOG_INFO("Meshlet count: {}", meshlet_count);
+			totalClusterCount += meshlet_count;
+			SPDLOG_INFO("Meshlet count: {}", totalClusterCount);
 
 			uint32_t indicesSize = static_cast<uint32_t>(helper::GetByteSizeOf(meshdata->indices));
 			uint32_t vertexSize = static_cast<uint32_t>(helper::GetByteSizeOf(meshdata->m_vertexesData));
@@ -419,7 +426,6 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 			}
 			meshDatas[i] = meshdata;
 			preBaseVertex += (uint32_t)meshdata->m_vertexesData.size();
-			pGPUMesh->m_meshlet[i].m_materialIndex = pMesh->mMaterialIndex;
 		}
 	} else {
 		m_drawArgs.resize(numMeshes);

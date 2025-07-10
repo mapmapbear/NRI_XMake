@@ -374,7 +374,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 	glm::vec3 sceneMin = glm::vec3(std::numeric_limits<float>::max());
 	glm::vec3 sceneMax = glm::vec3(std::numeric_limits<float>::lowest());
-	for (int i = 0; i < mesh->GetMeshCount(); ++i) {
+	for (int i = 0; i < mesh->m_GPUMesh->m_meshlet.size(); ++i) {
 		for (int j = 0; j < mesh->m_GPUMesh->m_meshlet[i].m_drawArgs.size(); ++j) {
 			RenderNode node;
 			node.mesh = mesh->GetMesh(i);
@@ -385,6 +385,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 			node.drawArgs.baseVertex = mesh->m_GPUMesh->m_meshlet[i].m_drawArgs[j].base.baseVertex;
 
 			node.material = &mesh->GetMaterial(node.mesh->GetMaterialID());
+			node.materialIndex = mesh->m_GPUMesh->m_meshlet[i].m_materialIndex < 0 ? UINT32_MAX : (uint32_t)mesh->m_GPUMesh->m_meshlet[i].m_materialIndex;
 			try {
 				node.globalTransform = mesh->results.at(i);
 			} catch (const std::exception &e) {
@@ -394,9 +395,10 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 			node.cluster_aabb = std::make_pair(*reinterpret_cast<glm::vec3 *>((mesh->m_GPUMesh->m_meshlet[i].m_bounds[j].center)), glm::vec3(mesh->m_GPUMesh->m_meshlet[i].m_bounds[j].radius));
 
-			if (node.material->IsTransparent) {
-				m_TransparentRenderNodes.push_back(node);
-			} else {
+			// if (node.material->IsTransparent) {
+			// 	m_TransparentRenderNodes.push_back(node);
+			// } else
+			{
 				m_OpaqueRenderNodes.push_back(node);
 			}
 		}

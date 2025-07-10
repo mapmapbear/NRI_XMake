@@ -7,6 +7,7 @@ public:
 	Buffer() = default;
 	void Create(Renderer *renderer, nri::BufferDesc &bufferDesc, nri::BufferViewDesc &viewDesc);
 	uint32_t GetViewIndex() { return m_viewIndex; }
+	inline void SetViewIndex(uint32_t index) { m_viewIndex = index; }
 	nri::Buffer *GetBuffer() { return m_buffer; }
 	nri::Descriptor *GetView() { return m_view; }
 

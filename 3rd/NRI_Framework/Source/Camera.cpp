@@ -110,8 +110,6 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 
 	state.rotation.x = fmodf(state.rotation.x, 360.0f);
 	state.rotation.y = clamp(state.rotation.y, -90.0f, 90.0f);
-#if 1
-	// SPDLOG_INFO("state.rotation: {}, {}", state.rotation.x, state.rotation.y);
 	// 计算yaw旋转（绕Y轴）
 	glm::quat yawRotation = glm::angleAxis(glm::radians(-state.rotation.x), vUp);
 	glm::vec3 rotatedForward = glm::normalize(yawRotation * vForward);
@@ -121,27 +119,8 @@ void Camera::Update(const CameraDesc &desc, uint32_t frameIndex) {
 	// 计算pitch旋转（绕X轴）
 	glm::quat pitchRotation = glm::angleAxis(glm::radians(-state.rotation.y), rotatedRight);
 	rotatedForward = glm::normalize(pitchRotation * rotatedForward);
-	//rotatedUp = glm::normalize(pitchRotation * rotatedUp);
-
-	// 确保正交性
-	// rotatedRight = glm::normalize(glm::cross(rotatedForward, rotatedUp));
-	// rotatedUp = glm::normalize(glm::cross(rotatedRight, rotatedForward));
-
 	vForward = rotatedForward;
 	vRight = rotatedRight;
-	// vUp = rotatedUp;
-
-	// SPDLOG_INFO("vForward: {}, {}, {}", vForward.x, vForward.y, vForward.z);
-	// SPDLOG_INFO("vRight: {}, {}, {}", vRight.x, vRight.y, vRight.z);
-	// SPDLOG_INFO("vUp: {}, {}, {}", vUp.x, vUp.y, vUp.z);
-
-	// // 构建视图矩阵
-	// state.mWorldToView = glm::mat4(
-	// 		glm::vec4(rotatedRight, 0.0f),
-	// 		glm::vec4(rotatedUp, 0.0f),
-	// 		glm::vec4(rotatedForward, 0.0f),
-	// 		glm::vec4(state.position, 1.0f));
-#endif
 
 	// Projection
 	if (desc.orthoRange > 0.0f) {
