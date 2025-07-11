@@ -961,10 +961,10 @@ utils::MeshData utils::ProcessMesh(const aiMesh *mesh) {
 
 		v_data.normal = glm::make_vec3(reinterpret_cast<float *>(&mesh->mNormals[i]));
 		if (mesh->HasTangentsAndBitangents()) {
-			v_data.tangent = glm::make_vec3(reinterpret_cast<float *>(&mesh->mTangents[i]));
+			v_data.tangent = glm::make_vec4(reinterpret_cast<float *>(&mesh->mTangents[i]));
 			v_data.bitangent = glm::make_vec3(reinterpret_cast<float *>(&mesh->mBitangents[i]));
 		} else {
-			v_data.tangent = { 0.0, 0.0, 0.0 };
+			v_data.tangent = { 0.0, 0.0, 0.0, 0.0 };
 			v_data.bitangent = { 0.0, 0.0, 0.0 };
 		}
 

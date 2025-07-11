@@ -118,6 +118,7 @@ float3 IBL (float3 N, float3 V, float3 R, float3 albedo, float metallic, float r
     F0 = lerp(F0, albedo, metallic);
     
     float3 irradiance = DiffuseIBL.SampleLevel(LinearWrap, N, 0).rgb;
+    return irradiance;
     irradiance = pow(irradiance, 1.0 / 2.2);
     float2 f_ab = SplitSum.Sample(LinearClamp, float2(max(dot(N, V), 0.0), roughness)).rg;
     f_ab = pow(f_ab, 1.0 / 2.2);
@@ -137,7 +138,5 @@ float3 IBL (float3 N, float3 V, float3 R, float3 albedo, float metallic, float r
     float3 FmsEms = Ems * FssEss * F_avg / (1.0 - F_avg * Ems);
     float3 k_D = c_diff * (1.0 - FssEss - FmsEms);
     ambient = FssEss * radiance + (FmsEms + k_D) * irradiance;
-    // ambient = radiance;
-
     return ambient;
 }

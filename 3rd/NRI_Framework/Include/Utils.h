@@ -182,10 +182,10 @@ struct Vertex {
 	glm::vec3 position;
 	glm::vec2 uv;
 	glm::vec3 normal;
-	glm::vec3 tangent;
+	glm::vec4 tangent;
 	glm::vec3 bitangent;
 	Vertex() = default;
-	Vertex(vec3 pos, vec2 uv, vec3 nor, vec3 tan, vec3 bitan) :
+	Vertex(vec3 pos, vec2 uv, vec3 nor, vec4 tan, vec3 bitan) :
 			position(pos), uv(uv), normal(nor), tangent(tan), bitangent(bitan) {}
 };
 

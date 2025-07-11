@@ -183,7 +183,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer, bool 
 		}
 		vertex.normal = *reinterpret_cast<glm::vec3 *>(&pMesh->mNormals[j]);
 		if (pMesh->HasTangentsAndBitangents()) {
-			vertex.tangent = *reinterpret_cast<glm::vec3 *>(&pMesh->mTangents[j]);
+			vertex.tangent = *reinterpret_cast<glm::vec4 *>(&pMesh->mTangents[j]);
 			vertex.bitangent = *reinterpret_cast<glm::vec3 *>(&pMesh->mBitangents[j]);
 		}
 	}
@@ -329,7 +329,7 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 		pGPUMesh->m_meshlet.resize(numMeshes);
 		for (uint32_t i = 0; i < numMeshes; ++i) {
 			aiMesh *pMesh = pScene->mMeshes[i];
-			if(!strcmp(pMesh->mName.C_Str(), "Submesh_0.340AE8711C31E9F3.003"))
+			if(!strcmp(pMesh->mName.C_Str(), "Plane001"))
 			{
 				SPDLOG_ERROR("MeshID: {}, MaterialID = {}", i, pMesh->mMaterialIndex);
 			}
@@ -349,11 +349,12 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 					}
 					vertex.normal = *reinterpret_cast<glm::vec3 *>(&pMesh->mNormals[j]);
 					if (pMesh->HasTangentsAndBitangents()) {
-						vertex.tangent = *reinterpret_cast<glm::vec3 *>(&pMesh->mTangents[j]);
+						vertex.tangent = *reinterpret_cast<glm::vec4 *>(&pMesh->mTangents[j]);
 						vertex.bitangent = *reinterpret_cast<glm::vec3 *>(&pMesh->mBitangents[j]);
 					}
 				}
 			}
+
 			// Indices Data
 			for (unsigned int j = 0; j != pMesh->mNumFaces; j++) {
 				for (int k = 0; k != 3; k++) {
@@ -463,7 +464,7 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 					}
 					vertex.normal = *reinterpret_cast<glm::vec3 *>(&pMesh->mNormals[j]);
 					if (pMesh->HasTangentsAndBitangents()) {
-						vertex.tangent = *reinterpret_cast<glm::vec3 *>(&pMesh->mTangents[j]);
+						vertex.tangent = *reinterpret_cast<glm::vec4 *>(&pMesh->mTangents[j]);
 						vertex.bitangent = *reinterpret_cast<glm::vec3 *>(&pMesh->mBitangents[j]);
 					}
 				}

@@ -718,7 +718,7 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 				block.camPos = vec4(cameraPos, 1.0);
 				block.index[0] = node.material->m_BaseTexture->GetViewIndex();
 				block.index[1] = block.index[2] = 0u;
-				block.index[3] = m_brdfTexIndex;
+				block.index[3] = m_renderer->m_DefaultIrradianceTex->GetViewIndex();
 				NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
 				uint32_t instanceCount = 1;
 

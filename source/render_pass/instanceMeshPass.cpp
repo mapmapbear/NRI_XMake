@@ -68,7 +68,7 @@ void InstanceMeshPass::AllocGPUMemory() {
 		const aiVector3D n = mesh->mNormals[i];
 		// const aiVector3D t = mesh->mTangents[i];
 		// const aiVector3D bt = mesh->mBitangents[i];
-		m_positions.push_back({ vec3(v.x, v.y, v.z), vec2(uv0.x, uv0.y), vec3(n.x, n.y, n.z), vec3(0.0), vec3(0.0) });
+		m_positions.push_back({ vec3(v.x, v.y, v.z), vec2(uv0.x, uv0.y), vec3(n.x, n.y, n.z), vec4(0.0), vec3(0.0) });
 	}
 
 	for (unsigned int i = 0; i != mesh->mNumFaces; i++) {

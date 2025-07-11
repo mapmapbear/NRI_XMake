@@ -23,7 +23,7 @@ struct inputVS {
     float3 in_position : POSITION0;
     float2 in_texcoord : TEXCOORD0;
     float3 in_normal   : NORMAL;
-    float3 in_tangent  : TANGENT;
+    float4 in_tangent  : TANGENT;
     uint instanceID    : SV_InstanceID;
 #endif
     uint startInstance : SV_StartInstanceLocation; 
@@ -40,7 +40,7 @@ struct outputVS {
     float4 positionLS1 : TEXCOORD3;
     uint4  matrialData : TEXCOORD4;
     float3 normalWS   : NORMAL;
-    float3 tangentWS  : TANGENT;
+    float4 tangentWS  : TANGENT;
     float3 color      : COLOR;
 #endif
 };
@@ -117,12 +117,12 @@ outputVS main(inputVS input) {
 #else
     output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));
     output.texCoord = input.in_texcoord;
-    float4x4 normalMatrix = transpose(inverse(g_PushConstants.modelMat));
+    float4x4 normalMatrix = transpose(inverse(testMat));
     output.normalWS  = normalize(mul(normalMatrix, float4(input.in_normal, 0.0)).xyz);
     output.positionWS = mul(testMat, float4(input.in_position, 1.0)).xyz; 
     output.positionLS = mul(lightVP, float4(output.positionWS, 1.0));
     output.positionLS1 = saturate(output.position.z / output.position.w);
-    output.tangentWS = normalize(mul(normalMatrix, float4(input.in_tangent, 1.0))).xyz;
+    output.tangentWS = normalize(mul(normalMatrix, float4(input.in_tangent)));
     output.matrialData = uint4(input.startInstance, 0, 0, 0);
     float h = hash(input.startInstance);
     float s = 0.8;

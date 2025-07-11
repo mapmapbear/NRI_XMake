@@ -404,6 +404,22 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 			totalClusterCount++;
 		}
 	}
+
+	for (int j = 0; j < mesh->m_GPUMesh->m_meshlet[49].m_drawArgs.size(); ++j) {
+		glm::mat4 transMat = mesh->results.at(49);
+		std::pair<glm::vec3, glm::vec3> cluster_aabb = std::make_pair(*reinterpret_cast<glm::vec3 *>((mesh->m_GPUMesh->m_meshlet[49].m_bounds[j].center)), glm::vec3(mesh->m_GPUMesh->m_meshlet[49].m_bounds[j].radius));
+		glm::vec3 min = cluster_aabb.first - cluster_aabb.second;
+		glm::vec3 max = cluster_aabb.first + cluster_aabb.second;
+
+		min = transMat * glm::vec4(min, 1.0);
+		max = transMat * glm::vec4(max, 1.0);
+
+		glm::vec3 center = (min + max) * 0.5f;
+		glm::vec3 extent = (max - min) * 0.5f;
+
+		debugdrawPass->DrawBox(center, extent, glm::vec4(1.0));
+	}
+
 	for (int i = 0; i < m_OpaqueRenderNodes.size(); ++i) {
 		RenderNode &node = m_OpaqueRenderNodes[i];
 		glm::mat4 transMat = node.globalTransform;
