@@ -362,11 +362,11 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = {};
-	// meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
+	meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("cubes.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_Ground.gltf", utils::DataFolder::ROOT);
-	meshFile = utils::GetFullPath("GLTF_OW/ow.gltf", utils::DataFolder::ROOT);
+	// meshFile = utils::GetFullPath("GLTF_OW/ow.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bistro/bistro_S1.gltf", utils::DataFolder::ROOT);
 	// meshFile = utils::GetFullPath("GLTF_Bunny/bunny1.gltf", utils::DataFolder::ROOT);
 	mesh->LoadFromUSD(meshFile, this, true);
@@ -486,12 +486,12 @@ void Renderer::OnUpdate(float deltaTime) {
 	m_lightPos = glm::vec3(0.01f, 200.0f, 0.01f);
 
 	glm::vec3 normalizedLightDir = vec3(0.001, 1.0, 0.001);
-	float distanceFromOrigin = 200.f; //m_SceneAABB.second.y;// + 50000;
+	float distanceFromOrigin = 350.f; //m_SceneAABB.second.y;// + 50000;
 	glm::vec3 lightPosition = -normalizedLightDir * distanceFromOrigin;
 	lightPosition = vec3(0.001, 200.0, 0.001);
 	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 	glm::mat4 lightView = glm::lookAtLH(lightPosition, vec3(0.0, 0.0, 0.0), up);
-	float orthoSize = 256.0f;
+	float orthoSize = 128.0f;
 	glm::mat4 lightProj = glm::orthoLH_ZO(-orthoSize, orthoSize, -orthoSize, orthoSize, 1.0f, distanceFromOrigin);
 	m_lightVP = lightProj * lightView;
 }
@@ -611,7 +611,7 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	{
 		skyPass->Render(info, camera);
 		gridPass->Render(info, camera);
-		meshPass->Render(info, camera);
+		// meshPass->Render(info, camera);
 		simplePass->SetTestIndex(testIndex);
 		simplePass->Render(info, camera);
 		if (m_config.DebugDrawState) {

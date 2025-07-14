@@ -64,7 +64,7 @@ void CommonMeshPass::AllocGPUMemory() {
 		m_materialIndexBlocks[i] = { mat.m_BaseTexture->GetViewIndex(),
 			mat.m_NormalTexture->GetViewIndex(),
 			mat.m_MetallicTexture->GetViewIndex(),
-			0 };
+			2 };
 	}
 
 	// // GPU Resource

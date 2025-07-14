@@ -61,7 +61,7 @@ float4 main(InputPS input) : SV_Target {
 
     float3 bitangent = cross(normal, tangent.xyz) * tangent.w;
     float3 worldNormal = normalize(normalTS.x * tangent.xyz + normalTS.y * bitangent + normalTS.z * normal);
-    
+
     float3 ligDir = float3(0.2, 100.0, 0.2);
     ligDir = normalize(ligDir);
     float NdotL = dot(normal, ligDir);
@@ -88,22 +88,20 @@ float4 main(InputPS input) : SV_Target {
     float3 dir = -v;
     float3 R = reflect(dir, worldNormal);
 
-    TextureCube<float4> diffuseIBL = ResourceDescriptorHeap[g_PushConstants.indexGroup.w];
-    TextureCube<float4> specularIBL = ResourceDescriptorHeap[g_PushConstants.indexGroup.w + 1];
-    Texture2D<float4> BRDFTex = ResourceDescriptorHeap[g_PushConstants.indexGroup.w + 2];
-    Texture2D<float> shadowMap = ResourceDescriptorHeap[g_PushConstants.indexGroup.w + 3];
+    TextureCube<float4> diffuseIBL = ResourceDescriptorHeap[7];
+    TextureCube<float4> specularIBL = ResourceDescriptorHeap[8];
+    Texture2D<float4> BRDFTex = ResourceDescriptorHeap[9];
+    Texture2D<float> shadowMap = ResourceDescriptorHeap[13];
 
-    SamplerState g_SamplerBRDF = SamplerDescriptorHeap[2];
-    SamplerComparisonState g_SamplerShadow = SamplerDescriptorHeap[3];
+    SamplerState g_SamplerBRDF = SamplerDescriptorHeap[materialData.textureIndex3];
+    SamplerComparisonState g_SamplerShadow = SamplerDescriptorHeap[materialData.textureIndex3 + 1];
 
-    // shadow = pcf_shadow_poisson(projCoords, g_SamplerShadow, shadowMap);
+    shadow = pcf_shadow_poisson_weighted(projCoords, g_SamplerShadow, shadowMap, 0.0001);
     float4 outPosLS = input.positionLS.xyzz;
-    baseColor.xyz *= shadow; //clamp(shadow, 0.4, 1.0);
+    // baseColor.xyz *= shadow; //clamp(shadow, 0.4, 1.0);
     // baseColor = float4(projCoords.xy, 0.0, 1.0);
     // return baseColor;
-    // color.xyz += IBL(worldNormal, v, R, baseColor.xyz, metallic, roughness, c_F0, BRDFTex, diffuseIBL, specularIBL, g_Sampler, g_SamplerBRDF);
-
-    float3 irradiance = diffuseIBL.SampleLevel(LinearWrap, worldNormal, 0).rgb;
-    color.xyz += irradiance;
+    color.xyz += IBL(worldNormal, v, R, baseColor.xyz, metallic, roughness, c_F0, BRDFTex, diffuseIBL, specularIBL, g_Sampler, g_SamplerBRDF);
+    color.xyz *= shadow;
     return color;
 }

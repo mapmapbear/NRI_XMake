@@ -26,7 +26,7 @@ struct inputVS {
     float4 in_tangent  : TANGENT;
     uint instanceID    : SV_InstanceID;
 #endif
-    uint startInstance : SV_StartInstanceLocation; 
+    uint startInstance : SV_StartInstanceLocation;
 };
 
 struct outputVS {
@@ -103,13 +103,7 @@ outputVS main(inputVS input) {
     outputVS output;
     float4x4 testMat = 1.0;
     StructuredBuffer<float4x4> worldMatBuffer = ResourceDescriptorHeap[1006];
-    if(g_PushConstants.testVec.y > 0.02)
-    {
-        testMat = g_PushConstants.modelMat;
-    }
-    else {
-        testMat = worldMatBuffer[input.startInstance];
-    }
+    testMat = worldMatBuffer[input.startInstance];
     float4x4 vpMat = mul(viewMat, testMat);
     float4x4 mvpMat = mul(projectMat, vpMat);
 #ifdef DEPTH_ONLY

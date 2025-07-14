@@ -183,7 +183,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh *pMesh, Renderer *renderer, bool 
 		}
 		vertex.normal = *reinterpret_cast<glm::vec3 *>(&pMesh->mNormals[j]);
 		if (pMesh->HasTangentsAndBitangents()) {
-			vertex.tangent = *reinterpret_cast<glm::vec4 *>(&pMesh->mTangents[j]);
+			vertex.tangent = *reinterpret_cast<glm::vec3 *>(&pMesh->mTangents[j]);
 			vertex.bitangent = *reinterpret_cast<glm::vec3 *>(&pMesh->mBitangents[j]);
 		}
 	}
@@ -329,8 +329,7 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 		pGPUMesh->m_meshlet.resize(numMeshes);
 		for (uint32_t i = 0; i < numMeshes; ++i) {
 			aiMesh *pMesh = pScene->mMeshes[i];
-			if(!strcmp(pMesh->mName.C_Str(), "Plane001"))
-			{
+			if (!strcmp(pMesh->mName.C_Str(), "Submesh_0.B86912A2EBDA8C63.027")) {
 				SPDLOG_ERROR("MeshID: {}, MaterialID = {}", i, pMesh->mMaterialIndex);
 			}
 			std::shared_ptr<utils::MeshData> meshdata = std::make_shared<utils::MeshData>();
@@ -378,23 +377,44 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 
 			uint32_t meshlet_count = (uint32_t)meshopt_buildMeshlets(pGPUMesh->m_meshlet[i].m_meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), meshdata->indices.data(),
 					indexCount, (float *)meshdata->m_vertexesData.data(), (uint32_t)vertexCount, (uint32_t)sizeof(utils::Vertex), max_vertices, max_triangles, cone_weight);
+			// 如果meshlet_count不大于1，则直接将meshdata的indices插入到m_meshlet[i].m_clusters
+			// if (meshlet_count <= 1) {
+			// 	pGPUMesh->m_meshlet[i].m_clusters.resize(1);
+			// 	pGPUMesh->m_meshlet[i].m_bounds.resize(1);
+			// 	// pGPUMesh->m_meshlet[i].m_clusters[0].swap(meshdata->indices);
+			// 	pGPUMesh->m_meshlet[i].m_clusters[0].insert(pGPUMesh->m_meshlet[i].m_clusters[0].end(), meshdata->indices.begin(), meshdata->indices.end());
+			// 	pGPUMesh->m_meshlet[i].m_cluster_total_size = (uint32_t)meshdata->indices.size();
 
-			pGPUMesh->m_meshlet[i].m_clusters.resize(meshlet_count);
-			pGPUMesh->m_meshlet[i].m_bounds.resize(meshlet_count);
-			for (size_t j = 0; j < meshlet_count; ++j) {
-				const meshopt_Meshlet &meshlet = pGPUMesh->m_meshlet[i].m_meshlets[j];
+			// 	glm::vec3 min = glm::make_vec3((float *)&pMesh->mAABB.mMin.x);
+			// 	glm::vec3 max = glm::make_vec3((float *)&pMesh->mAABB.mMax);
+			// 	glm::vec3 center = (min + max) * 0.5f;
+			// 	glm::vec3 extent = (max - min) * 0.5f;
+			// 	pGPUMesh->m_meshlet[i].m_bounds[0] = {};
+			// 	pGPUMesh->m_meshlet[i].m_bounds[0].center[0] = center.x;
+			// 	pGPUMesh->m_meshlet[i].m_bounds[0].center[1] = center.y;
+			// 	pGPUMesh->m_meshlet[i].m_bounds[0].center[2] = center.z;
+			// 	pGPUMesh->m_meshlet[i].m_bounds[0].radius = std::max(extent.x, std::max(extent.y, extent.z));
 
-				meshopt_optimizeMeshlet(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
+			// } else
+			{
+				pGPUMesh->m_meshlet[i].m_clusters.resize(meshlet_count);
+				pGPUMesh->m_meshlet[i].m_bounds.resize(meshlet_count);
+				for (size_t j = 0; j < meshlet_count; ++j) {
+					const meshopt_Meshlet &meshlet = pGPUMesh->m_meshlet[i].m_meshlets[j];
 
-				pGPUMesh->m_meshlet[i].m_clusters[j].resize(meshlet.triangle_count * 3);
-				pGPUMesh->m_meshlet[i].m_cluster_total_size += (uint32_t)pGPUMesh->m_meshlet[i].m_clusters[j].size();
-				for (size_t k = 0; k < meshlet.triangle_count * 3; ++k) {
-					pGPUMesh->m_meshlet[i].m_clusters[j][k] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + k]];
+					meshopt_optimizeMeshlet(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
+
+					pGPUMesh->m_meshlet[i].m_clusters[j].resize(meshlet.triangle_count * 3);
+					pGPUMesh->m_meshlet[i].m_cluster_total_size += (uint32_t)pGPUMesh->m_meshlet[i].m_clusters[j].size();
+					for (size_t k = 0; k < meshlet.triangle_count * 3; ++k) {
+						pGPUMesh->m_meshlet[i].m_clusters[j][k] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + k]];
+					}
+
+					pGPUMesh->m_meshlet[i].m_bounds[j] = meshopt_computeMeshletBounds(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset],
+							meshlet.triangle_count, (float *)meshdata->m_vertexesData.data(), (uint32_t)meshdata->m_vertexesData.size(), sizeof(utils::Vertex));
 				}
-
-				pGPUMesh->m_meshlet[i].m_bounds[j] = meshopt_computeMeshletBounds(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset],
-						meshlet.triangle_count, (float *)meshdata->m_vertexesData.data(), (uint32_t)meshdata->m_vertexesData.size(), sizeof(utils::Vertex));
 			}
+
 			pGPUMesh->m_meshlet[i].m_materialIndex = pMesh->mMaterialIndex;
 
 			meshdata->indices.resize(pGPUMesh->m_meshlet[i].m_cluster_total_size);
@@ -404,10 +424,7 @@ std::unique_ptr<SubMesh> Mesh::LoadGPUMesh(const aiScene *pScene, uint32_t numMe
 				offset += (uint32_t)pGPUMesh->m_meshlet[i].m_clusters[j].size();
 			}
 			totalClusterCount += meshlet_count;
-			if(totalClusterCount > 2526)
-			{
-				SPDLOG_ERROR("BUG Mat ID: {}", pMesh->mMaterialIndex);
-			}
+
 			SPDLOG_INFO("Meshlet count: {}", totalClusterCount);
 
 			uint32_t indicesSize = static_cast<uint32_t>(helper::GetByteSizeOf(meshdata->indices));
