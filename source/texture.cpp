@@ -38,11 +38,11 @@ void Texture::CreateAllView(Renderer *renderer, nri::Texture2DViewDesc &viewDesc
 	}
 }
 
-void Texture::CreateView(Renderer *renderer, nri::Texture2DViewDesc &viewDesc) {
-	m_views.resize(1);
+void Texture::CreateView(Renderer *renderer, nri::Texture2DViewDesc &viewDesc, uint32_t index) {
+	m_views.resize(index + 1);
 	if (viewDesc.format != nri::Format::UNKNOWN) {
 		viewDesc.texture = m_texture;
 		NRI_ABORT_ON_FAILURE(
-				renderer->GetNRI().CreateTexture2DView(viewDesc, m_views[0]));
+				renderer->GetNRI().CreateTexture2DView(viewDesc, m_views[index]));
 	}
 }

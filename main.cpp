@@ -6,7 +6,8 @@
 #include "imgui.h"
 #include "renderer.h"
 #include "texture.h"
-
+#include "NRI.h"
+#include "render_pass/commonMeshPass.h"
 // STB
 #include "spdlog/spdlog.h"
 #include "stb_image.h"
@@ -475,26 +476,19 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 			ImGui::Checkbox("Show Box", &testRenderPtr->m_config.DebugBoxDraw);
 			ImGui::Checkbox("Show SSAO", &testRenderPtr->m_config.DebugSSAOState);
 			ImGui::Checkbox("Enable HiZ Culling", &testRenderPtr->m_config.OcclusionCullingState);
-			// ImGui::SliderFloat("Transparency", &m_Transparency, 0.0f, 1.0f);
-			// ImGui::SliderFloat("Scale", &m_Scale, 0.75f, 1.25f);
-			// ImGui::SliderFloat("Fov", &m_Fov, 20.0f, 120.0f, "%.0f");
-			// ImGui::SliderInt("Tex Index", &testRenderPtr->testIndex, 0, 10);
-			// ImGui::SliderFloat("Metallic", &testRenderPtr->testMaterial, 0.0, 1.0);
-			// ImGui::SliderFloat("Roughness", &testRenderPtr->testRoughness, 0.0, 1.0);
-			// ImGui::SliderFloat4("Mat Debug", &testRenderPtr->testVec.x, 0.0, 1.0);
-			// ImGui::Text("Light Rotation");
-			ImGui::SliderFloat("Yaw", &testRenderPtr->testVec.x, 0.0f, 1.0f);
-			ImGui::SliderFloat("Pitch", &testRenderPtr->testVec.y, 0.0f, 1.0f);
-			// ImGui::SliderFloat("Roll", &testRenderPtr->testVec.z, 0.0f, 360.0f);
-			// ImGui::SliderFloat("radius", &testRenderPtr->testVec.x, 0.0f, 1.0f);
-			// ImGui::SliderFloat("att", &testRenderPtr->testVec.y, 0.0f, 3.0f);
-			// ImGui::SliderFloat("dist", &testRenderPtr->testVec.z, 0.0f, 3.0f);
-			// ImGui::SliderFloat("radius", &testRenderPtr->testVec.x, 0.0f, 1.0f);
-			// ImGui::SliderFloat4("Roll", &testRenderPtr->testVec[0], 0.0f, 360.0f);
+			
+			ImGui::Checkbox("Enable Shadow", &testRenderPtr->m_config.ShadowState);
+			ImGui::Checkbox("Enable Soft Shadow", &testRenderPtr->m_config.SoftShadowState);
+			ImGui::SliderFloat("Shadow Bias", &testRenderPtr->m_config.ShadowBias, 0.0f, 0.1f, "%.3f");
 		}
 		ImGui::End();
 	}
-	ImGui::ShowDemoWindow();
+	// ImGui::ShowDemoWindow();
+	ImGui::Begin("Image Viewer");
+	{
+		ImGui::Image(testRenderPtr->simplePass->m_textureViews[6], ImVec2(512, 512));
+	}
+	ImGui::End();
 
 	ImGui::EndFrame();
 	ImGui::Render();

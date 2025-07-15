@@ -21,6 +21,10 @@ struct RenderSetting {
 	bool DebugSphereDraw = false;
 	bool DebugDrawState = false;
 	bool OcclusionCullingState = true;
+	// Shadow
+	bool ShadowState = true;
+	bool SoftShadowState = true;
+	float ShadowBias = 0.005f;
 };
 
 class SkyRenderPass;
@@ -65,7 +69,7 @@ public:
 
 private:
 	void RandomLights();
-	glm::mat4 computeLightSpaceMatrix(float yaw, float pitch, float roll);
+	glm::mat4 computeLightSpaceMatrix(const glm::vec3 &lightDir, float distance);
 
 public:
 	int testIndex = 0;
@@ -78,7 +82,7 @@ public:
 	std::unordered_map<std::shared_ptr<Texture>, std::shared_ptr<utils::Texture>> uploadTextureMap;
 	std::unordered_map<std::shared_ptr<Buffer>, std::shared_ptr<utils::MeshData>> uploadIndexBufferMap;
 	std::unordered_map<std::shared_ptr<Buffer>, std::shared_ptr<utils::MeshData>> uploadShadowIndexBufferMap;
-	Camera& m_Camera;
+	Camera &m_Camera;
 
 private:
 	nri::Device *m_Device = nullptr;
@@ -142,7 +146,7 @@ public:
 public:
 	std::shared_ptr<GPUCullingPass> gpuCullingPass = nullptr;
 
-private:
+// private:
 	std::shared_ptr<SkyRenderPass> skyPass = nullptr;
 	std::shared_ptr<GridRenderPass> gridPass = nullptr;
 	std::shared_ptr<InstanceMeshPass> meshPass = nullptr;

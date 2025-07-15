@@ -261,7 +261,7 @@ void DebugDrawPass::BindMemory() {
 		{ { minX, minY, maxZ }, { minX, minY, maxZ, 1.0 } }, // color }, // 4
 		{ { maxX, minY, maxZ }, { maxX, minY, maxZ, 1.0 } }, // color }, // 5
 		{ { maxX, maxY, maxZ }, { maxX, maxY, maxZ, 1.0 } }, // color }, // 6
-		{ { minX, maxY, maxZ }, { minX, maxY, maxZ, 1.0 } } // color }   // 7
+		{ { minX, maxY, maxZ }, { minX, maxY, maxZ, 1.0 } } // color }  // 7
 	};
 
 	m_indices = {
@@ -479,6 +479,19 @@ void DebugDrawPass::BuildPipeline() {
 		graphicsPipelineDesc.inputAssembly = inputAssemblyDesc_sphere;
 		NRI_ABORT_ON_FAILURE(NRI.CreateGraphicsPipeline(
 				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_Pipeline_sphere));
+
+		nri::ShaderDesc shaderStages1[] = {
+			utils::LoadShader(deviceDesc.graphicsAPI,
+					"debugRect", shaderCodeStorage, "vs_main"),
+			utils::LoadShader(deviceDesc.graphicsAPI, "debugRect",
+					shaderCodeStorage, "ps_main"),
+		};
+		graphicsPipelineDesc.shaders = shaderStages1;
+		graphicsPipelineDesc.shaderNum = helper::GetCountOf(shaderStages1);
+		graphicsPipelineDesc.vertexInput = nullptr;
+
+		NRI_ABORT_ON_FAILURE(NRI.CreateGraphicsPipeline(
+				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_Pipeline_rect));
 	}
 }
 

@@ -41,6 +41,7 @@ public:
 			}
 		}
 	}
+	std::vector<nri::Descriptor *> m_textureViews;
 
 private:
 	nri::PipelineLayout *m_PipelineLayout = nullptr;
@@ -67,7 +68,6 @@ private:
 
 	std::vector<utils::Texture> m_texureDatas;
 	std::vector<nri::Texture *> m_textures;
-	std::vector<nri::Descriptor *> m_textureViews;
 
 	struct MaterialIndexBlock {
 		uint32_t textureBase = 0;

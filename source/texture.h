@@ -9,7 +9,7 @@ public:
 	void Create(Renderer *renderer, nri::TextureDesc &bufferDesc, nri::Texture2DViewDesc &viewDesc);
 	// void Create(nri::Texture *tex, nri::Texture2DViewDesc &viewDesc);
 	void CreateAllView(Renderer *renderer, nri::Texture2DViewDesc &viewDesc);
-	void CreateView(Renderer *renderer, nri::Texture2DViewDesc &viewDesc);
+	void CreateView(Renderer *renderer, nri::Texture2DViewDesc &viewDesc, uint32_t index = 0);
 	inline uint32_t GetViewIndex() { return m_viewIndex; }
 	inline void SetViewIndex(uint32_t index) { m_viewIndex = index; }
 	nri::Texture *GetTexture() { return m_texture; }

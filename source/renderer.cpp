@@ -242,6 +242,8 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		m_ShadowMap = std::make_shared<Texture>();
 		m_ShadowMap->Create(this, textureDesc, texViewDesc);
 		m_ShadowMap->CreateView(this, texViewDesc);
+		textureDesc.usage = nri::TextureUsageBits::SHADER_RESOURCE;
+		// m_ShadowMap->CreateView(this, texViewDesc, 1);
 		m_ShadowMap->SetViewIndex(13);
 		NRI.SetDebugName(m_ShadowMap->GetTexture(), "m_ShadowMap");
 	}
@@ -463,37 +465,57 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	gpuCullingPass = std::make_shared<GPUCullingPass>(this);
 }
 
-glm::mat4 Renderer::computeLightSpaceMatrix(float yaw, float pitch, float roll) {
-	glm::vec3 defaultLightDir(0.0f, 1.0f, 0.0f);
-	glm::mat4 rotationMatrix = glm::eulerAngleYXZ(glm::radians(yaw), glm::radians(pitch), glm::radians(roll));
-	glm::vec4 rotatedLightDir = rotationMatrix * glm::vec4(defaultLightDir, 0.0f);
-	glm::vec3 lightDir = glm::normalize(glm::vec3(rotatedLightDir));
+glm::mat4 Renderer::computeLightSpaceMatrix(const glm::vec3& lightDir, float distance) {
+    // Compute light position based on direction and distance
+    glm::vec3 lightPos = -lightDir * distance;
+    
+    // Look at origin from light position
+    glm::vec3 target(0.0f);
+    
+    // Choose up vector, avoiding degenerate cases
+    glm::vec3 up(0.0f, 1.0f, 0.0f);
+    if (glm::abs(glm::dot(lightDir, up)) > 0.99f) {
+        up = glm::vec3(0.0f, 0.0f, 1.0f);
+    }
 
-	glm::vec3 eye(0.0f, 100.0f, 0.0f);
-	glm::vec3 center = eye + lightDir;
-	glm::vec3 up(0.0f, 1.0f, 0.0f);
+    // Create view matrix looking from light position
+    return glm::lookAt(lightPos, target, up);
+}
 
-	if (glm::length(glm::cross(lightDir, up)) < 1e-6f) {
-		up = glm::vec3(1.0f, 0.0f, 0.0f);
-	}
-	glm::mat4 lightSpaceMatrix = glm::lookAt(eye, center, up);
+glm::mat4 createLightViewMatrix(const glm::vec3& eye, const glm::vec3& direction, const glm::vec3& up = glm::vec3(0.0f, 1.0f, 0.0f)) {
+    // 验证方向向量非零
+    if (glm::length(direction) < 1e-6f) {
+        throw std::invalid_argument("Direction vector cannot be zero");
+    }
 
-	return lightSpaceMatrix;
+    // 计算目标点：eye + direction
+    glm::vec3 target = eye + glm::normalize(direction);
+
+    // 验证上向量与方向向量不共线
+    glm::vec3 forward = glm::normalize(direction);
+    if (glm::length(glm::cross(up, forward)) < 1e-6f) {
+        throw std::invalid_argument("Up vector and direction are collinear");
+    }
+
+    // 使用 GLM 的 lookAt 函数构建视图矩阵
+    return glm::lookAt(eye, target, up);
 }
 
 void Renderer::OnUpdate(float deltaTime) {
 	m_lightPos = glm::vec3(cos(glm::radians(testVec.x)), 1.5f * 80.0f, cos(glm::radians(testVec.y)) * 1.0f);
 	m_lightPos = glm::vec3(0.01f, 200.0f, 0.01f);
 
-	glm::vec3 normalizedLightDir = vec3(0.001, 1.0, 0.001);
-	float distanceFromOrigin = 350.f; //m_SceneAABB.second.y;// + 50000;
+	glm::vec3 normalizedLightDir = vec3(0.00, -1.0, 0.00);
+	float distanceFromOrigin = 30.f; //m_SceneAABB.second.y;// + 50000;
 	glm::vec3 lightPosition = -normalizedLightDir * distanceFromOrigin;
-	lightPosition = vec3(0.001, 200.0, 0.001);
-	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+	// lightPosition = vec3(0.001, 16.0, 0.001);
+	glm::vec3 up = glm::vec3(0.0f, 0.0f, 1.0f);
 	glm::mat4 lightView = glm::lookAtLH(lightPosition, vec3(0.0, 0.0, 0.0), up);
-	float orthoSize = 128.0f;
-	glm::mat4 lightProj = glm::orthoLH_ZO(-orthoSize, orthoSize, -orthoSize, orthoSize, 1.0f, distanceFromOrigin);
+	float orthoSize = 10.0f;
+	lightView = createLightViewMatrix(vec3(0.0), vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 0.0));
+	glm::mat4 lightProj = glm::orthoLH_ZO(-orthoSize, orthoSize, -orthoSize, orthoSize, 0.01f, distanceFromOrigin);
 	m_lightVP = lightProj * lightView;
+
 }
 
 void Renderer::UploadSceneData() {

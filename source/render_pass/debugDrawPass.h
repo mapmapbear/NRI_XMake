@@ -62,6 +62,9 @@ private:
 	nri::Pipeline *m_Pipeline_frustum = nullptr;
 	std::shared_ptr<Buffer> m_GeometryBuffer_frustum;
 
+	// Rect
+	nri::Pipeline *m_Pipeline_rect = nullptr;
+
 	// Global World Matrices
 	std::vector<glm::mat4> boxWorldMats;
 	std::shared_ptr<Buffer> m_boxDataBuffer;
