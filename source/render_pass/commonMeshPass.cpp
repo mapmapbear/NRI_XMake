@@ -863,7 +863,11 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_ShadowPipeline);
 		nri::ClearDesc clearDesc = {};
 		clearDesc.planes = nri::PlaneBits::DEPTH;
+#ifdef RZ
+		clearDesc.value.depthStencil.depth = 0.0;
+#else
 		clearDesc.value.depthStencil.depth = 1.0;
+#endif
 		NRI.CmdClearAttachments(info.cmdBuffer, &clearDesc, 1, nullptr, 0);
 		{
 			const nri::Viewport viewport = { 0.0f, 0.0f, 2048.f,
@@ -884,7 +888,7 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 				nri::IndexType::UINT32);
 		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
 				*m_ConstantBufferDescriptorSet, nullptr);
-		// if (!m_renderer->m_config.IndirectDrawState) 
+		// if (!m_renderer->m_config.IndirectDrawState)
 		{
 			for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 				Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
@@ -900,7 +904,7 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 
 				NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
 			}
-		} 
+		}
 		// else {
 		// 	nri::Buffer *indirectBuffer = m_renderer->gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
 		// 	NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *indirectBuffer, 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);

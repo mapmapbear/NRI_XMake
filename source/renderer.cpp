@@ -5,6 +5,7 @@
 #include "buffer.h"
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
+#include "glm/fwd.hpp"
 #include "glm/matrix.hpp"
 #include "mesh.h"
 #include "render_pass/boxCullingPass.h"
@@ -232,7 +233,11 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		textureDesc.width = 2048;
 		textureDesc.height = 2048;
 		textureDesc.mipNum = 1;
+#ifdef RZ
+		textureDesc.optimizedClearValue = { .depthStencil = { 0.0f, 0 } };
+#else
 		textureDesc.optimizedClearValue = { .depthStencil = { 1.0f, 0 } };
+#endif
 
 		nri::Texture2DViewDesc texViewDesc = {};
 		texViewDesc.viewType = nri::Texture2DViewType::DEPTH_STENCIL_ATTACHMENT;
@@ -348,7 +353,11 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	nri::TextureSubresourceUploadDesc depthSubRes = {};
 	depthSubRes.rowPitch = 2048 * 4;
 	depthSubRes.slicePitch = depthSubRes.rowPitch * 2048;
+#ifdef RZ
+	std::vector<float> data1(depthSubRes.slicePitch, 0.0);
+#else
 	std::vector<float> data1(depthSubRes.slicePitch, 1.0);
+#endif
 	depthSubRes.sliceNum = 1;
 	depthSubRes.slices = data1.data();
 	nri::TextureUploadDesc textureData6;
@@ -416,6 +425,9 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		min = transMat * glm::vec4(min, 1.0);
 		max = transMat * glm::vec4(max, 1.0);
 
+		sceneMin = glm::min(sceneMin, min);
+		sceneMax = glm::max(sceneMax, max);
+
 		glm::vec3 center = (min + max) * 0.5f;
 		glm::vec3 extent = (max - min) * 0.5f;
 
@@ -465,57 +477,173 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	gpuCullingPass = std::make_shared<GPUCullingPass>(this);
 }
 
-glm::mat4 Renderer::computeLightSpaceMatrix(const glm::vec3& lightDir, float distance) {
-    // Compute light position based on direction and distance
-    glm::vec3 lightPos = -lightDir * distance;
-    
-    // Look at origin from light position
-    glm::vec3 target(0.0f);
-    
-    // Choose up vector, avoiding degenerate cases
-    glm::vec3 up(0.0f, 1.0f, 0.0f);
-    if (glm::abs(glm::dot(lightDir, up)) > 0.99f) {
-        up = glm::vec3(0.0f, 0.0f, 1.0f);
-    }
+glm::mat4 Renderer::computeLightSpaceMatrix(const glm::vec3 &lightDir, float distance) {
+	// Compute light position based on direction and distance
+	glm::vec3 lightPos = -lightDir * distance;
 
-    // Create view matrix looking from light position
-    return glm::lookAt(lightPos, target, up);
+	// Look at origin from light position
+	glm::vec3 target(0.0f);
+
+	// Choose up vector, avoiding degenerate cases
+	glm::vec3 up(0.0f, 1.0f, 0.0f);
+	if (glm::abs(glm::dot(lightDir, up)) > 0.99f) {
+		up = glm::vec3(0.0f, 0.0f, 1.0f);
+	}
+
+	// Create view matrix looking from light position
+	return glm::lookAt(lightPos, target, up);
 }
 
-glm::mat4 createLightViewMatrix(const glm::vec3& eye, const glm::vec3& direction, const glm::vec3& up = glm::vec3(0.0f, 1.0f, 0.0f)) {
-    // 验证方向向量非零
-    if (glm::length(direction) < 1e-6f) {
-        throw std::invalid_argument("Direction vector cannot be zero");
-    }
+glm::mat4 createLightViewMatrix(const glm::vec3 &eye, const glm::vec3 &direction, const glm::vec3 &up = glm::vec3(0.0f, 1.0f, 0.0f)) {
+	// 验证方向向量非零
+	if (glm::length(direction) < 1e-6f) {
+		throw std::invalid_argument("Direction vector cannot be zero");
+	}
 
-    // 计算目标点：eye + direction
-    glm::vec3 target = eye + glm::normalize(direction);
+	// 计算目标点：eye + direction
+	glm::vec3 target = eye + glm::normalize(direction);
 
-    // 验证上向量与方向向量不共线
-    glm::vec3 forward = glm::normalize(direction);
-    if (glm::length(glm::cross(up, forward)) < 1e-6f) {
-        throw std::invalid_argument("Up vector and direction are collinear");
-    }
+	// 验证上向量与方向向量不共线
+	glm::vec3 forward = glm::normalize(direction);
+	if (glm::length(glm::cross(up, forward)) < 1e-6f) {
+		throw std::invalid_argument("Up vector and direction are collinear");
+	}
 
-    // 使用 GLM 的 lookAt 函数构建视图矩阵
-    return glm::lookAt(eye, target, up);
+	// 使用 GLM 的 lookAt 函数构建视图矩阵
+	return glm::lookAt(eye, target, up);
+}
+
+glm::quat getRotationQuaternion(const glm::vec3 &v1, const glm::vec3 &v2) {
+	glm::vec3 n1 = glm::normalize(v1);
+	glm::vec3 n2 = glm::normalize(v2);
+
+	glm::vec3 axis = glm::cross(n1, n2);
+	float dot = glm::dot(n1, n2);
+	dot = glm::clamp(dot, -1.0f, 1.0f);
+	float angle = glm::acos(dot);
+	if (glm::length(axis) < 0.0001f) {
+		if (dot > 0.9999f) {
+			return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+		} else if (dot < -0.9999f) {
+			glm::vec3 ortho = glm::abs(n1.x) > glm::abs(n1.z) ? glm::vec3(-n1.y, n1.x, 0.0f) : glm::vec3(0.0f, -n1.z, n1.y);
+			axis = glm::normalize(ortho);
+			angle = glm::pi<float>();
+		}
+	} else {
+		axis = glm::normalize(axis);
+	}
+	return glm::angleAxis(angle, axis);
 }
 
 void Renderer::OnUpdate(float deltaTime) {
-	m_lightPos = glm::vec3(cos(glm::radians(testVec.x)), 1.5f * 80.0f, cos(glm::radians(testVec.y)) * 1.0f);
-	m_lightPos = glm::vec3(0.01f, 200.0f, 0.01f);
+	// m_lightPos = glm::vec3(cos(glm::radians(testVec.x)), 1.5f * 80.0f, cos(glm::radians(testVec.y)) * 1.0f);
+	// m_lightPos = glm::vec3(0.01f, 200.0f, 0.01f);
 
-	glm::vec3 normalizedLightDir = vec3(0.00, -1.0, 0.00);
-	float distanceFromOrigin = 30.f; //m_SceneAABB.second.y;// + 50000;
-	glm::vec3 lightPosition = -normalizedLightDir * distanceFromOrigin;
-	// lightPosition = vec3(0.001, 16.0, 0.001);
-	glm::vec3 up = glm::vec3(0.0f, 0.0f, 1.0f);
-	glm::mat4 lightView = glm::lookAtLH(lightPosition, vec3(0.0, 0.0, 0.0), up);
-	float orthoSize = 10.0f;
-	lightView = createLightViewMatrix(vec3(0.0), vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 0.0));
-	glm::mat4 lightProj = glm::orthoLH_ZO(-orthoSize, orthoSize, -orthoSize, orthoSize, 0.01f, distanceFromOrigin);
-	m_lightVP = lightProj * lightView;
+	// glm::vec3 normalizedLightDir = vec3(0.00, -1.0, 0.00);
+	// float distanceFromOrigin = 25.f; //m_SceneAABB.second.y;// + 50000;
+	// glm::vec3 lightPosition = -normalizedLightDir * distanceFromOrigin;
+	// // lightPosition = vec3(0.001, 16.0, 0.001);
+	// glm::vec3 up = glm::vec3(0.0f, 0.0f, 1.0f);
+	// glm::mat4 lightView = glm::lookAtLH(lightPosition, vec3(0.0, 0.0, 0.0), up);
+	// float orthoSize = 10.0f;
+	// lightView = createLightViewMatrix(m_Camera.state.globalPosition, vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0));
+	// glm::mat4 lightProj = glm::orthoLH_ZO(-orthoSize, orthoSize, -orthoSize, orthoSize, 0.01f, distanceFromOrigin);
+	// glm::quat rot = getRotationQuaternion(m_Camera.vForward, vec3(0.0, 1.0, 0.0));
+	// lightView *= glm::mat4_cast(rot);
+	// m_lightVP = lightProj * lightView;
+	
+    // 固定光源方向为(0,1,0)
+    glm::vec3 lightDir = glm::vec3(0.0f, 1.0f, 0.0f);
+    
+    // 设置最大阴影距离为50m
+    const float maxShadowDistance = 25.0f;
+    
+    // 获取相机位置作为阴影视锥的中心点
+    glm::vec3 shadowCenter = m_Camera.state.globalPosition;
+    
+    // 计算光源位置 - 从阴影中心沿光线方向偏移maxShadowDistance距离
+    glm::vec3 lightPos = shadowCenter + lightDir * maxShadowDistance;
+    
+    // 创建光源空间的view矩阵，始终看向相机位置
+    glm::mat4 lightView1 = glm::lookAt(lightPos, shadowCenter, glm::vec3(1.0f, 0.0f, 0.0f));
+    
+    // 创建正交投影矩阵，覆盖阴影区域
+    float orthoSize1 = maxShadowDistance * 0.5f; // 投影大小设为阴影距离的一半
+    glm::mat4 lightProj1 = glm::ortho(-orthoSize1, orthoSize1, -orthoSize1, orthoSize1, 0.1f, maxShadowDistance * 2.0f);
+    
+    // 组合光源空间变换矩阵
+    m_lightVP = lightProj1 * lightView1;
+}
+#define SHADOW_MAP_CASCADE_COUNT 4
+void Renderer::UpdateCascadeSplit() {
+	float cascadeSplits[SHADOW_MAP_CASCADE_COUNT];
 
+	float nearClip = m_Camera.m_desc.nearZ;
+	float farClip = m_Camera.m_desc.farZ;
+	float clipRange = farClip - nearClip;
+
+	float minZ = nearClip;
+	float maxZ = nearClip + clipRange;
+
+	float range = maxZ - minZ;
+	float ratio = maxZ / minZ;
+
+	for (uint32_t i = 0; i < SHADOW_MAP_CASCADE_COUNT; i++) {
+		float p = (i + 1) / static_cast<float>(SHADOW_MAP_CASCADE_COUNT);
+		float log = minZ * std::pow(ratio, p);
+		float uniform = minZ + range * p;
+		float d = cascadeSplitLambda * (log - uniform) + uniform;
+		cascadeSplits[i] = (d - nearClip) / clipRange;
+	}
+
+	float lastSplitDist = 0.0;
+	for (uint32_t i = 0; i < SHADOW_MAP_CASCADE_COUNT; i++) {
+		float splitDist = cascadeSplits[i];
+
+		glm::vec3 frustumCorners[8] = {
+			glm::vec3(-1.0f, 1.0f, 0.0f),
+			glm::vec3(1.0f, 1.0f, 0.0f),
+			glm::vec3(1.0f, -1.0f, 0.0f),
+			glm::vec3(-1.0f, -1.0f, 0.0f),
+			glm::vec3(-1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, -1.0f, 1.0f),
+			glm::vec3(-1.0f, -1.0f, 1.0f),
+		};
+
+		// Project frustum corners into world space
+		glm::mat4 invCam = glm::inverse(m_Camera.state.mViewToClip * m_Camera.state.mWorldToView);
+		for (uint32_t j = 0; j < 8; j++) {
+			glm::vec4 invCorner = invCam * glm::vec4(frustumCorners[j], 1.0f);
+			frustumCorners[j] = invCorner / invCorner.w;
+		}
+
+		for (uint32_t j = 0; j < 4; j++) {
+			glm::vec3 dist = frustumCorners[j + 4] - frustumCorners[j];
+			frustumCorners[j + 4] = frustumCorners[j] + (dist * splitDist);
+			frustumCorners[j] = frustumCorners[j] + (dist * lastSplitDist);
+		}
+
+		glm::vec3 frustumCenter = glm::vec3(0.0f);
+		for (uint32_t j = 0; j < 8; j++) {
+			frustumCenter += frustumCorners[j];
+		}
+		frustumCenter /= 8.0f;
+
+		float radius = 0.0f;
+		for (uint32_t j = 0; j < 8; j++) {
+			float distance = glm::length(frustumCorners[j] - frustumCenter);
+			radius = glm::max(radius, distance);
+		}
+		radius = std::ceil(radius * 16.0f) / 16.0f;
+
+		glm::vec3 maxExtents = glm::vec3(radius);
+		glm::vec3 minExtents = -maxExtents;
+		vec3 lightPos = vec3(0.0, 20.0, 0.0);
+		glm::vec3 lightDir = normalize(-lightPos);
+		glm::mat4 lightViewMatrix = glm::lookAt(frustumCenter - lightDir * -minExtents.z, frustumCenter, glm::vec3(0.0f, 1.0f, 0.0f));
+		glm::mat4 lightOrthoMatrix = glm::ortho(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, 0.0f, maxExtents.z - minExtents.z);
+	}
 }
 
 void Renderer::UploadSceneData() {

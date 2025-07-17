@@ -98,8 +98,8 @@ float4 main(InputPS input) : SV_Target {
 
     // shadow = pcf_shadow_poisson_weighted(projCoords, g_SamplerShadow, shadowMap, 0.0001);
     // shadow = uniformPoissonPCF(projCoords, g_SamplerShadow, shadowMap);
-    shadow = pcf_shadow(projCoords, g_SamplerShadow, shadowMap, 0.005, 5);
-    // shadow = shadowSampleCmp(g_SamplerShadow, shadowMap, projCoords.xy, projCoords.z - 0.002,  0);
+    // shadow = pcf_shadow(projCoords, g_SamplerShadow, shadowMap, 0.005, 5);
+    shadow = shadowSampleCmp(g_SamplerShadow, shadowMap, projCoords.xy, projCoords.z - 0.002,  0);
     float4 outPosLS = input.positionLS.xyzz;
     // baseColor.xyz *= shadow; //clamp(shadow, 0.4, 1.0);
     // baseColor = float4(projCoords.xy, 0.0, 1.0);

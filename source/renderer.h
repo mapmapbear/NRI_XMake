@@ -56,6 +56,7 @@ public:
 	void OnPostRender();
 	void InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain);
 	void UploadSceneData();
+	void UpdateCascadeSplit();
 
 	void BindCamera(Camera &camera) { m_Camera = camera; }
 
@@ -83,6 +84,7 @@ public:
 	std::unordered_map<std::shared_ptr<Buffer>, std::shared_ptr<utils::MeshData>> uploadIndexBufferMap;
 	std::unordered_map<std::shared_ptr<Buffer>, std::shared_ptr<utils::MeshData>> uploadShadowIndexBufferMap;
 	Camera &m_Camera;
+	float cascadeSplitLambda = 0.95f;
 
 private:
 	nri::Device *m_Device = nullptr;
