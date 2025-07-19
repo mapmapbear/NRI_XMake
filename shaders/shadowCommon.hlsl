@@ -196,6 +196,28 @@ float shadowSampleCmp(sampler_t shadow_sampler, texture2d_t shadow_map, float2 u
     return shadow_map.SampleCmpLevelZero(shadow_sampler, uv, z);
 }
 
+float shadow3x3PCF(sampler_t shadow_sampler, texture2d_t shadow_map, float2 uv, float z, float invShadowSize)
+{
+    float3 lightPos = float3(uv, z);
+    const float dilation = 2.0f;
+    float d1 = dilation * invShadowSize * 0.125f;
+    float d2 = dilation * invShadowSize * 0.875f;
+    float d3 = dilation * invShadowSize * 0.625f;
+    float d4 = dilation * invShadowSize * 0.375f;
+    float result = (
+        2.0f * shadow_map.SampleCmpLevelZero(shadow_sampler, uv, lightPos.z) +
+        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2(-d2,  d1), lightPos.z) +
+        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2(-d1, -d2), lightPos.z) +
+        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2( d2, -d1), lightPos.z) +
+        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2( d1,  d2), lightPos.z) +
+        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2(-d4,  d3), lightPos.z) +
+        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2(-d3, -d4), lightPos.z) +
+        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2( d4, -d3), lightPos.z) +
+        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2( d3,  d4), lightPos.z)
+        ) / 10.0f;
+    return result * result;
+}   
+
 float uniformPoissonPCF( float3 shadowSpaceCoord, sampler_t shadow_sampler, texture2d_t shadow_map)
 {
   float accumulatedShadow = 0.0f;

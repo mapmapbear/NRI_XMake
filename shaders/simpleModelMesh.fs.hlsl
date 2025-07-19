@@ -94,16 +94,15 @@ float4 main(InputPS input) : SV_Target {
     Texture2D<float> shadowMap = ResourceDescriptorHeap[13];
 
     SamplerState g_SamplerBRDF = SamplerDescriptorHeap[materialData.textureIndex3];
-    SamplerComparisonState g_SamplerShadow = SamplerDescriptorHeap[materialData.textureIndex3 + 1];
+    SamplerComparisonState g_SamplerShadow = SamplerDescriptorHeap[3];
 
     // shadow = pcf_shadow_poisson_weighted(projCoords, g_SamplerShadow, shadowMap, 0.0001);
     // shadow = uniformPoissonPCF(projCoords, g_SamplerShadow, shadowMap);
-    // shadow = pcf_shadow(projCoords, g_SamplerShadow, shadowMap, 0.005, 5);
-    shadow = shadowSampleCmp(g_SamplerShadow, shadowMap, projCoords.xy, projCoords.z - 0.002,  0);
+    // shadow = pcf_shadow(projCoords, g_SamplerShadow, shadowMap, 0.002, 8);
+    shadow = shadowSampleCmp(g_SamplerShadow, shadowMap, projCoords.xy, projCoords.z,  0);
+    // shadow = shadow3x3PCF(g_SamplerShadow, shadowMap, projCoords.xy, projCoords.z, 1.0 / 2048.0);
+    // return float4(projCoords.zzz, 1.0);
     float4 outPosLS = input.positionLS.xyzz;
-    // baseColor.xyz *= shadow; //clamp(shadow, 0.4, 1.0);
-    // baseColor = float4(projCoords.xy, 0.0, 1.0);
-    // return baseColor;
     color.xyz += IBL(worldNormal, v, R, baseColor.xyz, metallic, roughness, c_F0, BRDFTex, diffuseIBL, specularIBL, g_Sampler, g_SamplerBRDF);
     color.xyz *= shadow;
     return color;

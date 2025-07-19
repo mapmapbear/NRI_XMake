@@ -282,9 +282,9 @@ void CommonMeshPass::BindMemory() {
 		nri::SamplerDesc samplerDesc = {};
 		samplerDesc.addressModes = { nri::AddressMode::CLAMP_TO_EDGE,
 			nri::AddressMode::CLAMP_TO_EDGE, nri::AddressMode::CLAMP_TO_EDGE };
-		samplerDesc.filters = { nri::Filter::NEAREST, nri::Filter::NEAREST,
-			nri::Filter::NEAREST };
-		samplerDesc.compareFunc = nri::CompareFunc::LESS_EQUAL;
+		samplerDesc.filters = { nri::Filter::LINEAR, nri::Filter::LINEAR,
+			nri::Filter::LINEAR };
+		samplerDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
 		samplerDesc.mipMin = 0;
 		samplerDesc.mipMax = 1;
 		NRI_ABORT_ON_FAILURE(
@@ -605,7 +605,11 @@ void CommonMeshPass::BuildPipeline() {
 
 		nri::DepthAttachmentDesc depthAttachmentDesc = {};
 		depthAttachmentDesc.write = true;
+#ifdef RZ
+		depthAttachmentDesc.compareFunc = nri::CompareFunc::GREATER_EQUAL;
+#else
 		depthAttachmentDesc.compareFunc = nri::CompareFunc::LESS_EQUAL;
+#endif
 		depthAttachmentDesc.boundsTest = false;
 
 		nri::OutputMergerDesc outputMergerDesc = {};
@@ -744,7 +748,7 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 		commonConstants->modelMat = glm::mat4(1.0);
 		commonConstants->viewMat = camera.state.mWorldToView;
 		commonConstants->projectMat = camera.state.mViewToClip;
-		commonConstants->lightVP = m_renderer->m_lightVP;
+		commonConstants->lightVP = m_renderer->m_lightVP[1];
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
 
@@ -853,7 +857,7 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 		commonConstants->modelMat = glm::mat4(1.0);
 		commonConstants->viewMat = camera.state.mWorldToView;
 		commonConstants->projectMat = camera.state.mViewToClip;
-		commonConstants->lightVP = m_renderer->m_lightVP;
+		commonConstants->lightVP = m_renderer->m_lightVP[3];
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
 

@@ -1,13 +1,14 @@
 // © 2021 NVIDIA Corporation
 #include "GLFW/glfw3.h"
+#include "NRI.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/gtc/random.hpp"
 #include "glm/trigonometric.hpp"
 #include "imgui.h"
+#include "render_pass/commonMeshPass.h"
 #include "renderer.h"
 #include "texture.h"
-#include "NRI.h"
-#include "render_pass/commonMeshPass.h"
+
 // STB
 #include "spdlog/spdlog.h"
 #include "stb_image.h"
@@ -150,7 +151,7 @@ Sample::~Sample() {
 		NRI.DestroyDescriptorPool(*m_DescriptorPool);
 		NRI.DestroyFence(*m_FrameFence[0]);
 		NRI.DestroyFence(*m_FrameFence[1]);
-		
+
 		for (nri::Memory *memory : m_MemoryAllocations) {
 			NRI.FreeMemory(*memory);
 		}
@@ -317,7 +318,7 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 		textureDesc.height = (uint16_t)GetWindowResolution().second;
 		textureDesc.mipNum = 1;
 #ifdef RZ
-		textureDesc.clearValue = { { 0.0f, 0u } };
+		textureDesc.optimizedClearValue = { { 0.0f, 0u } };
 #else
 		textureDesc.optimizedClearValue = { { 1.0f, 0u } };
 #endif
@@ -404,9 +405,9 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	// testRenderPtr->BindCamera(m_Camera);
 
 	// DepthTest BUG Angle
-	// m_Camera.vForward = { 0.905398309, 0.0342303626, 0.423181087 };
-	// m_Camera.vUp = { -0.0310102850, 0.999414027, -0.0144941369 };
-	// m_Camera.vRight = { -0.423429251, 0.00000000, 0.905929208 };
+	m_Camera.vForward = { 1.0, 0.0, 0.0 };
+	m_Camera.vUp = { 0.0, 1.0, 0.0 };
+	m_Camera.vRight = { 0.0, 0.0, -1.0 };
 	return initialized;
 }
 
@@ -476,7 +477,7 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 			ImGui::Checkbox("Show Box", &testRenderPtr->m_config.DebugBoxDraw);
 			ImGui::Checkbox("Show SSAO", &testRenderPtr->m_config.DebugSSAOState);
 			ImGui::Checkbox("Enable HiZ Culling", &testRenderPtr->m_config.OcclusionCullingState);
-			
+
 			ImGui::Checkbox("Enable Shadow", &testRenderPtr->m_config.ShadowState);
 			ImGui::Checkbox("Enable Soft Shadow", &testRenderPtr->m_config.SoftShadowState);
 			ImGui::SliderFloat("Shadow Bias", &testRenderPtr->m_config.ShadowBias, 0.0f, 0.1f, "%.3f");

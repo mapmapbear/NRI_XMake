@@ -84,6 +84,7 @@ public:
 	std::unordered_map<std::shared_ptr<Buffer>, std::shared_ptr<utils::MeshData>> uploadIndexBufferMap;
 	std::unordered_map<std::shared_ptr<Buffer>, std::shared_ptr<utils::MeshData>> uploadShadowIndexBufferMap;
 	Camera &m_Camera;
+	Camera m_ShadowCamera;
 	float cascadeSplitLambda = 0.95f;
 
 private:
@@ -100,7 +101,7 @@ public:
 	std::pair<glm::vec3, glm::vec3> m_SceneAABB;
 	std::pair<uint32_t, uint32_t> m_OutputResolution = { 1920, 1080 };
 	bool m_firstFrame = true;
-	glm::mat4 m_lightVP = glm::mat4(1.0);
+	glm::mat4 m_lightVP[4] = {};//glm::mat4(1.0);
 	glm::vec3 m_lightPos = glm::vec3(0.2, 100.0, 0.2);
 
 	struct RenderNode {

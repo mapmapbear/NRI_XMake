@@ -551,28 +551,30 @@ void Renderer::OnUpdate(float deltaTime) {
 	// glm::quat rot = getRotationQuaternion(m_Camera.vForward, vec3(0.0, 1.0, 0.0));
 	// lightView *= glm::mat4_cast(rot);
 	// m_lightVP = lightProj * lightView;
-	
-    // 固定光源方向为(0,1,0)
-    glm::vec3 lightDir = glm::vec3(0.0f, 1.0f, 0.0f);
-    
-    // 设置最大阴影距离为50m
-    const float maxShadowDistance = 25.0f;
-    
-    // 获取相机位置作为阴影视锥的中心点
-    glm::vec3 shadowCenter = m_Camera.state.globalPosition;
-    
-    // 计算光源位置 - 从阴影中心沿光线方向偏移maxShadowDistance距离
-    glm::vec3 lightPos = shadowCenter + lightDir * maxShadowDistance;
-    
-    // 创建光源空间的view矩阵，始终看向相机位置
-    glm::mat4 lightView1 = glm::lookAt(lightPos, shadowCenter, glm::vec3(1.0f, 0.0f, 0.0f));
-    
-    // 创建正交投影矩阵，覆盖阴影区域
-    float orthoSize1 = maxShadowDistance * 0.5f; // 投影大小设为阴影距离的一半
-    glm::mat4 lightProj1 = glm::ortho(-orthoSize1, orthoSize1, -orthoSize1, orthoSize1, 0.1f, maxShadowDistance * 2.0f);
-    
-    // 组合光源空间变换矩阵
-    m_lightVP = lightProj1 * lightView1;
+
+	// 固定光源方向为(0,1,0)
+	glm::vec3 lightDir = glm::vec3(0.0f, 1.0f, 0.0f);
+
+	// 设置最大阴影距离为50m
+	const float maxShadowDistance = 200.0f;
+
+	// 获取相机位置作为阴影视锥的中心点
+	glm::vec3 shadowCenter = m_Camera.state.globalPosition;
+	shadowCenter.y = 0;
+
+	// 计算光源位置 - 从阴影中心沿光线方向偏移maxShadowDistance距离
+	glm::vec3 lightPos = shadowCenter + lightDir * maxShadowDistance;
+
+	// 创建光源空间的view矩阵，始终看向相机位置
+	glm::mat4 lightView1 = glm::lookAt(lightPos, shadowCenter, glm::vec3(1.0f, 0.0f, 0.0f));
+
+	// 创建正交投影矩阵，覆盖阴影区域
+	float orthoSize1 = maxShadowDistance * 0.5f; // 投影大小设为阴影距离的一半
+	glm::mat4 lightProj1 = glm::ortho(-orthoSize1, orthoSize1, -orthoSize1, orthoSize1, maxShadowDistance * 2.0f, 0.1f);
+
+	// 组合光源空间变换矩阵
+	m_lightVP[0] = lightProj1 * lightView1;
+	UpdateCascadeSplit();
 }
 #define SHADOW_MAP_CASCADE_COUNT 4
 void Renderer::UpdateCascadeSplit() {
@@ -580,6 +582,11 @@ void Renderer::UpdateCascadeSplit() {
 
 	float nearClip = m_Camera.m_desc.nearZ;
 	float farClip = m_Camera.m_desc.farZ;
+	m_ShadowCamera.vForward = vec3(0.0, -1.0, 0.0);
+	m_ShadowCamera.vRight = vec3(1.0, 0.0, 0.0);
+	m_ShadowCamera.vUp = vec3(0.0, 0.0, 1.0);
+	m_ShadowCamera.Initialize(glm::vec3(0.0f, 10.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f));
+
 	float clipRange = farClip - nearClip;
 
 	float minZ = nearClip;
@@ -610,18 +617,18 @@ void Renderer::UpdateCascadeSplit() {
 			glm::vec3(1.0f, -1.0f, 1.0f),
 			glm::vec3(-1.0f, -1.0f, 1.0f),
 		};
-
+		
 		// Project frustum corners into world space
-		glm::mat4 invCam = glm::inverse(m_Camera.state.mViewToClip * m_Camera.state.mWorldToView);
+		glm::mat4 invCam = (glm::inverse(m_ShadowCamera.state.mWorldToView * m_Camera.state.mViewToClip));
 		for (uint32_t j = 0; j < 8; j++) {
 			glm::vec4 invCorner = invCam * glm::vec4(frustumCorners[j], 1.0f);
 			frustumCorners[j] = invCorner / invCorner.w;
 		}
 
 		for (uint32_t j = 0; j < 4; j++) {
-			glm::vec3 dist = frustumCorners[j + 4] - frustumCorners[j];
-			frustumCorners[j + 4] = frustumCorners[j] + (dist * splitDist);
-			frustumCorners[j] = frustumCorners[j] + (dist * lastSplitDist);
+			glm::vec3 dist = frustumCorners[j] - frustumCorners[j + 4];
+			frustumCorners[j] = frustumCorners[j + 4] + (dist * splitDist);
+			frustumCorners[j + 4] = frustumCorners[j + 4] + (dist * lastSplitDist);
 		}
 
 		glm::vec3 frustumCenter = glm::vec3(0.0f);
@@ -639,10 +646,17 @@ void Renderer::UpdateCascadeSplit() {
 
 		glm::vec3 maxExtents = glm::vec3(radius);
 		glm::vec3 minExtents = -maxExtents;
-		vec3 lightPos = vec3(0.0, 20.0, 0.0);
+		vec3 lightPos = vec3(0.0, 1.0, 0.0);
 		glm::vec3 lightDir = normalize(-lightPos);
-		glm::mat4 lightViewMatrix = glm::lookAt(frustumCenter - lightDir * -minExtents.z, frustumCenter, glm::vec3(0.0f, 1.0f, 0.0f));
+
+		glm::mat4 lightViewMatrix = glm::lookAt(frustumCenter - lightDir * -minExtents.z, frustumCenter, glm::vec3(1.0f, 0.0f, 0.0f));
+#ifdef RZ
+		glm::mat4 lightOrthoMatrix = glm::ortho(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z - minExtents.z, 0.0f);
+#else
 		glm::mat4 lightOrthoMatrix = glm::ortho(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, 0.0f, maxExtents.z - minExtents.z);
+#endif
+		m_lightVP[i] = lightOrthoMatrix * lightViewMatrix;
+		lastSplitDist = splitDist;
 	}
 }
 
