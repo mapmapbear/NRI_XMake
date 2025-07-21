@@ -371,6 +371,17 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 			nullptr,
 			0));
 
+	m_ShadowCamera.vForward = vec3(0.0, 1.0, 0.0);
+	m_ShadowCamera.vRight = vec3(1.0, 0.0, 0.0);
+	m_ShadowCamera.vUp = vec3(0.0, 0.0, 1.0);
+
+	m_ShadowCamera.state.mViewToClip = glm::lookAtLH(m_Camera.state.globalPosition + m_ShadowCamera.vForward, m_Camera.state.globalPosition, m_ShadowCamera.vUp);
+#ifdef RZ
+	m_ShadowCamera.state.mViewToClip = glm::perspectiveLH_ZO(m_Camera.m_desc.horizontalFov, m_Camera.m_desc.aspectRatio, m_Camera.m_desc.farZ, m_Camera.m_desc.nearZ);
+#else
+	m_ShadowCamera.state.mViewToClip = glm::perspectiveLH_ZO(m_Camera.m_desc.horizontalFov, m_Camera.m_desc.aspectRatio, m_Camera.m_desc.nearZ, m_Camera.m_desc.farZ);
+#endif
+
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = {};
 	meshFile = utils::GetFullPath("GLTF_Sponza/sponza.gltf", utils::DataFolder::ROOT);
@@ -536,6 +547,7 @@ glm::quat getRotationQuaternion(const glm::vec3 &v1, const glm::vec3 &v2) {
 }
 
 void Renderer::OnUpdate(float deltaTime) {
+	m_ShadowCamera.state.mWorldToView = glm::lookAtLH(m_Camera.state.globalPosition + m_ShadowCamera.vForward * 300.0f, m_Camera.state.globalPosition, m_ShadowCamera.vUp);
 	// m_lightPos = glm::vec3(cos(glm::radians(testVec.x)), 1.5f * 80.0f, cos(glm::radians(testVec.y)) * 1.0f);
 	// m_lightPos = glm::vec3(0.01f, 200.0f, 0.01f);
 
@@ -553,27 +565,27 @@ void Renderer::OnUpdate(float deltaTime) {
 	// m_lightVP = lightProj * lightView;
 
 	// 固定光源方向为(0,1,0)
-	glm::vec3 lightDir = glm::vec3(0.0f, 1.0f, 0.0f);
+	// glm::vec3 lightDir = glm::vec3(0.0f, 1.0f, 0.0f);
 
-	// 设置最大阴影距离为50m
-	const float maxShadowDistance = 200.0f;
+	// // 设置最大阴影距离为50m
+	// const float maxShadowDistance = 200.0f;
 
-	// 获取相机位置作为阴影视锥的中心点
-	glm::vec3 shadowCenter = m_Camera.state.globalPosition;
-	shadowCenter.y = 0;
+	// // 获取相机位置作为阴影视锥的中心点
+	// glm::vec3 shadowCenter = m_Camera.state.globalPosition;
+	// shadowCenter.y = 0;
 
-	// 计算光源位置 - 从阴影中心沿光线方向偏移maxShadowDistance距离
-	glm::vec3 lightPos = shadowCenter + lightDir * maxShadowDistance;
+	// // 计算光源位置 - 从阴影中心沿光线方向偏移maxShadowDistance距离
+	// glm::vec3 lightPos = shadowCenter + lightDir * maxShadowDistance;
 
-	// 创建光源空间的view矩阵，始终看向相机位置
-	glm::mat4 lightView1 = glm::lookAt(lightPos, shadowCenter, glm::vec3(1.0f, 0.0f, 0.0f));
+	// // 创建光源空间的view矩阵，始终看向相机位置
+	// glm::mat4 lightView1 = glm::lookAt(lightPos, shadowCenter, glm::vec3(1.0f, 0.0f, 0.0f));
 
-	// 创建正交投影矩阵，覆盖阴影区域
-	float orthoSize1 = maxShadowDistance * 0.5f; // 投影大小设为阴影距离的一半
-	glm::mat4 lightProj1 = glm::ortho(-orthoSize1, orthoSize1, -orthoSize1, orthoSize1, maxShadowDistance * 2.0f, 0.1f);
+	// // 创建正交投影矩阵，覆盖阴影区域
+	// float orthoSize1 = maxShadowDistance * 0.5f; // 投影大小设为阴影距离的一半
+	// glm::mat4 lightProj1 = glm::ortho(-orthoSize1, orthoSize1, -orthoSize1, orthoSize1, maxShadowDistance * 2.0f, 0.1f);
 
-	// 组合光源空间变换矩阵
-	m_lightVP[0] = lightProj1 * lightView1;
+	// // 组合光源空间变换矩阵
+	// m_lightVP[0] = lightProj1 * lightView1;
 	UpdateCascadeSplit();
 }
 #define SHADOW_MAP_CASCADE_COUNT 4
@@ -582,10 +594,6 @@ void Renderer::UpdateCascadeSplit() {
 
 	float nearClip = m_Camera.m_desc.nearZ;
 	float farClip = m_Camera.m_desc.farZ;
-	m_ShadowCamera.vForward = vec3(0.0, -1.0, 0.0);
-	m_ShadowCamera.vRight = vec3(1.0, 0.0, 0.0);
-	m_ShadowCamera.vUp = vec3(0.0, 0.0, 1.0);
-	m_ShadowCamera.Initialize(glm::vec3(0.0f, 10.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f));
 
 	float clipRange = farClip - nearClip;
 
@@ -602,7 +610,10 @@ void Renderer::UpdateCascadeSplit() {
 		float d = cascadeSplitLambda * (log - uniform) + uniform;
 		cascadeSplits[i] = (d - nearClip) / clipRange;
 	}
-
+	// cascadeSplits[0] = 0.2;
+	// cascadeSplits[1] = 0.4;
+	// cascadeSplits[2] = 0.6;
+	// cascadeSplits[3] = 1.0;
 	float lastSplitDist = 0.0;
 	for (uint32_t i = 0; i < SHADOW_MAP_CASCADE_COUNT; i++) {
 		float splitDist = cascadeSplits[i];
@@ -617,9 +628,9 @@ void Renderer::UpdateCascadeSplit() {
 			glm::vec3(1.0f, -1.0f, 1.0f),
 			glm::vec3(-1.0f, -1.0f, 1.0f),
 		};
-		
+
 		// Project frustum corners into world space
-		glm::mat4 invCam = (glm::inverse(m_ShadowCamera.state.mWorldToView * m_Camera.state.mViewToClip));
+		glm::mat4 invCam = (glm::inverse(m_ShadowCamera.state.mWorldToView * m_ShadowCamera.state.mViewToClip));
 		for (uint32_t j = 0; j < 8; j++) {
 			glm::vec4 invCorner = invCam * glm::vec4(frustumCorners[j], 1.0f);
 			frustumCorners[j] = invCorner / invCorner.w;
@@ -646,14 +657,14 @@ void Renderer::UpdateCascadeSplit() {
 
 		glm::vec3 maxExtents = glm::vec3(radius);
 		glm::vec3 minExtents = -maxExtents;
-		vec3 lightPos = vec3(0.0, 1.0, 0.0);
+		vec3 lightPos = vec3(0.0, 10.0, 0.0);
 		glm::vec3 lightDir = normalize(-lightPos);
 
-		glm::mat4 lightViewMatrix = glm::lookAt(frustumCenter - lightDir * -minExtents.z, frustumCenter, glm::vec3(1.0f, 0.0f, 0.0f));
+		glm::mat4 lightViewMatrix = glm::lookAtLH(frustumCenter - lightDir * -minExtents.z, frustumCenter, glm::vec3(1.0f, 0.0f, 0.0f));
 #ifdef RZ
-		glm::mat4 lightOrthoMatrix = glm::ortho(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z - minExtents.z, 0.0f);
+		glm::mat4 lightOrthoMatrix = glm::orthoLH_ZO(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z - minExtents.z, 0.0f);
 #else
-		glm::mat4 lightOrthoMatrix = glm::ortho(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, 0.0f, maxExtents.z - minExtents.z);
+		glm::mat4 lightOrthoMatrix = glm::orthoLH_ZO(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, 0.0f, maxExtents.z - minExtents.z);
 #endif
 		m_lightVP[i] = lightOrthoMatrix * lightViewMatrix;
 		lastSplitDist = splitDist;

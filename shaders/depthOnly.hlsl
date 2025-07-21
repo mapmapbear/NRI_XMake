@@ -3,7 +3,7 @@ NRI_RESOURCE(cbuffer, CommonConstants, b, 0, 0) {
     float4x4 modelMat;
     float4x4 viewMat;
     float4x4 projectMat;
-    float4x4 lightVP;
+    float4x4 lightVP[4];
 };
 
 struct PushConstants {
@@ -42,7 +42,7 @@ outputVS vs_main(inputVS input) {
     outputVS output;
     StructuredBuffer<float4x4> worldMatBuffer = ResourceDescriptorHeap[1006];
     float4x4 testMat = worldMatBuffer[input.startInstance];
-    float4x4 lightMVP = mul(lightVP,testMat);
+    float4x4 lightMVP = mul(lightVP[g_PushConstants.indexGroup.z],testMat);
     output.testVS = mul(g_PushConstants.worldMat, float4(0.0, 1.0, 1.0, 1.0));
     float4x4 worldMat = g_PushConstants.worldMat;
     float4x4 vpMat = mul(viewMat, worldMat);

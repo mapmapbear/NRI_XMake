@@ -748,7 +748,10 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 		commonConstants->modelMat = glm::mat4(1.0);
 		commonConstants->viewMat = camera.state.mWorldToView;
 		commonConstants->projectMat = camera.state.mViewToClip;
-		commonConstants->lightVP = m_renderer->m_lightVP[1];
+		commonConstants->lightVP[0] = m_renderer->m_lightVP[0];
+		commonConstants->lightVP[1] = m_renderer->m_lightVP[1];
+		commonConstants->lightVP[2] = m_renderer->m_lightVP[2];
+		commonConstants->lightVP[3] = m_renderer->m_lightVP[3];
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
 
@@ -805,47 +808,6 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 
 void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 	auto NRI = *m_NRI;
-	// {
-	// 	helper::Annotation annotation(NRI, info.cmdBuffer, "Shadow Pass");
-	// 	NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_ShadowPipelineLayout);
-	// 	NRI.CmdSetPipeline(info.cmdBuffer, *m_ShadowPipeline);
-	// 	nri::ClearDesc clearDesc = {};
-	// 	clearDesc.planes = nri::PlaneBits::DEPTH;
-	// 	clearDesc.value.depthStencil.depth = 1.0;
-	// 	NRI.CmdClearAttachments(info.cmdBuffer, &clearDesc, 1, nullptr, 0);
-	// 	{
-	// 		const nri::Viewport viewport = { 0.0f, 0.0f, 2048.f,
-	// 			2048.f, 0.0f, 1.0f };
-	// 		NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
-
-	// 		nri::Rect scissor = { 0, 0, 2048, 2048 };
-	// 		NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
-	// 	}
-
-	// 	nri::Buffer *geoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_vertexbuffer->GetBuffer();
-	// 	nri::VertexBufferDesc vertexBufferDesc = {};
-	// 	vertexBufferDesc.buffer = geoBuffer;
-	// 	vertexBufferDesc.stride = sizeof(utils::Vertex);
-	// 	NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
-	// 	nri::Buffer *indexGeoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_indexbuffer->GetBuffer();
-	// 	NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, 0,
-	// 			nri::IndexType::UINT32);
-
-	// 	for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
-	// 		Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
-	// 		CBlock block = {};
-	// 		block.modelMat = node.globalTransform;
-	// 		// block.modelMat = glm::scale(block.modelMat, glm::vec3(0.01f));
-	// 		block.camPos = vec4(cameraPos, 1.0);
-	// 		block.index[0] = node.material->m_BaseTexture->GetViewIndex();
-	// 		block.index[1] = block.index[2] = block.index[3] = 1u;
-	// 		block.testVec.y = 2.0f;
-	// 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
-
-	// 		uint32_t instanceCount = 1;
-	// 		NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
-	// 	}
-	// }
 
 	const glm::mat4 p = camera.statePrev.mViewToClip;
 	const glm::vec3 cameraPos = camera.statePrev.position;
@@ -853,11 +815,15 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
 			*m_ConstantBuffer, 0,
 			sizeof(ConstantBufferLayout));
+
 	if (commonConstants) {
 		commonConstants->modelMat = glm::mat4(1.0);
 		commonConstants->viewMat = camera.state.mWorldToView;
 		commonConstants->projectMat = camera.state.mViewToClip;
-		commonConstants->lightVP = m_renderer->m_lightVP[3];
+		commonConstants->lightVP[0] = m_renderer->m_lightVP[0];
+		commonConstants->lightVP[1] = m_renderer->m_lightVP[1];
+		commonConstants->lightVP[2] = m_renderer->m_lightVP[2];
+		commonConstants->lightVP[3] = m_renderer->m_lightVP[3];
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
 
@@ -873,42 +839,63 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 		clearDesc.value.depthStencil.depth = 1.0;
 #endif
 		NRI.CmdClearAttachments(info.cmdBuffer, &clearDesc, 1, nullptr, 0);
+		// {
+		// 	const nri::Viewport viewport = { 0.0f, 0.0f, 2048.f,
+		// 		2048.f, 0.0f, 1.0f };
+		// 	NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
 		{
-			const nri::Viewport viewport = { 0.0f, 0.0f, 2048.f,
-				2048.f, 0.0f, 1.0f };
-			NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
-
 			nri::Rect scissor = { 0, 0, 2048, 2048 };
 			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
 		}
 
-		nri::Buffer *geoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_vertexbuffer->GetBuffer();
-		nri::VertexBufferDesc vertexBufferDesc = {};
-		vertexBufferDesc.buffer = geoBuffer;
-		vertexBufferDesc.stride = sizeof(utils::Vertex);
-		NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
-		nri::Buffer *indexGeoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_indexbuffer->GetBuffer();
-		NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, 0,
-				nri::IndexType::UINT32);
-		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
-				*m_ConstantBufferDescriptorSet, nullptr);
-		// if (!m_renderer->m_config.IndirectDrawState)
-		{
-			for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
-				Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
-				CBlock block = {};
-				block.modelMat = node.globalTransform;
-				block.camPos = vec4(cameraPos, 1.0);
-				block.index[0] = node.material->m_BaseTexture->GetViewIndex();
-				block.index[1] = block.index[2] = block.index[3] = 1u;
-				block.testVec.y = 2.0f;
-				NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+		// Split 2048x2048 shadow map into 4 viewports of 512x512 for cascade shadow mapping
+		for (int i = 0; i < 4; i++) {
+			const nri::Viewport viewport = {
+				(float)(i % 2) * 512.0f, // x offset
+				(float)(i / 2) * 512.0f, // y offset
+				512.0f, // width
+				512.0f, // height
+				0.0f, 1.0f
+			};
+			NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
 
-				uint32_t instanceCount = 1;
+			// nri::Rect scissor = {
+			// 	static_cast<int16_t>((i % 2) * 512), // x offset
+			// 	static_cast<int16_t>((i / 2) * 512), // y offset
+			// 	512, 512 // width, height
+			// };
+			// NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
 
-				NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
+			nri::Buffer *geoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_vertexbuffer->GetBuffer();
+			nri::VertexBufferDesc vertexBufferDesc = {};
+			vertexBufferDesc.buffer = geoBuffer;
+			vertexBufferDesc.stride = sizeof(utils::Vertex);
+			NRI.CmdSetVertexBuffers(info.cmdBuffer, 0, &vertexBufferDesc, 1);
+			nri::Buffer *indexGeoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_indexbuffer->GetBuffer();
+			NRI.CmdSetIndexBuffer(info.cmdBuffer, *indexGeoBuffer, 0,
+					nri::IndexType::UINT32);
+			NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
+					*m_ConstantBufferDescriptorSet, nullptr);
+			// if (!m_renderer->m_config.IndirectDrawState)
+			{
+				for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
+					Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
+					CBlock block = {};
+					block.modelMat = node.globalTransform;
+					block.camPos = vec4(cameraPos, 1.0);
+					block.index[0] = node.material->m_BaseTexture->GetViewIndex();
+					block.index[1] = block.index[3] = 1u;
+					block.index[2] = i;
+					block.testVec.y = 2.0f;
+					NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+
+					uint32_t instanceCount = 1;
+
+					NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
+				}
 			}
 		}
+
 		// else {
 		// 	nri::Buffer *indirectBuffer = m_renderer->gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
 		// 	NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *indirectBuffer, 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);

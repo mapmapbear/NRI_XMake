@@ -5,7 +5,7 @@ NRI_RESOURCE(cbuffer, CommonConstants, b, 0, 0) {
     float4x4 modelMat;
     float4x4 viewMat;
     float4x4 projectMat;
-    float4x4 lightVP;
+    float4x4 lightVP[4];
 };
 
 struct PushConstants {
@@ -31,14 +31,14 @@ struct inputVS {
 
 struct outputVS {
 #ifdef DEPTH_ONLY
-    float4 position   : SV_Position;
+    float4 position   :  SV_Position;
 #else
     float4 position   : SV_Position;
     float2 texCoord   : TEXCOORD0;
     float3 positionWS : TEXCOORD1;
     float4 positionLS : TEXCOORD2;
     float4 positionLS1 : TEXCOORD3;
-    uint4  matrialData : TEXCOORD4;
+    nointerpolation uint4  matrialData : TEXCOORD4;
     float3 normalWS   : NORMAL;
     float4 tangentWS  : TANGENT;
     float3 color      : COLOR;
@@ -114,8 +114,7 @@ outputVS main(inputVS input) {
     float4x4 normalMatrix = transpose(inverse(testMat));
     output.normalWS  = normalize(mul(normalMatrix, float4(input.in_normal, 0.0)).xyz);
     output.positionWS = mul(testMat, float4(input.in_position, 1.0)).xyz; 
-    output.positionLS = mul(lightVP, float4(output.positionWS, 1.0));
-    output.positionLS1 = saturate(output.position.z / output.position.w);
+    output.positionLS = mul(lightVP[g_PushConstants.indexGroup.z], float4(output.positionWS, 1.0));
     output.tangentWS = normalize(mul(normalMatrix, float4(input.in_tangent)));
     output.matrialData = uint4(input.startInstance, 0, 0, 0);
     float h = hash(input.startInstance);
