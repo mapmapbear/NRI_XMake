@@ -42,11 +42,12 @@ outputVS vs_main(inputVS input) {
     outputVS output;
     StructuredBuffer<float4x4> worldMatBuffer = ResourceDescriptorHeap[1006];
     float4x4 testMat = worldMatBuffer[input.startInstance];
-    float4x4 lightMVP = mul(lightVP[g_PushConstants.indexGroup.z],testMat);
-    output.testVS = mul(g_PushConstants.worldMat, float4(0.0, 1.0, 1.0, 1.0));
-    float4x4 worldMat = g_PushConstants.worldMat;
-    float4x4 vpMat = mul(viewMat, worldMat);
-    float4x4 mvpMat = mul(projectMat, vpMat);
+    uint idx = g_PushConstants.indexGroup.z;
+    float4x4 lightMVP = mul(lightVP[idx],testMat);
+    // output.testVS = mul(g_PushConstants.worldMat, float4(0.0, 1.0, 1.0, 1.0));
+    // float4x4 worldMat = g_PushConstants.worldMat;
+    // float4x4 vpMat = mul(viewMat, worldMat);
+    // float4x4 mvpMat = mul(projectMat, vpMat);
     // output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));
     output.position = mul(lightMVP, float4(input.in_position.xyz, 1.0));
 #ifdef ALPHA_TEST

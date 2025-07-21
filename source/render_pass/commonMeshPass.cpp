@@ -23,10 +23,9 @@ struct CBlock {
 	glm::mat4 modelMat;
 	glm::vec4 camPos;
 	glm::vec4 testVec;
-	glm::vec4 baseColor;
-	glm::vec4 pbrParams;
 	uint32_t index[4];
 };
+
 
 CommonMeshPass::CommonMeshPass(Renderer *renderer, utils::Scene &scene, std::shared_ptr<Mesh> &rootMesh) :
 		CommonRenderPass(renderer), m_Scene(scene), m_rootMesh(std::move(rootMesh)) {
@@ -843,21 +842,29 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 		// 	const nri::Viewport viewport = { 0.0f, 0.0f, 2048.f,
 		// 		2048.f, 0.0f, 1.0f };
 		// 	NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
-		{
-			nri::Rect scissor = { 0, 0, 2048, 2048 };
-			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
-		}
 
 		// Split 2048x2048 shadow map into 4 viewports of 512x512 for cascade shadow mapping
 		for (int i = 0; i < 4; i++) {
-			const nri::Viewport viewport = {
-				(float)(i % 2) * 512.0f, // x offset
-				(float)(i / 2) * 512.0f, // y offset
-				512.0f, // width
-				512.0f, // height
-				0.0f, 1.0f
-			};
-			NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
+			std::string cmdLable = "Cascade " + std::to_string(i);
+			helper::Annotation annotation(NRI, info.cmdBuffer, cmdLable.c_str());
+
+			int row = i / 2;
+			int col = i % 2;
+			{
+				const nri::Viewport viewport = {
+					(float)(col) * 1024.0f, // x offset
+					(float)(row) * 1024.0f, // y offset
+					1024.0f, // width
+					1024.0f, // height
+					0.0f, 1.0f
+				};
+				NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
+			}
+
+			{
+				nri::Rect scissor = { static_cast<int16_t>(col * 1024.0f), static_cast<int16_t>(row * 1024.0f), 2048, 2048 };
+				NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
+			}
 
 			// nri::Rect scissor = {
 			// 	static_cast<int16_t>((i % 2) * 512), // x offset
@@ -884,8 +891,9 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 					block.modelMat = node.globalTransform;
 					block.camPos = vec4(cameraPos, 1.0);
 					block.index[0] = node.material->m_BaseTexture->GetViewIndex();
-					block.index[1] = block.index[3] = 1u;
+					block.index[1] = 1;
 					block.index[2] = i;
+					block.index[3] = 0;
 					block.testVec.y = 2.0f;
 					NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
 

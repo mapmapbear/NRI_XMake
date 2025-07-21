@@ -514,7 +514,7 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	desc.aspectRatio = float(testRenderPtr->m_OutputResolution.first) / float(testRenderPtr->m_OutputResolution.second);
 	desc.horizontalFov = glm::radians(m_Fov);
 	desc.nearZ = 0.1f;
-	desc.farZ = 200.0f;
+	desc.farZ = 50.0f;
 #ifdef RZ
 	desc.isReversedZ = true;
 #else
