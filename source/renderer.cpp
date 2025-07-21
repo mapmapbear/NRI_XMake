@@ -371,9 +371,9 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 			nullptr,
 			0));
 
-	m_ShadowCamera.vForward = vec3(0.0, 1.0, 0.0);
+	m_ShadowCamera.vForward = vec3(0.001, -1.0, 0.001);
 	m_ShadowCamera.vRight = vec3(1.0, 0.0, 0.0);
-	m_ShadowCamera.vUp = vec3(0.0, 0.0, 1.0);
+	m_ShadowCamera.vUp = vec3(0.0, 1.0, 0.0);
 
 	m_ShadowCamera.state.mViewToClip = glm::lookAtLH(m_Camera.state.globalPosition + m_ShadowCamera.vForward, m_Camera.state.globalPosition, m_ShadowCamera.vUp);
 #ifdef RZ
@@ -588,7 +588,7 @@ void Renderer::UpdateCascadeSplit() {
 		};
 
 		// Project frustum corners into world space
-		glm::mat4 invCam = (glm::inverse(m_Camera.state.mWorldToView * m_Camera.state.mViewToClip));
+		glm::mat4 invCam = (glm::inverse(m_ShadowCamera.state.mViewToClip * m_ShadowCamera.state.mWorldToView));
 		for (uint32_t j = 0; j < 8; j++) {
 			glm::vec4 invCorner = invCam * glm::vec4(frustumCorners[j], 1.0f);
 			frustumCorners[j] = invCorner / invCorner.w;
@@ -618,7 +618,7 @@ void Renderer::UpdateCascadeSplit() {
 		vec3 lightPos = vec3(0.001, -1.0, 0.001);
 		glm::vec3 lightDir = normalize(-lightPos);
 
-		glm::mat4 lightViewMatrix = glm::lookAtLH(frustumCenter - lightDir * -minExtents.z, frustumCenter, glm::vec3(1.0f, 0.0f, 0.0f));
+		glm::mat4 lightViewMatrix = glm::lookAtLH(frustumCenter - lightDir * -minExtents.z, frustumCenter, glm::vec3(0.0f, 1.0f, 0.0f));
 #ifdef RZ
 		glm::mat4 lightOrthoMatrix = glm::orthoLH_ZO(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z - minExtents.z, 0.0f);
 #else
