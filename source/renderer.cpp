@@ -371,15 +371,23 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 			nullptr,
 			0));
 
-	m_ShadowCamera.vForward = vec3(0.001, -1.0, 0.001);
-	m_ShadowCamera.vRight = vec3(1.0, 0.0, 0.0);
-	m_ShadowCamera.vUp = vec3(0.0, 1.0, 0.0);
+	// m_ShadowCamera.vForward = vec3(0.001, -1.0, 0.001);
+	// m_ShadowCamera.vRight = vec3(1.0, 0.0, 0.0);
+	// m_ShadowCamera.vUp = vec3(0.0, 1.0, 0.0);
 
-	m_ShadowCamera.state.mViewToClip = glm::lookAtLH(m_Camera.state.globalPosition + m_ShadowCamera.vForward, m_Camera.state.globalPosition, m_ShadowCamera.vUp);
+	m_ShadowCamera.vForward = vec3(0.0, -1.0, 0.0);
+	m_ShadowCamera.vRight = vec3(1.0, 0.0, 0.0);
+	m_ShadowCamera.vUp = vec3(0.0, 0.0, 1.0);
+	m_ShadowCamera.m_desc.aspectRatio = 1.0f;
+	m_ShadowCamera.m_desc.horizontalFov = 45.0f;
+	m_ShadowCamera.m_desc.nearZ = 0.1f;
+	m_ShadowCamera.m_desc.farZ = 200.0f;
+
+	m_ShadowCamera.state.mWorldToView = glm::lookAtLH(m_Camera.state.globalPosition + m_ShadowCamera.vForward, m_Camera.state.globalPosition, m_ShadowCamera.vUp);
 #ifdef RZ
-	m_ShadowCamera.state.mViewToClip = glm::perspectiveLH_ZO(m_Camera.m_desc.horizontalFov, m_Camera.m_desc.aspectRatio, m_Camera.m_desc.farZ, m_Camera.m_desc.nearZ);
+	m_ShadowCamera.state.mViewToClip = glm::perspectiveLH_ZO(m_ShadowCamera.m_desc.horizontalFov, m_ShadowCamera.m_desc.aspectRatio, m_ShadowCamera.m_desc.farZ, m_ShadowCamera.m_desc.nearZ);
 #else
-	m_ShadowCamera.state.mViewToClip = glm::perspectiveLH_ZO(m_Camera.m_desc.horizontalFov, m_Camera.m_desc.aspectRatio, m_Camera.m_desc.nearZ, m_Camera.m_desc.farZ);
+	m_ShadowCamera.state.mViewToClip = glm::perspectiveLH_ZO(m_ShadowCamera.m_desc.horizontalFov, m_ShadowCamera.m_ShadowCamera.aspectRatio, m_ShadowCamera.m_desc.nearZ, m_ShadowCamera.m_desc.farZ);
 #endif
 
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
@@ -547,7 +555,7 @@ glm::quat getRotationQuaternion(const glm::vec3 &v1, const glm::vec3 &v2) {
 }
 
 void Renderer::OnUpdate(float deltaTime) {
-	m_ShadowCamera.state.mWorldToView = glm::lookAtLH(m_Camera.state.globalPosition + m_ShadowCamera.vForward, m_Camera.state.globalPosition, m_ShadowCamera.vUp);
+	m_ShadowCamera.state.mWorldToView = glm::lookAtLH(m_Camera.state.globalPosition + m_ShadowCamera.vForward * 2.0f, m_Camera.state.globalPosition, m_ShadowCamera.vUp);
 	UpdateCascadeSplit();
 }
 #define SHADOW_MAP_CASCADE_COUNT 4
@@ -618,13 +626,14 @@ void Renderer::UpdateCascadeSplit() {
 		vec3 lightPos = vec3(0.001, -1.0, 0.001);
 		glm::vec3 lightDir = normalize(-lightPos);
 
-		glm::mat4 lightViewMatrix = glm::lookAtLH(frustumCenter - lightDir * -minExtents.z, frustumCenter, glm::vec3(0.0f, 1.0f, 0.0f));
+		glm::mat4 lightViewMatrix = glm::lookAtLH(frustumCenter + lightDir * maxExtents.z, frustumCenter, glm::vec3(0.0f, 0.0f, 1.0f));
 #ifdef RZ
 		glm::mat4 lightOrthoMatrix = glm::orthoLH_ZO(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z - minExtents.z, 0.0f);
 #else
 		glm::mat4 lightOrthoMatrix = glm::orthoLH_ZO(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, 0.0f, maxExtents.z - minExtents.z);
 #endif
 		m_lightVP[i] = lightOrthoMatrix * lightViewMatrix;
+		m_splitDepth[i] = (m_ShadowCamera.m_desc.nearZ + splitDist * clipRange);
 		lastSplitDist = splitDist;
 	}
 }

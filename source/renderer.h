@@ -102,6 +102,7 @@ public:
 	std::pair<uint32_t, uint32_t> m_OutputResolution = { 1920, 1080 };
 	bool m_firstFrame = true;
 	glm::mat4 m_lightVP[4] = {};//glm::mat4(1.0);
+	float m_splitDepth[4];
 	glm::vec3 m_lightPos = glm::vec3(0.2, 100.0, 0.2);
 
 	struct RenderNode {
