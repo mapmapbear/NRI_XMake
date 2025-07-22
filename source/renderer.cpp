@@ -555,7 +555,9 @@ glm::quat getRotationQuaternion(const glm::vec3 &v1, const glm::vec3 &v2) {
 }
 
 void Renderer::OnUpdate(float deltaTime) {
-	m_ShadowCamera.state.mWorldToView = glm::lookAtLH(m_Camera.state.globalPosition + m_ShadowCamera.vForward * 2.0f, m_Camera.state.globalPosition, m_ShadowCamera.vUp);
+	glm::vec3 shadowCamerPos = m_Camera.state.globalPosition;
+	shadowCamerPos.y = 0;
+	m_ShadowCamera.state.mWorldToView = glm::lookAtLH(shadowCamerPos + m_ShadowCamera.vForward * 2.0f, m_Camera.state.globalPosition, m_ShadowCamera.vUp);
 	UpdateCascadeSplit();
 }
 #define SHADOW_MAP_CASCADE_COUNT 4
@@ -626,11 +628,25 @@ void Renderer::UpdateCascadeSplit() {
 		vec3 lightPos = vec3(0.001, -1.0, 0.001);
 		glm::vec3 lightDir = normalize(-lightPos);
 
-		glm::mat4 lightViewMatrix = glm::lookAtLH(frustumCenter + lightDir * maxExtents.z, frustumCenter, glm::vec3(0.0f, 0.0f, 1.0f));
+		float shadowMapSize = 1024.0f;
+		float texelSize = (maxExtents.x - minExtents.x) / shadowMapSize;
+
+		glm::vec3 alignedCenter = frustumCenter;
+		alignedCenter.x = floor(alignedCenter.x / texelSize) * texelSize;
+		alignedCenter.y = floor(alignedCenter.y / texelSize) * texelSize;
+
+		glm::mat4 lightViewMatrix = glm::lookAtLH(alignedCenter + lightDir * (maxExtents.z + 4.0f), frustumCenter, glm::vec3(0.0f, 0.0f, 1.0f));
+
+		float alignedMinX = floor(minExtents.x / texelSize) * texelSize;
+		float alignedMaxX = floor(maxExtents.x / texelSize) * texelSize;
+		float alignedMinY = floor(minExtents.y / texelSize) * texelSize;
+		float alignedMaxY = floor(maxExtents.y / texelSize) * texelSize;
+
+		glm::mat4 lightOrthoMatrix = {};
 #ifdef RZ
-		glm::mat4 lightOrthoMatrix = glm::orthoLH_ZO(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z - minExtents.z, 0.0f);
+		lightOrthoMatrix = glm::orthoLH_ZO(alignedMinX, alignedMaxX, alignedMinY, alignedMaxY, maxExtents.z - minExtents.z, 0.0f);
 #else
-		glm::mat4 lightOrthoMatrix = glm::orthoLH_ZO(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, 0.0f, maxExtents.z - minExtents.z);
+		lightOrthoMatrix = glm::orthoLH_ZO(alignedMinX, alignedMaxX, alignedMinY, alignedMaxY, 0.0f, maxExtents.z - minExtents.z);
 #endif
 		m_lightVP[i] = lightOrthoMatrix * lightViewMatrix;
 		m_splitDepth[i] = (m_ShadowCamera.m_desc.nearZ + splitDist * clipRange);

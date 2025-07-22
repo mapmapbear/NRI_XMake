@@ -14,6 +14,14 @@ struct InputPS {
     float3 color      : COLOR;
 };
 
+NRI_RESOURCE(cbuffer, CommonConstants, b, 0, 0) {
+    float4x4 modelMat;
+    float4x4 viewMat;
+    float4x4 projectMat;
+    float4x4 lightVP[4];
+    float4   splitDepth;
+};
+
 struct PushConstants {
     float4x4 modelMat;
     float4 camPos;
@@ -34,6 +42,33 @@ struct MaterialBlock {
 struct ObjectIndexBlock {
     uint materialIndex;
 };
+
+int GetCascadeIndex(float depth, float4 splitDepth) {
+    int cascadeIndex = 0;
+    if (depth > splitDepth.x) cascadeIndex = 1;
+    if (depth > splitDepth.y) cascadeIndex = 2;
+    if (depth > splitDepth.z) cascadeIndex = 3;
+    return cascadeIndex;
+}
+
+float SampleCascadeShadow(float3 worldPos, float4 splitDepth) {
+    float viewDepth = length(g_PushConstants.camPos.xyz - worldPos);
+    int cascadeIndex = GetCascadeIndex(viewDepth, splitDepth);
+
+    float4 lightSpacePos = mul(lightVP[cascadeIndex], float4(worldPos, 1.0));
+    float3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+
+    projCoords.x = projCoords.x * 0.5 + 0.5;
+    projCoords.y = projCoords.y * -0.5 + 0.5;
+
+    float2 atlasOffset = float2(cascadeIndex % 2, cascadeIndex / 2) * 0.5;
+    float2 atlasUV = projCoords.xy * 0.5 + atlasOffset;
+
+    Texture2D<float> shadowMap = ResourceDescriptorHeap[13];
+    SamplerComparisonState shadowSampler = SamplerDescriptorHeap[3];
+
+    return shadowSampleCmp(shadowSampler, shadowMap, atlasUV, projCoords.z + 0.005, 0);
+}
 
 [earlydepthstencil]
 float4 main(InputPS input) : SV_Target {
@@ -100,6 +135,19 @@ float4 main(InputPS input) : SV_Target {
     // shadow = uniformPoissonPCF(projCoords, g_SamplerShadow, shadowMap);
     // shadow = pcf_shadow(projCoords, g_SamplerShadow, shadowMap, 0.002, 8);
     shadow = shadowSampleCmp(g_SamplerShadow, shadowMap, projCoords.xy, projCoords.z,  0);
+
+    shadow = SampleCascadeShadow(input.positionWS, splitDepth);
+
+    float4 cascadeColors[4] = {
+        float4(1.0, 0.0, 0.0, 1.0), // 红色 - 级联0
+        float4(0.0, 1.0, 0.0, 1.0), // 绿色 - 级联1  
+        float4(0.0, 0.0, 1.0, 1.0), // 蓝色 - 级联2
+        float4(1.0, 1.0, 0.0, 1.0)  // 黄色 - 级联3
+    };
+    float viewDepth = length(g_PushConstants.camPos.xyz - input.positionWS);
+    int cascadeIndex = GetCascadeIndex(viewDepth, splitDepth);
+    return cascadeColors[cascadeIndex] * shadow;
+
     // shadow = shadow3x3PCF(g_SamplerShadow, shadowMap, projCoords.xy, projCoords.z, 1.0 / 2048.0);
     // return float4(projCoords.zzz, 1.0);
     float4 outPosLS = input.positionLS.xyzz;

@@ -6,6 +6,7 @@
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_projection.hpp"
 #include "glm/ext/matrix_transform.hpp"
+#include "glm/gtc/type_ptr.hpp"
 #include "glm/matrix.hpp"
 #include "gpucullingPass.h"
 #include "mesh.h"
@@ -25,7 +26,6 @@ struct CBlock {
 	glm::vec4 testVec;
 	uint32_t index[4];
 };
-
 
 CommonMeshPass::CommonMeshPass(Renderer *renderer, utils::Scene &scene, std::shared_ptr<Mesh> &rootMesh) :
 		CommonRenderPass(renderer), m_Scene(scene), m_rootMesh(std::move(rootMesh)) {
@@ -751,6 +751,7 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 		commonConstants->lightVP[1] = m_renderer->m_lightVP[1];
 		commonConstants->lightVP[2] = m_renderer->m_lightVP[2];
 		commonConstants->lightVP[3] = m_renderer->m_lightVP[3];
+		commonConstants->splitDepth = glm::make_vec4((float *)m_renderer->m_splitDepth);
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
 
@@ -823,6 +824,7 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 		commonConstants->lightVP[1] = m_renderer->m_lightVP[1];
 		commonConstants->lightVP[2] = m_renderer->m_lightVP[2];
 		commonConstants->lightVP[3] = m_renderer->m_lightVP[3];
+		commonConstants->splitDepth = glm::make_vec4((float *)m_renderer->m_splitDepth);
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
 

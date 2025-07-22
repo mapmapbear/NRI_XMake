@@ -85,7 +85,7 @@ public:
 	std::unordered_map<std::shared_ptr<Buffer>, std::shared_ptr<utils::MeshData>> uploadShadowIndexBufferMap;
 	Camera &m_Camera;
 	Camera m_ShadowCamera;
-	float cascadeSplitLambda = 0.95f;
+	float cascadeSplitLambda = 0.9f;
 
 private:
 	nri::Device *m_Device = nullptr;

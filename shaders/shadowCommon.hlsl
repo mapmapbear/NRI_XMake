@@ -4,93 +4,102 @@
 // Poisson 7X7
 static const uint g_PoissonSamplesCount = 18;
 
-static const float2 g_PoissonSamples[g_PoissonSamplesCount] =
-{
-  { -0.7393085f, 3.280662f },
-  { -2.47004f, 2.328731f },
-  { -0.6732481f, 1.042242f },
-  { 0.6072469f, 1.525136f },
-  { 0.9831414f, 3.14807f },
-  { 1.894908f, 0.6981092f },
-  { 0.5978739f, 0.0825575f },
-  { 2.06167f, -0.6915861f },
-  { -1.294738f, -0.2353872f },
-  { 3.23345f, 1.27049f },
-  { -2.976625f, 0.1078734f },
-  { -1.566728f, -2.490001f },
-  { 0.022746f, -1.93031f },
-  { -2.484528f, -1.378844f },
-  { 1.984003f, -2.342571f },
-  { -0.2734823f, -3.234874f },
-  { 3.35825f, -0.3363621f },
-  { 2.090277f, 2.286526f }
+static const float2 g_PoissonSamples[g_PoissonSamplesCount] = { {
+        -0.7393085f, 3.280662f
+    }, {
+        -2.47004f, 2.328731f
+    }, {
+        -0.6732481f, 1.042242f
+    }, {
+        0.6072469f, 1.525136f
+    }, {
+        0.9831414f, 3.14807f
+    }, {
+        1.894908f, 0.6981092f
+    }, {
+        0.5978739f, 0.0825575f
+    }, {
+        2.06167f, -0.6915861f
+    }, {
+        -1.294738f, -0.2353872f
+    }, {
+        3.23345f, 1.27049f
+    }, {
+        -2.976625f, 0.1078734f
+    }, {
+        -1.566728f, -2.490001f
+    }, {
+        0.022746f, -1.93031f
+    }, {
+        -2.484528f, -1.378844f
+    }, {
+        1.984003f, -2.342571f
+    }, {
+        -0.2734823f, -3.234874f
+    }, {
+        3.35825f, -0.3363621f
+    }, {
+        2.090277f, 2.286526f
+    }
 };
 
 #define SHADOWFX_FILTER_SIZE_7 7
 #define FR SHADOWFX_FILTER_SIZE_7 / 2
 //--------------------------------------------------------
 
-float hard_shadow(float3 shadow_pos, sampler_t shadow_sampler, texture2d_t shadow_map, float bias)
-{
+float hard_shadow(float3 shadow_pos, sampler_t shadow_sampler, texture2d_t shadow_map, float bias) {
     float shadow = shadow_map.SampleCmpLevelZero(shadow_sampler, shadow_pos.xy, shadow_pos.z + bias).x;
     return shadow;
 }
 
-float pcf_shadow(float3 shadow_pos, sampler_t shadow_sampler, texture2d_t shadow_map, float bias = 0.002, int kernelSize = 3)
-{
+float pcf_shadow(float3 shadow_pos, sampler_t shadow_sampler, texture2d_t shadow_map, float bias = 0.002, int kernelSize = 3) {
     float shadow = 0.0;
     float2 texelSize;
     uint width, height;
     shadow_map.GetDimensions(width, height);
     texelSize = float2(1.0 / width, 1.0 / height);
-    
+
     int halfKernel = kernelSize / 2;
     float samples = 0.0;
-    
-    for (int x = -halfKernel; x <= halfKernel; x++)
-    {
-        for (int y = -halfKernel; y <= halfKernel; y++)
-        {
+
+    for (int x = -halfKernel; x <= halfKernel; x++) {
+        for (int y = -halfKernel; y <= halfKernel; y++) {
             float2 offset = float2(x, y) * texelSize;
             shadow += shadow_map.SampleCmpLevelZero(shadow_sampler, shadow_pos.xy + offset, shadow_pos.z - bias).x;
             samples += 1.0;
         }
     }
-    
+
     return shadow / samples;
 }
 
-float pcf_shadow_weighted(float3 shadow_pos, sampler_t shadow_sampler, texture2d_t shadow_map, float bias = 0.002)
-{
+float pcf_shadow_weighted(float3 shadow_pos, sampler_t shadow_sampler, texture2d_t shadow_map, float bias = 0.002) {
     float shadow = 0.0;
     float2 texelSize;
     uint width, height;
     shadow_map.GetDimensions(width, height);
     texelSize = float2(1.0 / width, 1.0 / height);
-    
+
     float weights[9] = {
         1.0, 2.0, 1.0,
         2.0, 4.0, 2.0,
         1.0, 2.0, 1.0
     };
     float totalWeight = 16.0;
-    
+
     int idx = 0;
-    for (int x = -1; x <= 1; x++)
-    {
-        for (int y = -1; y <= 1; y++)
-        {
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
             float2 offset = float2(x, y) * texelSize;
             shadow += weights[idx] * shadow_map.SampleCmpLevelZero(shadow_sampler, shadow_pos.xy + offset, shadow_pos.z - bias).x;
             idx++;
         }
     }
-    
+
     return shadow / totalWeight;
 }
 
-float pcf_shadow_poisson(float3 shadow_pos, sampler_t shadow_sampler, texture2d_t shadow_map, float bias = 0.002, int samples = 16)
-{
+float pcf_shadow_poisson(float3 shadow_pos, sampler_t shadow_sampler, texture2d_t shadow_map, float bias = 0.002, int samples = 16) {
     float shadow = 0.0;
     float2 texelSize;
     uint width, height;
@@ -118,25 +127,22 @@ float pcf_shadow_poisson(float3 shadow_pos, sampler_t shadow_sampler, texture2d_
     float randomAngle = frac(sin(dot(shadow_pos.xy, float2(12.9898, 78.233))) * 43758.5453) * 3.14159 * 2.0;
     float s = sin(randomAngle);
     float c = cos(randomAngle);
-    
+
     float radius = 2.5;
-    
-    for (int i = 0; i < min(samples, 16); i++)
-    {
+
+    for (int i = 0; i < min(samples, 16); i++) {
         float2 rotatedOffset = float2(
             poissonDisk[i].x * c - poissonDisk[i].y * s,
-            poissonDisk[i].x * s + poissonDisk[i].y * c
-        );
+            poissonDisk[i].x * s + poissonDisk[i].y * c);
 
         float2 offset = rotatedOffset * texelSize * radius;
         shadow += shadow_map.SampleCmpLevelZero(shadow_sampler, shadow_pos.xy + offset, shadow_pos.z - bias).x;
     }
-    
+
     return shadow / float(min(samples, 16));
 }
 
-float pcf_shadow_poisson_weighted(float3 shadow_pos, sampler_t shadow_sampler, texture2d_t shadow_map, float bias = 0.002)
-{
+float pcf_shadow_poisson_weighted(float3 shadow_pos, sampler_t shadow_sampler, texture2d_t shadow_map, float bias = 0.002) {
     float shadow = 0.0;
     float2 texelSize;
     uint width, height;
@@ -156,7 +162,7 @@ float pcf_shadow_poisson_weighted(float3 shadow_pos, sampler_t shadow_sampler, t
         float2(-0.32194, -0.932615),
         float2(-0.791559, -0.59771)
     };
-    
+
     float weights[12] = {
         0.2,
         0.1,
@@ -176,28 +182,23 @@ float pcf_shadow_poisson_weighted(float3 shadow_pos, sampler_t shadow_sampler, t
     float s = sin(randomAngle);
     float c = cos(randomAngle);
     float radius = 2.0;
-    
-    for (int i = 0; i < 12; i++)
-    {
+
+    for (int i = 0; i < 12; i++) {
         float2 rotatedOffset = float2(
             poissonDisk[i].x * c - poissonDisk[i].y * s,
-            poissonDisk[i].x * s + poissonDisk[i].y * c
-        );
+            poissonDisk[i].x * s + poissonDisk[i].y * c);
         float2 offset = rotatedOffset * texelSize * radius;
         shadow += weights[i] * shadow_map.SampleCmpLevelZero(shadow_sampler, shadow_pos.xy + offset, shadow_pos.z - bias).x;
     }
-    
+
     return shadow / totalWeight;
 }
 
-
-float shadowSampleCmp(sampler_t shadow_sampler, texture2d_t shadow_map, float2 uv, float z, uint slice)
-{
+float shadowSampleCmp(sampler_t shadow_sampler, texture2d_t shadow_map, float2 uv, float z, uint slice) {
     return shadow_map.SampleCmpLevelZero(shadow_sampler, uv, z);
 }
 
-float shadow3x3PCF(sampler_t shadow_sampler, texture2d_t shadow_map, float2 uv, float z, float invShadowSize)
-{
+float shadow3x3PCF(sampler_t shadow_sampler, texture2d_t shadow_map, float2 uv, float z, float invShadowSize) {
     float3 lightPos = float3(uv, z);
     const float dilation = 2.0f;
     float d1 = dilation * invShadowSize * 0.125f;
@@ -208,33 +209,31 @@ float shadow3x3PCF(sampler_t shadow_sampler, texture2d_t shadow_map, float2 uv, 
         2.0f * shadow_map.SampleCmpLevelZero(shadow_sampler, uv, lightPos.z) +
         shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2(-d2,  d1), lightPos.z) +
         shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2(-d1, -d2), lightPos.z) +
-        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2( d2, -d1), lightPos.z) +
-        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2( d1,  d2), lightPos.z) +
+        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2(d2, -d1), lightPos.z) +
+        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2(d1,  d2), lightPos.z) +
         shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2(-d4,  d3), lightPos.z) +
         shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2(-d3, -d4), lightPos.z) +
-        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2( d4, -d3), lightPos.z) +
-        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2( d3,  d4), lightPos.z)
-        ) / 10.0f;
+        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2(d4, -d3), lightPos.z) +
+        shadow_map.SampleCmpLevelZero(shadow_sampler, uv + float2(d3,  d4), lightPos.z)) / 10.0f;
     return result * result;
 }   
 
-float uniformPoissonPCF( float3 shadowSpaceCoord, sampler_t shadow_sampler, texture2d_t shadow_map)
-{
-  float accumulatedShadow = 0.0f;
-  float accumulatedWeight = 0.0f;
+float uniformPoissonPCF(float3 shadowSpaceCoord, sampler_t shadow_sampler, texture2d_t shadow_map) {
+    float accumulatedShadow = 0.0f;
+    float accumulatedWeight = 0.0f;
 
-  float depthBias = 0.005;
-  float3 shadowUVZ = float3(shadowSpaceCoord.xy, shadowSpaceCoord.z - depthBias);
-  
-  [unroll]
-  for( uint i = 0; i < g_PoissonSamplesCount; i += 1 )
-  {
-    float weight = exp( -((g_PoissonSamples[i].x*g_PoissonSamples[i].x) + (g_PoissonSamples[i].y*g_PoissonSamples[i].y)) / (FR*FR) );
-    float shadow = shadowSampleCmp( shadow_sampler, shadow_map, shadowUVZ.xy + g_PoissonSamples[i].xy * (1.0 / 2048.0), shadowUVZ.z, 0);
+    float depthBias = 0.005;
+    float3 shadowUVZ = float3(shadowSpaceCoord.xy, shadowSpaceCoord.z - depthBias);
 
-    accumulatedShadow += shadow * weight;
-    accumulatedWeight += weight;
-  }
+    [unroll]
+    for(uint i = 0; i < g_PoissonSamplesCount; i += 1) {
+        float weight = exp(-((g_PoissonSamples[i].x*g_PoissonSamples[i].x) + (g_PoissonSamples[i].y*g_PoissonSamples[i].y)) / (FR*FR));
+        float shadow = shadowSampleCmp(shadow_sampler, shadow_map, shadowUVZ.xy + g_PoissonSamples[i].xy * (1.0 / 2048.0), shadowUVZ.z, 0);
 
-  return accumulatedShadow * ( 1.0f / accumulatedWeight ) ;
+        accumulatedShadow += shadow * weight;
+        accumulatedWeight += weight;
+    }
+
+    return accumulatedShadow * (1.0f / accumulatedWeight) ;
 }
+
