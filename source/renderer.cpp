@@ -496,64 +496,6 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	gpuCullingPass = std::make_shared<GPUCullingPass>(this);
 }
 
-glm::mat4 Renderer::computeLightSpaceMatrix(const glm::vec3 &lightDir, float distance) {
-	// Compute light position based on direction and distance
-	glm::vec3 lightPos = -lightDir * distance;
-
-	// Look at origin from light position
-	glm::vec3 target(0.0f);
-
-	// Choose up vector, avoiding degenerate cases
-	glm::vec3 up(0.0f, 1.0f, 0.0f);
-	if (glm::abs(glm::dot(lightDir, up)) > 0.99f) {
-		up = glm::vec3(0.0f, 0.0f, 1.0f);
-	}
-
-	// Create view matrix looking from light position
-	return glm::lookAt(lightPos, target, up);
-}
-
-glm::mat4 createLightViewMatrix(const glm::vec3 &eye, const glm::vec3 &direction, const glm::vec3 &up = glm::vec3(0.0f, 1.0f, 0.0f)) {
-	// 验证方向向量非零
-	if (glm::length(direction) < 1e-6f) {
-		throw std::invalid_argument("Direction vector cannot be zero");
-	}
-
-	// 计算目标点：eye + direction
-	glm::vec3 target = eye + glm::normalize(direction);
-
-	// 验证上向量与方向向量不共线
-	glm::vec3 forward = glm::normalize(direction);
-	if (glm::length(glm::cross(up, forward)) < 1e-6f) {
-		throw std::invalid_argument("Up vector and direction are collinear");
-	}
-
-	// 使用 GLM 的 lookAt 函数构建视图矩阵
-	return glm::lookAt(eye, target, up);
-}
-
-glm::quat getRotationQuaternion(const glm::vec3 &v1, const glm::vec3 &v2) {
-	glm::vec3 n1 = glm::normalize(v1);
-	glm::vec3 n2 = glm::normalize(v2);
-
-	glm::vec3 axis = glm::cross(n1, n2);
-	float dot = glm::dot(n1, n2);
-	dot = glm::clamp(dot, -1.0f, 1.0f);
-	float angle = glm::acos(dot);
-	if (glm::length(axis) < 0.0001f) {
-		if (dot > 0.9999f) {
-			return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-		} else if (dot < -0.9999f) {
-			glm::vec3 ortho = glm::abs(n1.x) > glm::abs(n1.z) ? glm::vec3(-n1.y, n1.x, 0.0f) : glm::vec3(0.0f, -n1.z, n1.y);
-			axis = glm::normalize(ortho);
-			angle = glm::pi<float>();
-		}
-	} else {
-		axis = glm::normalize(axis);
-	}
-	return glm::angleAxis(angle, axis);
-}
-
 void Renderer::OnUpdate(float deltaTime) {
 	UpdateCascadeSplit();
 }
@@ -641,7 +583,7 @@ void Renderer::UpdateCascadeSplit() {
 
 		glm::mat4 lightOrthoMatrix = {};
 #ifdef RZ
-		lightOrthoMatrix = glm::orthoLH_ZO(alignedMinX, alignedMaxX, alignedMinY, alignedMaxY, maxExtents.z - minExtents.z, 0.0f);
+		lightOrthoMatrix = glm::orthoLH_ZO(alignedMinX, alignedMaxX, alignedMinY, alignedMaxY, (maxExtents.z - minExtents.z), 0.0f);
 #else
 		lightOrthoMatrix = glm::orthoLH_ZO(alignedMinX, alignedMaxX, alignedMinY, alignedMaxY, 0.0f, maxExtents.z - minExtents.z);
 #endif

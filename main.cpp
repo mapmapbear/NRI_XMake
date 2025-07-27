@@ -239,8 +239,8 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	desc.aspectRatio = float(testRenderPtr->m_OutputResolution.first) / float(testRenderPtr->m_OutputResolution.second);
 	desc.horizontalFov = glm::radians(m_Fov);
 	desc.nearZ = 0.1f;
-	desc.farZ = 200.0f;
-	mainCamera.setPerspective(90.0f, desc.aspectRatio, desc.farZ, desc.nearZ);
+	desc.farZ = 50.0f;
+	mainCamera.setPerspective(90.0f, desc.aspectRatio, desc.nearZ, desc.farZ);
 	mainCamera.setPosition({ 0.0f, -3.2f, 0.0f });
 
 	// Fences
@@ -463,7 +463,7 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 
 			ImGui::Checkbox("Enable Shadow", &testRenderPtr->m_config.ShadowState);
 			ImGui::Checkbox("Enable Soft Shadow", &testRenderPtr->m_config.SoftShadowState);
-			newFarState = ImGui::SliderFloat("Shadow Bias", &testRenderPtr->cascadeSplitLambda, 0.0f, 200.0f, "%.3f");
+			newFarState = ImGui::SliderFloat("Shadow Bias", &testRenderPtr->cascadeSplitLambda, 0.0f, 1.0f, "%.3f");
 		}
 		ImGui::End();
 	}
@@ -512,10 +512,12 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 	testRenderPtr->OnUpdate(deltaTime);
 	mainCamera.rotation.y += desc.dYaw;
 	mainCamera.rotation.x += desc.dPitch;
-	if (newFarState) {
-		desc.farZ = testRenderPtr->cascadeSplitLambda;
-		mainCamera.setPerspective(90.0f, desc.aspectRatio, desc.farZ, desc.nearZ);
-	}
+	mainCamera.rotation.x = clamp(mainCamera.rotation.x, -90.0f, 90.0f);
+
+	// if (newFarState) {
+	// 	desc.farZ = testRenderPtr->cascadeSplitLambda;
+	// 	mainCamera.setPerspective(90.0f, desc.aspectRatio, desc.farZ, desc.nearZ);
+	// }
 
 	mainCamera.update(desc, deltaTime);
 

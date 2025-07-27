@@ -15,7 +15,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-
 class Camera1 {
 private:
 	float fov;
@@ -98,8 +97,11 @@ public:
 		this->fov = fov;
 		this->znear = znear;
 		this->zfar = zfar;
+#ifdef RZ
+		matrices.perspective = glm::perspectiveLH_ZO(glm::radians(fov), aspect, zfar, znear);
+#else
 		matrices.perspective = glm::perspectiveLH_ZO(glm::radians(fov), aspect, znear, zfar);
-		// matrices.perspective = glm::infinitePerspectiveLH_ZO(glm::radians(fov), aspect, zfar);
+#endif
 		if (flipY) {
 			matrices.perspective[1][1] *= -1.0f;
 		}
@@ -182,7 +184,7 @@ public:
 				// if (keys.down) {
 				// 	position += glm::normalize(glm::cross(camFront, glm::vec3(1.0f, 0.0f, 0.0f))) * desc.dLocal.y;
 				// }
-				SPDLOG_INFO("pos:{} {} {}", position.x, position.y, position.z);
+				// SPDLOG_INFO("pos:{} {} {}", position.x, position.y, position.z);
 			}
 		}
 		updateViewMatrix();

@@ -8,6 +8,7 @@ NRI_RESOURCE(cbuffer, CommonConstants, b, 0, 0) {
     float4x4 viewProjMat;
     float4x4 lightVP[4];
     float4   splitDepth;
+    float4   cameraPosition; //w = far near: default 0.1
 };
 
 struct PushConstants {
@@ -39,7 +40,7 @@ struct outputVS {
     float2 texCoord   : TEXCOORD0;
     float3 positionWS : TEXCOORD1;
     float4 positionLS : TEXCOORD2;
-    float4 positionLS1 : TEXCOORD3;
+    float4 positionVS : TEXCOORD3;
     nointerpolation uint4  matrialData : TEXCOORD4;
     float3 normalWS   : NORMAL;
     float4 tangentWS  : TANGENT;
@@ -101,6 +102,10 @@ float3 hsv2rgb(float3 c) {
     return c.z * lerp(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
+float linearDepth01(float posVS) {
+    return (posVS - 0.1) / (cameraPosition.w - 0.1f);
+}
+
 outputVS main(inputVS input) {
     outputVS output;
     float4x4 testMat = 1.0;
@@ -117,6 +122,8 @@ outputVS main(inputVS input) {
     output.normalWS  = normalize(mul(normalMatrix, float4(input.in_normal, 0.0)).xyz);
     output.positionWS = mul(testMat, float4(input.in_position, 1.0)).xyz; 
     output.positionLS = mul(lightVP[g_PushConstants.indexGroup.z], float4(output.positionWS, 1.0));
+    output.positionVS = mul(viewMat, float4(output.positionWS, 1.0));
+    output.positionVS.w = linearDepth01(output.positionVS.z);
     output.tangentWS = normalize(mul(normalMatrix, float4(input.in_tangent)));
     output.matrialData = uint4(input.startInstance, 0, 0, 0);
     float h = hash(input.startInstance);

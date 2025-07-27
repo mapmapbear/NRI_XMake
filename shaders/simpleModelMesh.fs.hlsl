@@ -7,7 +7,7 @@ struct InputPS {
     float2 uv         : TEXCOORD0;
     float3 positionWS : TEXCOORD1;
     float4 positionLS : TEXCOORD2;
-    float4 positionLS1 : TEXCOORD3;
+    float4 positionVS : TEXCOORD3;
     uint4  matrialData : TEXCOORD4;
     float3 normalWS   : NORMAL;
     float4 tangentWS  : TANGENT;
@@ -18,8 +18,10 @@ NRI_RESOURCE(cbuffer, CommonConstants, b, 0, 0) {
     float4x4 modelMat;
     float4x4 viewMat;
     float4x4 projectMat;
+    float4x4 viewProjMat;
     float4x4 lightVP[4];
     float4   splitDepth;
+    float4   cameraPosition;
 };
 
 struct PushConstants {
@@ -51,8 +53,7 @@ int GetCascadeIndex(float depth, float4 splitDepth) {
     return cascadeIndex;
 }
 
-float SampleCascadeShadow(float3 worldPos, float4 splitDepth) {
-    float viewDepth = length(g_PushConstants.camPos.xyz - worldPos);
+float SampleCascadeShadow(float viewDepth, float3 worldPos, float4 splitDepth) {
     int cascadeIndex = GetCascadeIndex(viewDepth, splitDepth);
 
     float4 lightSpacePos = mul(lightVP[cascadeIndex], float4(worldPos, 1.0));
@@ -66,8 +67,11 @@ float SampleCascadeShadow(float3 worldPos, float4 splitDepth) {
 
     Texture2D<float> shadowMap = ResourceDescriptorHeap[13];
     SamplerComparisonState shadowSampler = SamplerDescriptorHeap[3];
-
-    return shadowSampleCmp(shadowSampler, shadowMap, atlasUV, projCoords.z + 0.005, 0);
+    float shadow = 1.0;
+    if(projCoords.z > 0.0f && projCoords.z < 1.0f) {
+        shadow = shadowSampleCmp(shadowSampler, shadowMap, atlasUV, projCoords.z + 0.02, 0);
+    }
+    return shadow;
 }
 
 [earlydepthstencil]
@@ -75,7 +79,7 @@ float4 main(InputPS input) : SV_Target {
     float2 newUV = input.uv;
     float4 color = 0.0;
     float3 n = input.normalWS;
-    float3 v = normalize(g_PushConstants.camPos.xyz - input.positionWS);
+    float3 v = normalize(cameraPosition.xyz - input.positionWS);
     StructuredBuffer<MaterialBlock> material = ResourceDescriptorHeap[14];
     StructuredBuffer<ObjectIndexBlock> object = ResourceDescriptorHeap[15];
     uint materialIndex = object[input.matrialData.x].materialIndex;
@@ -135,8 +139,9 @@ float4 main(InputPS input) : SV_Target {
     // shadow = uniformPoissonPCF(projCoords, g_SamplerShadow, shadowMap);
     // shadow = pcf_shadow(projCoords, g_SamplerShadow, shadowMap, 0.002, 8);
     shadow = shadowSampleCmp(g_SamplerShadow, shadowMap, projCoords.xy, projCoords.z,  0);
+    float viewDepth = input.positionVS.w;
 
-    shadow = SampleCascadeShadow(input.positionWS, splitDepth);
+    shadow = SampleCascadeShadow(viewDepth, input.positionWS, splitDepth);
 
     float4 cascadeColors[4] = {
         float4(1.0, 0.0, 0.0, 1.0), // 红色 - 级联0
@@ -144,9 +149,9 @@ float4 main(InputPS input) : SV_Target {
         float4(0.0, 0.0, 1.0, 1.0), // 蓝色 - 级联2
         float4(1.0, 1.0, 0.0, 1.0)  // 黄色 - 级联3
     };
-    float viewDepth = length(g_PushConstants.camPos.xyz - input.positionWS);
     int cascadeIndex = GetCascadeIndex(viewDepth, splitDepth);
-    // return cascadeColors[cascadeIndex] * shadow;
+    // return viewDepth;
+    return cascadeColors[cascadeIndex] * shadow;
 
     // shadow = shadow3x3PCF(g_SamplerShadow, shadowMap, projCoords.xy, projCoords.z, 1.0 / 2048.0);
     // return float4(projCoords.zzz, 1.0);

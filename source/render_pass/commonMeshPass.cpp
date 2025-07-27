@@ -390,7 +390,7 @@ void CommonMeshPass::BuildPipeline() {
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
 		rasterizationDesc.cullMode = nri::CullMode::NONE;
 		// rasterizationDesc.frontCounterClockwise = true;
-		rasterizationDesc.depthClamp = true;
+		// rasterizationDesc.depthClamp = true;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 #ifdef HDR_ENABLE
@@ -489,7 +489,7 @@ void CommonMeshPass::BuildPipeline() {
 		nri::RasterizationDesc rasterizationDesc = {};
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
 		rasterizationDesc.cullMode = nri::CullMode::NONE;
-		rasterizationDesc.depthClamp = true;
+		// rasterizationDesc.depthClamp = true;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 #ifdef HDR_ENABLE
@@ -753,6 +753,7 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera1 &camera) {
 		commonConstants->lightVP[2] = m_renderer->m_lightVP[2];
 		commonConstants->lightVP[3] = m_renderer->m_lightVP[3];
 		commonConstants->splitDepth = glm::make_vec4((float *)m_renderer->m_splitDepth);
+		commonConstants->cameraPosition = vec4(camera.position, 1.0);
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
 
@@ -827,6 +828,7 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera1 &camera) {
 		commonConstants->lightVP[2] = m_renderer->m_lightVP[2];
 		commonConstants->lightVP[3] = m_renderer->m_lightVP[3];
 		commonConstants->splitDepth = glm::make_vec4((float *)m_renderer->m_splitDepth);
+		commonConstants->cameraPosition = vec4(camera.position, 1.0);
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
 
@@ -907,10 +909,5 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera1 &camera) {
 				}
 			}
 		}
-
-		// else {
-		// 	nri::Buffer *indirectBuffer = m_renderer->gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
-		// 	NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *indirectBuffer, 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), nullptr, 0);
-		// }
 	}
 }
