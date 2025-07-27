@@ -134,7 +134,7 @@ void PresentPass::BuildPipeline() {
 	}
 }
 
-void PresentPass::Render(RenderInfo &info, Camera &camera) {
+void PresentPass::Render(RenderInfo &info, Camera1 &camera) {
 	auto NRI = *m_NRI;
 	nri::CommandBuffer &commandBuffer = info.cmdBuffer;
 	{

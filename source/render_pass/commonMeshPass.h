@@ -22,9 +22,9 @@ class CommonMeshPass : public CommonRenderPass {
 
 public:
 	CommonMeshPass(Renderer *renderer, utils::Scene &scene, std::shared_ptr<Mesh> &rootMesh);
-	void Render(struct RenderInfo &info, Camera &camera) override;
-	void RenderDepth(struct RenderInfo &info, Camera &camera);
-	void RenderShadow(struct RenderInfo &info, Camera &camera);
+	void Render(struct RenderInfo &info, Camera1 &camera) override;
+	void RenderDepth(struct RenderInfo &info, Camera1 &camera);
+	void RenderShadow(struct RenderInfo &info, Camera1 &camera);
 	void BuildPipeline() override;
 	void AllocGPUMemory() override;
 	void BindMemory() override;

@@ -25,7 +25,7 @@
 #include <random>
 #include <vector>
 
-Renderer::Renderer(NRIInterface &NRI, nri::Device *device, Camera &camera) :
+Renderer::Renderer(NRIInterface &NRI, nri::Device *device, Camera1 &camera) :
 		m_Device(device), m_NRI(NRI), m_Camera(camera) {
 	NRI_ABORT_ON_FAILURE(NRI.GetQueue(*m_Device, nri::QueueType::GRAPHICS, 0, m_GraphicsQueue));
 	NRI.SetDebugName(m_GraphicsQueue, "GraphicsQueue");
@@ -375,20 +375,20 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 	// m_ShadowCamera.vRight = vec3(1.0, 0.0, 0.0);
 	// m_ShadowCamera.vUp = vec3(0.0, 1.0, 0.0);
 
-	m_ShadowCamera.vForward = vec3(0.0, -1.0, 0.0);
-	m_ShadowCamera.vRight = vec3(1.0, 0.0, 0.0);
-	m_ShadowCamera.vUp = vec3(0.0, 0.0, 1.0);
-	m_ShadowCamera.m_desc.aspectRatio = 1.0f;
-	m_ShadowCamera.m_desc.horizontalFov = 45.0f;
-	m_ShadowCamera.m_desc.nearZ = 0.1f;
-	m_ShadowCamera.m_desc.farZ = 200.0f;
+	// m_ShadowCamera.vForward = vec3(0.0, -1.0, 0.0);
+	// m_ShadowCamera.vRight = vec3(1.0, 0.0, 0.0);
+	// m_ShadowCamera.vUp = vec3(0.0, 0.0, 1.0);
+	// m_ShadowCamera.m_desc.aspectRatio = 1.0f;
+	// m_ShadowCamera.m_desc.horizontalFov = 45.0f;
+	// m_ShadowCamera.m_desc.nearZ = 0.1f;
+	// m_ShadowCamera.m_desc.farZ = 200.0f;
 
-	m_ShadowCamera.state.mWorldToView = glm::lookAtLH(m_Camera.state.globalPosition + m_ShadowCamera.vForward, m_Camera.state.globalPosition, m_ShadowCamera.vUp);
-#ifdef RZ
-	m_ShadowCamera.state.mViewToClip = glm::perspectiveLH_ZO(m_ShadowCamera.m_desc.horizontalFov, m_ShadowCamera.m_desc.aspectRatio, m_ShadowCamera.m_desc.farZ, m_ShadowCamera.m_desc.nearZ);
-#else
-	m_ShadowCamera.state.mViewToClip = glm::perspectiveLH_ZO(m_ShadowCamera.m_desc.horizontalFov, m_ShadowCamera.m_ShadowCamera.aspectRatio, m_ShadowCamera.m_desc.nearZ, m_ShadowCamera.m_desc.farZ);
-#endif
+// 	m_ShadowCamera.state.mWorldToView = glm::lookAtLH(m_Camera.state.globalPosition + m_ShadowCamera.vForward, m_Camera.state.globalPosition, m_ShadowCamera.vUp);
+// #ifdef RZ
+// 	m_ShadowCamera.state.mViewToClip = glm::perspectiveLH_ZO(m_ShadowCamera.m_desc.horizontalFov, m_ShadowCamera.m_desc.aspectRatio, m_ShadowCamera.m_desc.farZ, m_ShadowCamera.m_desc.nearZ);
+// #else
+// 	m_ShadowCamera.state.mViewToClip = glm::perspectiveLH_ZO(m_ShadowCamera.m_desc.horizontalFov, m_ShadowCamera.m_ShadowCamera.aspectRatio, m_ShadowCamera.m_desc.nearZ, m_ShadowCamera.m_desc.farZ);
+// #endif
 
 	std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>();
 	std::string meshFile = {};
@@ -435,7 +435,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		}
 	}
 
-	for (int j = 0; j < mesh->m_GPUMesh->m_meshlet[49].m_drawArgs.size(); ++j) {
+	/*for (int j = 0; j < mesh->m_GPUMesh->m_meshlet[49].m_drawArgs.size(); ++j) {
 		glm::mat4 transMat = mesh->results.at(49);
 		std::pair<glm::vec3, glm::vec3> cluster_aabb = std::make_pair(*reinterpret_cast<glm::vec3 *>((mesh->m_GPUMesh->m_meshlet[49].m_bounds[j].center)), glm::vec3(mesh->m_GPUMesh->m_meshlet[49].m_bounds[j].radius));
 		glm::vec3 min = cluster_aabb.first - cluster_aabb.second;
@@ -451,7 +451,7 @@ void Renderer::OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nr
 		glm::vec3 extent = (max - min) * 0.5f;
 
 		debugdrawPass->DrawBox(center, extent, glm::vec4(1.0));
-	}
+	}*/
 
 	for (int i = 0; i < m_OpaqueRenderNodes.size(); ++i) {
 		RenderNode &node = m_OpaqueRenderNodes[i];
@@ -555,17 +555,14 @@ glm::quat getRotationQuaternion(const glm::vec3 &v1, const glm::vec3 &v2) {
 }
 
 void Renderer::OnUpdate(float deltaTime) {
-	glm::vec3 shadowCamerPos = m_Camera.state.globalPosition;
-	shadowCamerPos.y = 0;
-	m_ShadowCamera.state.mWorldToView = glm::lookAtLH(shadowCamerPos + m_ShadowCamera.vForward * 2.0f, m_Camera.state.globalPosition, m_ShadowCamera.vUp);
 	UpdateCascadeSplit();
 }
 #define SHADOW_MAP_CASCADE_COUNT 4
 void Renderer::UpdateCascadeSplit() {
 	float cascadeSplits[SHADOW_MAP_CASCADE_COUNT];
 
-	float nearClip = m_Camera.m_desc.nearZ;
-	float farClip = m_Camera.m_desc.farZ;
+	float nearClip = m_Camera.getNearClip();
+	float farClip = m_Camera.getFarClip();
 
 	float clipRange = farClip - nearClip;
 
@@ -598,7 +595,7 @@ void Renderer::UpdateCascadeSplit() {
 		};
 
 		// Project frustum corners into world space
-		glm::mat4 invCam = (glm::inverse(m_ShadowCamera.state.mViewToClip * m_ShadowCamera.state.mWorldToView));
+		glm::mat4 invCam = (glm::inverse(m_Camera.matrices.perspective * m_Camera.matrices.view));
 		for (uint32_t j = 0; j < 8; j++) {
 			glm::vec4 invCorner = invCam * glm::vec4(frustumCorners[j], 1.0f);
 			frustumCorners[j] = invCorner / invCorner.w;
@@ -649,7 +646,7 @@ void Renderer::UpdateCascadeSplit() {
 		lightOrthoMatrix = glm::orthoLH_ZO(alignedMinX, alignedMaxX, alignedMinY, alignedMaxY, 0.0f, maxExtents.z - minExtents.z);
 #endif
 		m_lightVP[i] = lightOrthoMatrix * lightViewMatrix;
-		m_splitDepth[i] = (m_ShadowCamera.m_desc.nearZ + splitDist * clipRange);
+		m_splitDepth[i] = (m_Camera.getNearClip() + splitDist * clipRange);
 		lastSplitDist = splitDist;
 	}
 }
@@ -729,7 +726,7 @@ void Renderer::InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain
 	}
 }
 
-void Renderer::OnRender(RenderInfo &info, Camera &camera) {
+void Renderer::OnRender(RenderInfo &info, Camera1 &camera) {
 	nri::AttachmentsDesc depthAttachmentsDesc = info.desc;
 	depthAttachmentsDesc.colorNum = 0;
 	depthAttachmentsDesc.colors = nullptr;
@@ -791,7 +788,7 @@ void Renderer::OnRender(RenderInfo &info, Camera &camera) {
 	}
 }
 
-void Renderer::OnRenderDepth(RenderInfo &info, Camera &camera) {
+void Renderer::OnRenderDepth(RenderInfo &info, Camera1 &camera) {
 	// In this Pass, DepthTex is SRV state
 	ssaoCompPass->Render(info, camera);
 	{
@@ -809,7 +806,7 @@ void Renderer::OnRenderDepth(RenderInfo &info, Camera &camera) {
 }
 
 void Renderer::OnPresent(RenderInfo &info) {
-	Camera dummyCamera; // Create a dummy Camera object
+	Camera1 dummyCamera; // Create a dummy Camera object
 	presentPass->Render(info, dummyCamera);
 
 	{

@@ -16,6 +16,7 @@ struct ConstantBufferLayout {
 	glm::mat4 modelMat;
 	glm::mat4 viewMat;
 	glm::mat4 projectMat;
+	glm::mat4 viewProjMat;
 	glm::mat4 lightVP[4];
 	glm::vec4 splitDepth;
 };
@@ -24,7 +25,7 @@ class Renderer;
 class CommonRenderPass {
 public:
 	CommonRenderPass(Renderer *renderer);
-	virtual void Render(struct RenderInfo &info, Camera &camera) = 0;
+	virtual void Render(struct RenderInfo &info, Camera1 &camera) = 0;
 	virtual void BuildPipeline() = 0;
 	virtual void AllocGPUMemory() = 0;
 	virtual void BindMemory() = 0;

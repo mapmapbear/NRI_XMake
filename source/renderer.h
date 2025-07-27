@@ -40,7 +40,7 @@ class Buffer;
 class Texture;
 class Renderer {
 public:
-	Renderer(NRIInterface &NRI, nri::Device *device, Camera &camera);
+	Renderer(NRIInterface &NRI, nri::Device *device, Camera1 &camera);
 	nri::Device *GetRenderDevice() { return m_Device; }
 	NRIInterface &GetNRI() { return m_NRI; }
 	nri::DescriptorPool &GetDescriptorPool() { return *m_DescriptorPool; }
@@ -50,15 +50,15 @@ public:
 	void OnStart(nri::DescriptorSet *globalSet, nri::Texture *colorTex, nri::Texture *depthTex);
 	void OnUpdate(float deltaTime);
 	void OnPreRender();
-	void OnRenderDepth(RenderInfo &info, Camera &camera);
-	void OnRender(RenderInfo &info, Camera &camera);
+	void OnRenderDepth(RenderInfo &info, Camera1 &camera);
+	void OnRender(RenderInfo &info, Camera1 &camera);
 	void OnPresent(RenderInfo &info);
 	void OnPostRender();
 	void InitPresentPass(nri::Texture *colorRT, nri::SwapChain *swawpchain);
 	void UploadSceneData();
 	void UpdateCascadeSplit();
 
-	void BindCamera(Camera &camera) { m_Camera = camera; }
+	void BindCamera(Camera1 &camera) { m_Camera = camera; }
 
 	utils::Texture &GetDefaultBlackTex() { return defaultBlackTex; }
 	utils::Texture &GetDefaultWhiteTex() { return defaultWhiteTex; }
@@ -83,9 +83,9 @@ public:
 	std::unordered_map<std::shared_ptr<Texture>, std::shared_ptr<utils::Texture>> uploadTextureMap;
 	std::unordered_map<std::shared_ptr<Buffer>, std::shared_ptr<utils::MeshData>> uploadIndexBufferMap;
 	std::unordered_map<std::shared_ptr<Buffer>, std::shared_ptr<utils::MeshData>> uploadShadowIndexBufferMap;
-	Camera &m_Camera;
-	Camera m_ShadowCamera;
-	float cascadeSplitLambda = 0.9f;
+	Camera1 &m_Camera;
+	// Camera m_ShadowCamera;
+	float cascadeSplitLambda = 0.7f;
 
 private:
 	nri::Device *m_Device = nullptr;

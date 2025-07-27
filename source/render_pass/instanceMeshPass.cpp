@@ -651,7 +651,7 @@ void InstanceMeshPass::BuildPipeline() {
 	}
 }
 
-void InstanceMeshPass::Render(RenderInfo &info, Camera &camera) {
+void InstanceMeshPass::Render(RenderInfo &info, Camera1 &camera) {
 	auto NRI = *m_NRI;
 
 	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
@@ -663,14 +663,14 @@ void InstanceMeshPass::Render(RenderInfo &info, Camera &camera) {
 	const glm::mat4 m2 = glm::rotate(glm::mat4(1.0f), (float)glfwGetTime(),
 			glm::vec3(0.0f, 1.f, 0.f));
 	glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.8f, 0.0f)) * m2; // * m1;
-	const glm::mat4 p = camera.state.mViewToClip;
-	const glm::vec3 cameraPos = camera.state.globalPosition;
-	glm::vec3 target = cameraPos + glm::vec3(camera.state.mWorldToView[0][2], camera.state.mWorldToView[1][2], camera.state.mWorldToView[2][2]);
+	const glm::mat4 p = camera.matrices.perspective;
+	const glm::vec3 cameraPos = camera.position;
+	glm::vec3 target = cameraPos + glm::vec3(camera.matrices.view[0][2], camera.matrices.view[1][2], camera.matrices.view[2][2]);
 	const glm::mat4 v = glm::lookAtLH(cameraPos, target, glm::vec3(0.0f, 1.0f, 0.0f));
 
 	if (commonConstants) {
 		commonConstants->modelMat = m;
-		commonConstants->viewMat = camera.state.mWorldToView;
+		commonConstants->viewMat = camera.matrices.view;
 		commonConstants->projectMat = p;
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}

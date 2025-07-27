@@ -189,9 +189,9 @@ void SkyRenderPass::BuildPipeline() {
 	}
 }
 
-void SkyRenderPass::Render(RenderInfo &info, Camera &camera) {
+void SkyRenderPass::Render(RenderInfo &info, Camera1 &camera) {
 	glm::vec4 skyParams;
-	const glm::mat4 p = camera.state.mViewToClip;
+	const glm::mat4 p = camera.matrices.perspective;
 	skyParams.x = 0;
 	skyParams.y = p[1][1];
 	skyParams.z = 0;

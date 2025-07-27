@@ -3,6 +3,7 @@ NRI_RESOURCE(cbuffer, CommonConstants, b, 0, 0) {
     float4x4 modelMat;
     float4x4 viewMat;
     float4x4 projectMat;
+    float4x4 viewProjMat;
     float4x4 lightVP[4];
     float4   splitDepth;
 };

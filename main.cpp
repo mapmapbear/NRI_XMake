@@ -6,14 +6,17 @@
 #include "glm/trigonometric.hpp"
 #include "imgui.h"
 #include "render_pass/commonMeshPass.h"
+#include "render_pass/commonRenderPass.h"
 #include "renderer.h"
 #include "texture.h"
 
 // STB
-#include "spdlog/spdlog.h"
 #include "stb_image.h"
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
 #include <string>
 #include <unordered_map>
+
 
 #define INSTANCE
 
@@ -225,7 +228,21 @@ bool Sample::Initialize(nri::GraphicsAPI graphicsAPI) {
 	NRI_ABORT_ON_FAILURE(NRI.GetQueue(*m_Device, nri::QueueType::COMPUTE, 0, m_ComputeQueue));
 	NRI.SetDebugName(m_ComputeQueue, "ComputeQueue");
 	m_Camera.Initialize(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	testRenderPtr = new Renderer(NRI, m_Device, m_Camera);
+
+	auto logger = spdlog::stdout_color_mt("console");
+	logger->set_level(spdlog::level::debug);
+
+	mainCamera.type = Camera1::firstperson;
+	mainCamera.movementSpeed = 2.5f;
+	testRenderPtr = new Renderer(NRI, m_Device, mainCamera);
+	CameraDesc desc = {};
+	desc.aspectRatio = float(testRenderPtr->m_OutputResolution.first) / float(testRenderPtr->m_OutputResolution.second);
+	desc.horizontalFov = glm::radians(m_Fov);
+	desc.nearZ = 0.1f;
+	desc.farZ = 200.0f;
+	mainCamera.setPerspective(90.0f, desc.aspectRatio, desc.farZ, desc.nearZ);
+	mainCamera.setPosition({ 0.0f, -3.2f, 0.0f });
+
 	// Fences
 	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_FrameFence[0]));
 	NRI_ABORT_ON_FAILURE(NRI.CreateFence(*m_Device, 0, m_FrameFence[1]));
@@ -427,42 +444,8 @@ void ShowNode(utils::NodeData node) {
 	}
 }
 
-// void ShowFrameTimeGraph(size_t frameCount)
-// {
-//     const float width = ImGui::GetWindowWidth();
-//     // const size_t frameCount = m_FrameTimeHistory.GetCount();
-//     if(width > 0.f && frameCount > 0)
-//     {
-//         ImDrawList* drawList = ImGui::GetWindowDrawList();
-//         ImVec2 basePos = ImGui::GetCursorScreenPos();
-//         constexpr float minHeight = 2.f;
-//         constexpr float maxHeight = 64.f;
-//         float endX = width;
-//         constexpr float dtMin = 1.f / 120.f;
-//         constexpr float dtMax = 1.f / 15.f;
-//         const float dtMin_Log2 = log2(dtMin);
-//         const float dtMax_Log2 = log2(dtMax);
-//         drawList->AddRectFilled(basePos, ImVec2(basePos.x + width, basePos.y + maxHeight), 0xFF404040);
-//         for(size_t frameIndex = 0; frameIndex < frameCount && endX > 0.f; ++frameIndex)
-//         {
-//             const FrameTimeHistory::Entry dt = m_FrameTimeHistory.Get(frameIndex);
-//             const float frameWidth = dt.m_DT / dtMin;
-//             const float frameHeightFactor = (dt.m_DT_Log2 - dtMin_Log2) / (dtMax_Log2 - dtMin_Log2);
-//             const float frameHeightFactor_Nrm = std::min(std::max(0.f, frameHeightFactor), 1.f);
-//             const float frameHeight = glm::mix(minHeight, maxHeight, frameHeightFactor_Nrm);
-//             const float begX = endX - frameWidth;
-//             const uint32_t color = glm::packUnorm4x8(DeltaTimeToColor(dt.m_DT));
-//             drawList->AddRectFilled(
-//                 ImVec2(basePos.x + std::max(0.f, floor(begX)), basePos.y + maxHeight - frameHeight),
-//                 ImVec2(basePos.x + ceil(endX), basePos.y + maxHeight),
-//                 color);
-//             endX = begX;
-//         }
-//         ImGui::Dummy(ImVec2(width, maxHeight));
-//     }
-// }
-
 void Sample::PrepareFrame(uint32_t frameIndex) {
+	bool newFarState;
 	ImGui::NewFrame();
 	{
 		ImGui::SetNextWindowPos(ImVec2(30, 30), ImGuiCond_Once);
@@ -480,7 +463,7 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 
 			ImGui::Checkbox("Enable Shadow", &testRenderPtr->m_config.ShadowState);
 			ImGui::Checkbox("Enable Soft Shadow", &testRenderPtr->m_config.SoftShadowState);
-			ImGui::SliderFloat("Shadow Bias", &testRenderPtr->m_config.ShadowBias, 0.0f, 0.1f, "%.3f");
+			newFarState = ImGui::SliderFloat("Shadow Bias", &testRenderPtr->cascadeSplitLambda, 0.0f, 200.0f, "%.3f");
 		}
 		ImGui::End();
 	}
@@ -522,10 +505,19 @@ void Sample::PrepareFrame(uint32_t frameIndex) {
 #endif
 	desc.timeScale = 5.0;
 	GetCameraDescFromInputDevices(desc);
+	GetCameraDescFromInputDevices(mainCamera);
 	m_Camera.Update(desc, frameIndex);
 
 	float deltaTime = (float)glfwGetTime();
 	testRenderPtr->OnUpdate(deltaTime);
+	mainCamera.rotation.y += desc.dYaw;
+	mainCamera.rotation.x += desc.dPitch;
+	if (newFarState) {
+		desc.farZ = testRenderPtr->cascadeSplitLambda;
+		mainCamera.setPerspective(90.0f, desc.aspectRatio, desc.farZ, desc.nearZ);
+	}
+
+	mainCamera.update(desc, deltaTime);
 
 	testRenderPtr->m_OutputResolution = GetWindowResolution();
 }
@@ -650,7 +642,7 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 		NRI.CmdEndRendering(*commandBuffer);
 
 		RenderInfo info = { .desc = attachmentsDesc, .cmdBuffer = *commandBuffer };
-		testRenderPtr->OnRender(info, m_Camera);
+		testRenderPtr->OnRender(info, mainCamera);
 
 		// Transform Depth RT -> Depth SRV
 		{
@@ -666,7 +658,7 @@ void Sample::RenderFrame(uint32_t frameIndex) {
 			NRI.CmdBarrier(*commandBuffer, barrierGroupDesc);
 		}
 
-		testRenderPtr->OnRenderDepth(info, m_Camera);
+		testRenderPtr->OnRenderDepth(info, mainCamera);
 
 		// Transform Color RT -> Back Buffer
 		{

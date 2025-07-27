@@ -223,7 +223,7 @@ void BoxCullingPass::BuildPipeline() {
 	}
 }
 
-void BoxCullingPass::Render(struct RenderInfo &info, Camera &camera) {
+void BoxCullingPass::Render(struct RenderInfo &info, Camera1 &camera) {
 	auto NRI = *m_NRI;
 
 	{
@@ -238,7 +238,7 @@ void BoxCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 			nri::Rect scissor = { 0, 0, (uint16_t)m_renderer->m_OutputResolution.first, (uint16_t)m_renderer->m_OutputResolution.second };
 			NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);	
 		}
-		glm::mat4 vpMat = camera.state.mViewToClip * camera.state.mWorldToView;
+		glm::mat4 vpMat = camera.matrices.perspective * camera.matrices.view;
 		NRI.CmdSetRootConstants(info.cmdBuffer, 0, &vpMat, sizeof(glm::mat4));
 
 		nri::VertexBufferDesc vertexBufferDesc = {};

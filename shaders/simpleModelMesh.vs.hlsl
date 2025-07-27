@@ -5,6 +5,7 @@ NRI_RESOURCE(cbuffer, CommonConstants, b, 0, 0) {
     float4x4 modelMat;
     float4x4 viewMat;
     float4x4 projectMat;
+    float4x4 viewProjMat;
     float4x4 lightVP[4];
     float4   splitDepth;
 };
@@ -105,8 +106,8 @@ outputVS main(inputVS input) {
     float4x4 testMat = 1.0;
     StructuredBuffer<float4x4> worldMatBuffer = ResourceDescriptorHeap[1006];
     testMat = worldMatBuffer[input.startInstance];
-    float4x4 vpMat = mul(viewMat, testMat);
-    float4x4 mvpMat = mul(projectMat, vpMat);
+    float4x4 vpMat = mul(projectMat, viewMat);
+    float4x4 mvpMat = mul(viewProjMat, testMat);
 #ifdef DEPTH_ONLY
     output.position = mul(mvpMat, float4(input.in_position.xyz, 1.0));
 #else

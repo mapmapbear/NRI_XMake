@@ -489,8 +489,7 @@ void CommonMeshPass::BuildPipeline() {
 		nri::RasterizationDesc rasterizationDesc = {};
 		rasterizationDesc.fillMode = nri::FillMode::SOLID;
 		rasterizationDesc.cullMode = nri::CullMode::NONE;
-		// rasterizationDesc.frontCounterClockwise = false;
-		// rasterizationDesc.depthClamp = true;
+		rasterizationDesc.depthClamp = true;
 
 		nri::ColorAttachmentDesc colorAttachmentDesc = {};
 #ifdef HDR_ENABLE
@@ -516,6 +515,7 @@ void CommonMeshPass::BuildPipeline() {
 		nri::OutputMergerDesc outputMergerDesc = {};
 		outputMergerDesc.depth = depthAttachmentDesc;
 		outputMergerDesc.depthStencilFormat = nri::Format::D32_SFLOAT;
+		// outputMergerDesc.logicFunc = nri::LogicFunc::NONE;
 
 		utils::ShaderCodeStorage shaderCodeStorage;
 
@@ -687,9 +687,9 @@ void CommonMeshPass::BuildPipeline() {
 	}
 }
 
-void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
+void CommonMeshPass::Render(RenderInfo &info, Camera1 &camera) {
 	auto NRI = *m_NRI;
-	const glm::vec3 cameraPos = camera.state.globalPosition;
+	const glm::vec3 cameraPos = camera.position;
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Forward Mesh Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
@@ -735,18 +735,19 @@ void CommonMeshPass::Render(RenderInfo &info, Camera &camera) {
 	}
 }
 
-void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
+void CommonMeshPass::RenderDepth(RenderInfo &info, Camera1 &camera) {
 	auto NRI = *m_NRI;
-	const glm::mat4 p = camera.statePrev.mViewToClip;
-	const glm::vec3 cameraPos = camera.statePrev.position;
+	const glm::mat4 p = camera.matrices.perspective;
+	const glm::vec3 cameraPos = camera.position;
 
 	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
 			*m_ConstantBuffer, 0,
 			sizeof(ConstantBufferLayout));
 	if (commonConstants) {
 		commonConstants->modelMat = glm::mat4(1.0);
-		commonConstants->viewMat = camera.state.mWorldToView;
-		commonConstants->projectMat = camera.state.mViewToClip;
+		commonConstants->viewMat = camera.matrices.view;
+		commonConstants->projectMat = camera.matrices.perspective;
+		commonConstants->viewProjMat = (camera.matrices.perspective * camera.matrices.view);
 		commonConstants->lightVP[0] = m_renderer->m_lightVP[0];
 		commonConstants->lightVP[1] = m_renderer->m_lightVP[1];
 		commonConstants->lightVP[2] = m_renderer->m_lightVP[2];
@@ -806,11 +807,11 @@ void CommonMeshPass::RenderDepth(RenderInfo &info, Camera &camera) {
 	}
 }
 
-void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
+void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera1 &camera) {
 	auto NRI = *m_NRI;
 
-	const glm::mat4 p = camera.statePrev.mViewToClip;
-	const glm::vec3 cameraPos = camera.statePrev.position;
+	const glm::mat4 p = camera.matrices.perspective;
+	const glm::vec3 cameraPos = camera.position;
 
 	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
 			*m_ConstantBuffer, 0,
@@ -818,8 +819,9 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera &camera) {
 
 	if (commonConstants) {
 		commonConstants->modelMat = glm::mat4(1.0);
-		commonConstants->viewMat = camera.state.mWorldToView;
-		commonConstants->projectMat = camera.state.mViewToClip;
+		commonConstants->viewMat = camera.matrices.view;
+		commonConstants->projectMat = camera.matrices.perspective;
+		commonConstants->viewProjMat = (camera.matrices.perspective * camera.matrices.view);
 		commonConstants->lightVP[0] = m_renderer->m_lightVP[0];
 		commonConstants->lightVP[1] = m_renderer->m_lightVP[1];
 		commonConstants->lightVP[2] = m_renderer->m_lightVP[2];

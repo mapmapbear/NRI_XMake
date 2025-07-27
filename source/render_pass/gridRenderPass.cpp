@@ -92,7 +92,7 @@ void GridRenderPass::BuildPipeline() {
 				*m_renderer->GetRenderDevice(), graphicsPipelineDesc, m_GridPipeline));
 	}
 }
-void GridRenderPass::Render(RenderInfo &info, Camera &camera) {
+void GridRenderPass::Render(RenderInfo &info, Camera1 &camera) {
 	auto NRI = *m_NRI;
 	helper::Annotation annotation(NRI, info.cmdBuffer, "GridTest");
 	NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_GridPipelineLayout);
@@ -102,8 +102,8 @@ void GridRenderPass::Render(RenderInfo &info, Camera &camera) {
 		vec4 camPos;
 		vec4 origin;
 	} params = {
-		.mvp = camera.state.mClipToView * camera.state.mWorldToView,
-		.camPos = vec4(camera.state.globalPosition, 1.0),
+		.mvp = camera.matrices.perspective * camera.matrices.view,
+		.camPos = vec4(camera.position, 1.0),
 		.origin = vec4(0.0)
 	};
 	NRI.CmdSetRootConstants(info.cmdBuffer, 0, &params, sizeof(params));

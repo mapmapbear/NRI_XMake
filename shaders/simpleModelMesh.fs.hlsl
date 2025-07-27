@@ -146,12 +146,13 @@ float4 main(InputPS input) : SV_Target {
     };
     float viewDepth = length(g_PushConstants.camPos.xyz - input.positionWS);
     int cascadeIndex = GetCascadeIndex(viewDepth, splitDepth);
-    return cascadeColors[cascadeIndex] * shadow;
+    // return cascadeColors[cascadeIndex] * shadow;
 
     // shadow = shadow3x3PCF(g_SamplerShadow, shadowMap, projCoords.xy, projCoords.z, 1.0 / 2048.0);
     // return float4(projCoords.zzz, 1.0);
     float4 outPosLS = input.positionLS.xyzz;
     color.xyz += IBL(worldNormal, v, R, baseColor.xyz, metallic, roughness, c_F0, BRDFTex, diffuseIBL, specularIBL, g_Sampler, g_SamplerBRDF);
-    color.xyz *= shadow;
+    //color.xyz *= shadow;
+    // color.xyz = input.color.xyz;
     return color;
 }

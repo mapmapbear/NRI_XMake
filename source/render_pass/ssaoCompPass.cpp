@@ -217,7 +217,7 @@ void SSAOCompPass::BindMemory() {
 	auto NRI = *m_NRI;
 }
 
-void SSAOCompPass::Render(struct RenderInfo &info, Camera &camera) {
+void SSAOCompPass::Render(struct RenderInfo &info, Camera1 &camera) {
 	auto NRI = *m_NRI;
 	{
 		helper::Annotation annotation(NRI, info.cmdBuffer, "SSAO Comp Pass");

@@ -4,7 +4,7 @@ class Buffer;
 class BoxCullingPass : public CommonRenderPass {
 public:
 	BoxCullingPass(Renderer *renderer);
-	void Render(struct RenderInfo &info, Camera &camera) override;
+	void Render(struct RenderInfo &info, Camera1 &camera) override;
 	void BuildPipeline() override;
 	void AllocGPUMemory() override;
 	void BindMemory() override;

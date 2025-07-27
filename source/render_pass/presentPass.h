@@ -5,7 +5,7 @@
 class PresentPass : public CommonRenderPass {
 public:
 	PresentPass(Renderer *renderer, nri::Texture *colorRT, nri::SwapChain *swapchain);
-	void Render(struct RenderInfo &info, Camera &camera) override;
+	void Render(struct RenderInfo &info, Camera1 &camera) override;
 	// void Render(struct RenderInfo &src_info, struct RenderInfo &dst_info);
 
 	void BuildPipeline() override;

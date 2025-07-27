@@ -495,10 +495,10 @@ void DebugDrawPass::BuildPipeline() {
 	}
 }
 
-void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
+void DebugDrawPass::Render(RenderInfo &info, Camera1 &camera) {
 	auto NRI = *m_NRI;
-	const glm::mat4 p = camera.state.mViewToClip;
-	const glm::vec3 cameraPos = camera.state.globalPosition;
+	const glm::mat4 p = camera.matrices.perspective;
+	const glm::vec3 cameraPos = camera.position;
 
 	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
 			*m_ConstantBuffer, 0,
@@ -506,7 +506,7 @@ void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
 
 	if (commonConstants) {
 		commonConstants->modelMat = glm::mat4(1.0);
-		commonConstants->viewMat = camera.state.mWorldToView;
+		commonConstants->viewMat = camera.matrices.view;
 		commonConstants->projectMat = p;
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
@@ -529,7 +529,7 @@ void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
 		NRI.CmdSetDescriptorSet(info.cmdBuffer, 0, *m_DescriptorSet, nullptr);
 		ConstantBlock block = {};
 		block.modelMat = glm::mat4(1.0);
-		block.modelMat = camera.state.mWorldToView * block.modelMat;
+		block.modelMat = camera.matrices.view * block.modelMat;
 		block.modelMat = p * block.modelMat;
 		block.camPos = vec4(cameraPos, 1.0);
 		block.index[0] = block.index[1] = block.index[2] = block.index[3] = 0u;
@@ -562,7 +562,7 @@ void DebugDrawPass::Render(RenderInfo &info, Camera &camera) {
 		}
 
 		// Frustum Draw
-		block.modelMat = glm::inverse(camera.statePrev.mWorldToView) * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f));
+		block.modelMat = glm::inverse(camera.matrices.view) * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f));
 
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_PipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_Pipeline);

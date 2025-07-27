@@ -443,16 +443,16 @@ glm::vec4 normalizePlane(const glm::vec4 &plane) {
 	return plane;
 }
 
-void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
+void GPUCullingPass::Render(struct RenderInfo &info, Camera1 &camera) {
 	auto NRI = *m_NRI;
 
 	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
 			*m_ConstantBuffer, 0,
 			sizeof(ConstantBufferLayout));
-	const glm::mat4 p = camera.state.mViewToClip;
+	const glm::mat4 p = camera.matrices.perspective;
 	if (commonConstants) {
 		commonConstants->modelMat = glm::mat4(1.0);
-		commonConstants->viewMat = camera.state.mWorldToView;
+		commonConstants->viewMat = camera.matrices.view;
 		commonConstants->projectMat = p;
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
@@ -461,7 +461,7 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Frustum Culling Pre Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_CullingPipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_CullingPipeline);
-		glm::mat4 projMat = camera.state.mViewToClip;
+		glm::mat4 projMat = camera.matrices.perspective;
 
 		glm::vec4 frustumL = normalizePlane(projMat[3] + projMat[0]);
 		glm::vec4 frustumR = normalizePlane(projMat[3] - projMat[0]);
@@ -469,8 +469,8 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 		glm::vec4 frustumB = normalizePlane(projMat[3] - projMat[1]);
 
 		PushConstants block = {
-			.viewMat = p * camera.state.mWorldToView, // * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f)),
-			.cameraArgs = glm::vec4(camera.m_desc.nearZ, camera.m_desc.farZ, camera.m_desc.farZ + 20, 0.0f),
+			.viewMat = p * camera.matrices.view, // * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f)),
+			.cameraArgs = glm::vec4(camera.getNearClip(), camera.getFarClip(), camera.getFarClip() + 20, 0.0f),
 			.frustum = { glm::vec4(frustumL.x, frustumL.y, frustumL.z, frustumL.w),
 					glm::vec4(frustumR.x, frustumR.y, frustumR.z, frustumR.w),
 					glm::vec4(frustumT.x, frustumT.y, frustumT.z, frustumT.w),
@@ -484,16 +484,16 @@ void GPUCullingPass::Render(struct RenderInfo &info, Camera &camera) {
 	}
 }
 
-void GPUCullingPass::RenderPost(struct RenderInfo &info, Camera &camera) {
+void GPUCullingPass::RenderPost(struct RenderInfo &info, Camera1 &camera) {
 	auto NRI = *m_NRI;
 
 	ConstantBufferLayout *commonConstants = (ConstantBufferLayout *)NRI.MapBuffer(
 			*m_ConstantBuffer, 0,
 			sizeof(ConstantBufferLayout));
-	const glm::mat4 p = camera.state.mViewToClip;
+	const glm::mat4 p = camera.matrices.perspective;
 	if (commonConstants) {
 		commonConstants->modelMat = glm::mat4(1.0);
-		commonConstants->viewMat = camera.state.mWorldToView;
+		commonConstants->viewMat = camera.matrices.view;
 		commonConstants->projectMat = p;
 		NRI.UnmapBuffer(*m_ConstantBuffer);
 	}
@@ -502,7 +502,7 @@ void GPUCullingPass::RenderPost(struct RenderInfo &info, Camera &camera) {
 		helper::Annotation annotation(NRI, info.cmdBuffer, "Frustum Culling Post Pass");
 		NRI.CmdSetPipelineLayout(info.cmdBuffer, *m_CullingPipelineLayout);
 		NRI.CmdSetPipeline(info.cmdBuffer, *m_CullingPipeline2);
-		glm::mat4 projMat = camera.state.mViewToClip;
+		glm::mat4 projMat = camera.matrices.perspective;
 
 		glm::vec4 frustumL = normalizePlane(projMat[3] + projMat[0]);
 		glm::vec4 frustumR = normalizePlane(projMat[3] - projMat[0]);
@@ -510,8 +510,8 @@ void GPUCullingPass::RenderPost(struct RenderInfo &info, Camera &camera) {
 		glm::vec4 frustumB = normalizePlane(projMat[3] - projMat[1]);
 
 		PushConstants block = {
-			.viewMat = p * camera.state.mWorldToView, // * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f)),
-			.cameraArgs = glm::vec4(camera.m_desc.nearZ, camera.m_desc.farZ, camera.m_desc.farZ + 20, 0.0f),
+			.viewMat = p * camera.matrices.view, // * glm::rotate(glm::mat4(1.0), glm::radians(180.f), glm::vec3(0.0f, 1.0f, 0.0f)),
+			.cameraArgs = glm::vec4(camera.getNearClip(), camera.getFarClip(), camera.getFarClip() + 20, 0.0f),
 			.frustum = { glm::vec4(frustumL.x, frustumL.y, frustumL.z, frustumL.w),
 					glm::vec4(frustumR.x, frustumR.y, frustumR.z, frustumR.w),
 					glm::vec4(frustumT.x, frustumT.y, frustumT.z, frustumT.w),

@@ -70,6 +70,7 @@
 
 // NRI framework
 #include "Camera.h"
+#include "Camera1.h"
 #include "Controls.h"
 #include "Helper.h"
 #include "Timer.h"
@@ -161,6 +162,7 @@ public:
     }
 
     void GetCameraDescFromInputDevices(CameraDesc& cameraDesc);
+    void GetCameraDescFromInputDevices(Camera1& camera);
 
     // Render
     virtual void RenderFrame(uint32_t frameIndex) = 0;
@@ -228,6 +230,7 @@ protected:
     std::string m_SceneFile = "ShaderBalls/ShaderBalls.gltf";
     GLFWwindow* m_Window = nullptr;
     Camera m_Camera;
+    Camera1 mainCamera;
     Timer m_Timer;
     std::pair<uint32_t, uint32_t> m_OutputResolution = {1920, 1080};
     std::pair<uint32_t, uint32_t> m_WindowResolution = {};
