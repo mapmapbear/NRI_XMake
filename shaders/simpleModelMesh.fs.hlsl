@@ -69,7 +69,7 @@ float SampleCascadeShadow(float viewDepth, float3 worldPos, float4 splitDepth) {
     SamplerComparisonState shadowSampler = SamplerDescriptorHeap[3];
     float shadow = 1.0;
     if(projCoords.z > 0.0f && projCoords.z < 1.0f) {
-        shadow = shadowSampleCmp(shadowSampler, shadowMap, atlasUV, projCoords.z + 0.02, 0);
+        shadow = pcf_shadow_weighted(float3(atlasUV, projCoords.z), shadowSampler, shadowMap, -0.00002);
     }
     return shadow;
 }
