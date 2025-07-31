@@ -844,10 +844,6 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera1 &camera) {
 		clearDesc.value.depthStencil.depth = 1.0;
 #endif
 		NRI.CmdClearAttachments(info.cmdBuffer, &clearDesc, 1, nullptr, 0);
-		// {
-		// 	const nri::Viewport viewport = { 0.0f, 0.0f, 2048.f,
-		// 		2048.f, 0.0f, 1.0f };
-		// 	NRI.CmdSetViewports(info.cmdBuffer, &viewport, 1);
 
 		// Split 2048x2048 shadow map into 4 viewports of 512x512 for cascade shadow mapping
 		for (int i = 0; i < 4; i++) {
@@ -868,16 +864,9 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera1 &camera) {
 			}
 
 			{
-				nri::Rect scissor = { static_cast<int16_t>(col * 1024.0f), static_cast<int16_t>(row * 1024.0f), 2048, 2048 };
+				nri::Rect scissor = { static_cast<int16_t>(col * 1024.0f), static_cast<int16_t>(row * 1024.0f), 1024, 1024 };
 				NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
 			}
-
-			// nri::Rect scissor = {
-			// 	static_cast<int16_t>((i % 2) * 512), // x offset
-			// 	static_cast<int16_t>((i / 2) * 512), // y offset
-			// 	512, 512 // width, height
-			// };
-			// NRI.CmdSetScissors(info.cmdBuffer, &scissor, 1);
 
 			nri::Buffer *geoBuffer = m_renderer->m_OpaqueRenderNodes[0].meshGPU->m_vertexbuffer->GetBuffer();
 			nri::VertexBufferDesc vertexBufferDesc = {};
@@ -889,8 +878,7 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera1 &camera) {
 					nri::IndexType::UINT32);
 			NRI.CmdSetDescriptorSet(info.cmdBuffer, 0,
 					*m_ConstantBufferDescriptorSet, nullptr);
-			// if (!m_renderer->m_config.IndirectDrawState)
-			{
+			if (!m_renderer->m_config.IndirectDrawState) {
 				for (uint32_t index = 0; index < m_renderer->m_OpaqueRenderNodes.size(); ++index) {
 					Renderer::RenderNode &node = m_renderer->m_OpaqueRenderNodes[index];
 					CBlock block = {};
@@ -906,6 +894,23 @@ void CommonMeshPass::RenderShadow(struct RenderInfo &info, Camera1 &camera) {
 					uint32_t instanceCount = 1;
 
 					NRI.CmdDrawIndexed(info.cmdBuffer, { static_cast<uint32_t>(node.drawArgs.indexNum), instanceCount, node.drawArgs.baseIndex, node.drawArgs.baseVertex, index });
+				}
+			} else {
+				nri::Buffer *indirectBuffer = m_renderer->gpuCullingPass->m_CullGPUSceneObjectsBuffer->GetBuffer();
+				nri::Buffer *counterBuffer = m_renderer->gpuCullingPass->m_VisibleObjectCounterBuffer->GetBuffer();
+
+				CBlock block = {};
+				block.modelMat = glm::mat4(1.0);
+				block.camPos = vec4(cameraPos, 1.0);
+				block.index[0] = 0;
+				block.index[1] = 1;
+				block.index[2] = i;
+				block.index[3] = 0;
+				block.testVec.y = 2.0f;
+				NRI.CmdSetRootConstants(info.cmdBuffer, 0, &block, sizeof(CBlock));
+
+				{
+					NRI.CmdDrawIndexedIndirect(info.cmdBuffer, *indirectBuffer, 0, (uint32_t)m_renderer->m_OpaqueRenderNodes.size(), sizeof(nri::DrawIndexedDesc), counterBuffer, 0);
 				}
 			}
 		}
